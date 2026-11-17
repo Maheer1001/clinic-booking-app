@@ -2,12 +2,24 @@ package app;
 
 import io.github.cdimascio.dotenv.Dotenv;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Properties;
 
+/**
+ * Single source of JDBC connections for the app. Settings come from {@code .env}
+ * (DB_URL, DB_USERNAME, DB_PASSWORD) or, failing that, from process environment variables.
+ * Each call to {@link #connect()} opens a new connection that the caller must close
+ * (all DAOs use try-with-resources).
+ */
 public class DB {
+
+    /** Seconds to wait for the server before giving up, so an unreachable DB does not hang the UI. */
+    static final int CONNECT_TIMEOUT_SECONDS = 10;
 
     private static final Dotenv dotenv = Dotenv.configure()
             .ignoreIfMissing()
@@ -17,17 +29,13 @@ public class DB {
     private static String password = dotenv.get("DB_PASSWORD");
 
     static {
-        // Validate database configuration on startup
-        if (url == null || url.isEmpty()) {
-            System.err.println("[DB] WARNING: DB_URL not configured in .env file. Database connections will fail.");
-        }
-        if (username == null || username.isEmpty()) {
-            System.err.println("[DB] WARNING: DB_USERNAME not configured in .env file. Database connections will fail.");
-        }
-        if (password == null || password.isEmpty()) {
-            System.err.println("[DB] WARNING: DB_PASSWORD not configured in .env file. Database connections will fail.");
+        String problem = configurationProblem();
+        if (problem != null) {
+            System.err.println("[DB] WARNING: " + problem);
         }
     }
+
+    private DB() {}
 
     /**
      * Override the default connection URL (used by tests with H2).
@@ -45,35 +53,74 @@ public class DB {
     public static String getUsername() { return username; }
     public static String getPassword() { return password; }
 
+    /** True when DB_URL, DB_USERNAME and DB_PASSWORD are all set. */
+    public static boolean isConfigured() {
+        return configurationProblem() == null;
+    }
+
+    /**
+     * Describes what is missing from the database configuration, or returns null when it is complete.
+     * The message is suitable for showing to the user.
+     */
+    public static String configurationProblem() {
+        StringBuilder missing = new StringBuilder();
+        if (isBlank(url)) missing.append("DB_URL");
+        if (isBlank(username)) missing.append(missing.isEmpty() ? "" : ", ").append("DB_USERNAME");
+        // An empty password is valid (e.g. in-memory H2 in tests); only a missing one is an error.
+        if (password == null) missing.append(missing.isEmpty() ? "" : ", ").append("DB_PASSWORD");
+        if (missing.isEmpty()) return null;
+
+        String where = Files.exists(Path.of(".env"))
+                ? "Add them to the .env file in " + Path.of("").toAbsolutePath() + "."
+                : "No .env file was found in " + Path.of("").toAbsolutePath()
+                  + ". Copy .env.example to .env and fill in your database details (see docs/SETUP.md).";
+        return "Database is not configured (missing " + missing + "). " + where;
+    }
+
     public static Connection connect() throws SQLException {
-        if (url == null || url.isEmpty()) {
-            throw new SQLException("Database URL is not configured. Please set DB_URL in your .env file.");
+        String problem = configurationProblem();
+        if (problem != null) {
+            throw new SQLException(problem, "08001");
         }
-        if (username == null || username.isEmpty()) {
-            throw new SQLException("Database username is not configured. Please set DB_USERNAME in your .env file.");
+
+        Properties props = new Properties();
+        props.setProperty("user", username);
+        props.setProperty("password", password);
+        if (url.startsWith("jdbc:postgresql:")) {
+            // Fail fast instead of blocking the JavaFX thread for the OS default TCP timeout.
+            props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS));
+            props.setProperty("loginTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS));
         }
-        // Allow null/empty password for in-memory H2 (tests); production .env should set DB_PASSWORD
-        if (password == null) {
-            throw new SQLException("Database password is not configured. Please set DB_PASSWORD in your .env file.");
-        }
-        
+
         try {
-            return DriverManager.getConnection(url, username, password);
+            return DriverManager.getConnection(url, props);
         } catch (SQLException e) {
-            // Provide more helpful error message
-            String errorMsg = e.getMessage();
-            if (errorMsg != null && errorMsg.toLowerCase().contains("connection")) {
-                throw new SQLException(
-                    "Failed to connect to database. Check:\n" +
-                    "  - DB_URL, DB_USERNAME, and DB_PASSWORD in .env file\n" +
-                    "  - Database server is accessible from your network\n" +
-                    "  - Firewall allows connections to the database port\n" +
-                    "Original error: " + errorMsg,
-                    e
-                );
-            }
-            throw e;
+            throw new SQLException(describeFailure(e), e.getSQLState(), e.getErrorCode(), e);
         }
+    }
+
+    /** Turns a driver exception into a message that says what to check. */
+    static String describeFailure(SQLException e) {
+        String state = e.getSQLState() != null ? e.getSQLState() : "";
+        String original = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        String hint;
+        if (state.startsWith("28")) {
+            hint = "The database rejected the login. Check DB_USERNAME and DB_PASSWORD in .env.";
+        } else if (state.equals("3D000")) {
+            hint = "The database named in DB_URL does not exist. Check DB_URL in .env.";
+        } else if (state.startsWith("08") || original.toLowerCase().contains("connection")) {
+            hint = "Could not reach the database server. Check DB_URL in .env, your network connection, "
+                    + "and that the server accepts connections on its port.";
+        } else if (original.startsWith("No suitable driver")) {
+            hint = "DB_URL is not a valid JDBC URL (expected jdbc:postgresql://host/database).";
+        } else {
+            hint = "Could not connect to the database.";
+        }
+        return hint + " (" + original + ")";
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     public static void initTables(Connection c) throws SQLException {
@@ -287,6 +334,8 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS default_clinic_id INTEGER");
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS created TIMESTAMP");
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS updated TIMESTAMP");
+            // ClinicDAO reads this column; older/fresh schemas created above do not have it.
+            s.execute("ALTER TABLE \"Clinic\" ADD COLUMN IF NOT EXISTS disability_accessibility TEXT");
         }
     }
 }
