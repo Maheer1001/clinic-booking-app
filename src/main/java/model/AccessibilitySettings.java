@@ -5,6 +5,7 @@ import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class AccessibilitySettings {
 
     private final BooleanProperty highContrast = new SimpleBooleanProperty(false);
@@ -20,7 +21,7 @@ public class AccessibilitySettings {
     public AccessibilitySettings(boolean highContrast, boolean boldText, TextSize textSize) {
         this.highContrast.set(highContrast);
         this.boldText.set(boldText);
-        this.textSize.set(textSize);
+        setTextSize(textSize);
     }
 
     public boolean isHighContrast() {
@@ -39,7 +40,8 @@ public class AccessibilitySettings {
         return textSize.get();
     }
     public void setTextSize(TextSize textSize) {
-        this.textSize.set(textSize);
+        // stored JSON may contain null or come from an older version; never leave the size unset
+        this.textSize.set(textSize != null ? textSize : TextSize.MEDIUM);
     }
 
     @com.fasterxml.jackson.annotation.JsonIgnore

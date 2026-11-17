@@ -1,5 +1,5 @@
 .root {
-    -fx-font-family: "Nunito Extrabold";
+    -fx-font-family: "Nunito ExtraBold";
 }
 
-/* IF THIS DOESN'T LOOK RIGHT, CAN BE CHANGED TO EDIT INDIVIDUAL CLASSES' FONT WEIGHT NUMBERS
+/* If this does not look right, individual classes can set their own font weight instead. */

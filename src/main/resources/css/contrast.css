@@ -275,8 +275,26 @@
     -fx-text-fill: #6A39A0;
 }
 
+/* Success messages ("Saved") must not use the error red in high-contrast mode. */
 .app-inline-save-confirm {
+    -fx-text-fill: #1b5e20;
+}
+
+.auth-success {
+    -fx-text-fill: #1b5e20;
+}
+
+.auth-hint {
+    -fx-text-fill: #333333;
+}
+
+.auth-field-error {
     -fx-text-fill: #d00000;
+}
+
+.input-invalid {
+    -fx-border-color: #d00000;
+    -fx-border-width: 2px;
 }
 
 .app-reminder-tab {

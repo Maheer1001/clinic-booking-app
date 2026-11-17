@@ -166,7 +166,9 @@ public class LoginController {
         scene.getStylesheets().add(UI.STYLE);
         Data.setScene(scene);
 
-        new MainController(nav, mainView, userID);
+        MainController mainController = new MainController(nav, mainView, userID);
+        // save a settings change made just before the window is closed
+        stage.setOnHidden(e -> mainController.flushSettings());
         stage.setScene(scene);
     }
 
