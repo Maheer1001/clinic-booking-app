@@ -1,0 +1,663 @@
+@startuml Sexual Health System - MVC Layout (Updated)
+!theme plain
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam nodesep 25
+skinparam ranksep 50
+skinparam packageBorderColor #000000
+skinparam packageBorderThickness 2
+skinparam margin 20
+skinparam diagramMargin 60
+
+left to right direction
+
+package "View Layer" as VL #b9ffcb {
+    class MainView {
+        + getMainScene(): VBox
+        + getRoot(): BorderPane
+    }
+
+    class Navigator {
+        + goToPage(Node, String, boolean): void
+        + goBack(): void
+        + goToHome(): void
+        + getRoot(): BorderPane
+        - root: BorderPane
+    }
+
+    class ServiceSelection {
+        + getPage(BookingController): Node
+    }
+
+    class PersonalInfo {
+        + getPage(BookingController): Node
+    }
+
+    class DateTime {
+        + getPage(BookingController): Node
+    }
+
+    class DateTimeSelector {
+        + DateTimeSelector(TimeslotProvider, Consumer<AvailableTimeslot>)
+        + getSelectedDate(): LocalDate
+        + getSelectedSlot(): AvailableTimeslot
+    }
+
+    interface TimeslotProvider {
+        + getAvailableDates(): Set<LocalDate>
+        + getTimeslots(LocalDate): List<AvailableTimeslot>
+    }
+
+    class Review {
+        + getPage(Navigator, BookingController): Node
+    }
+
+    class ViewBookings {
+        + getPage(Navigator): Node
+        - getDetailsPage(Navigator, ViewAppointmentController, int): Node
+    }
+
+    class Reschedule {
+        + getPage(Navigator): Node
+        + getPageWithAppId(Navigator, int): Node
+    }
+
+    class Cancel {
+        + getPage(Navigator): Node
+    }
+
+    class TrackingView {
+        + getTrackingMainScene(): VBox
+        + getEntryListScene(VBox): VBox
+        + getEntryButton(String, String): Button
+        + getEntryDetailsScene(HBox, VBox): VBox
+    }
+
+    class TrackingHubView {
+        + getPage(Navigator): Node
+    }
+
+    class RemindersView {
+        + show(): void
+    }
+
+    class AppointmentRemindersView {
+        + show(): void
+    }
+
+    class TreatmentRemindersView {
+        + show(): void
+    }
+
+    class BookingRemindersView {
+        + show(): void
+    }
+
+    class AccountView {
+        + getPage(Navigator): Node
+    }
+
+    class AccessibilitySettingsView {
+        + getPage(Navigator): Node
+    }
+
+    ' Force a tidy "spine" layout like classimmutable.puml
+    MainView -[hidden]right-> Navigator
+    Navigator -[hidden]right-> AccountView
+    AccountView -[hidden]right-> AccessibilitySettingsView
+    AccessibilitySettingsView -[hidden]right-> ServiceSelection
+    ServiceSelection -[hidden]right-> PersonalInfo
+    PersonalInfo -[hidden]right-> DateTime
+    DateTime -[hidden]right-> Review
+    Review -[hidden]right-> ViewBookings
+    ViewBookings -[hidden]right-> Reschedule
+    Reschedule -[hidden]right-> Cancel
+    Cancel -[hidden]right-> TrackingHubView
+    TrackingHubView -[hidden]right-> TrackingView
+    TrackingView -[hidden]right-> RemindersView
+    RemindersView -[hidden]right-> AppointmentRemindersView
+    AppointmentRemindersView -[hidden]right-> TreatmentRemindersView
+    TreatmentRemindersView -[hidden]right-> BookingRemindersView
+}
+
+package "Controller Layer" as CL #b3d0ff {
+    class MainController {
+        - nav: Navigator
+        - view: MainView
+        - userID: int
+        + MainController(Navigator, MainView, int)
+    }
+
+    class BookingController {
+        - nav: Navigator
+        - bookingService: BookingService
+        - notificationDispatcher: NotificationDispatcher
+        + selectClinic(Clinic): void
+        + selectService(Service): void
+        + goToTimeslotsForItems(): void
+        + goToServiceSelection(): void
+        + goToDetails(): void
+        + goToReview(): void
+        + confirmBooking(): void
+    }
+
+    class ViewAppointmentController {
+        - userId: int
+        - appointmentDAO: AppointmentRepository
+        + getUpcomingAppointments(): List<UpcomingAppointmentDetails>
+        + getAppointmentDetails(int): Optional<UpcomingAppointmentDetails>
+        + cancelAppointment(int): void
+        + rescheduleToNewTimeslot(int, int): boolean
+        + getAvailableTimeslotsForReschedule(int, LocalDate): List<AvailableTimeslot>
+        + getClinicAndServiceIdsForAppointment(int): Optional<int[]>
+        + getAvailableDatesForReschedule(int): List<LocalDate>
+    }
+
+    class LoginController {
+        + goToPasswordReset(): void
+    }
+
+    class SignUpController {
+        + onSignUp(): void
+        + goToTerms(): void
+        + goToPrivacy(): void
+    }
+
+    class PasswordResetController {
+        + onSendOtp(): void
+        + onVerifyOtp(): void
+        + onConfirmReset(): void
+        + goToLogin(): void
+    }
+
+    class TermsController {
+        + returnToSignup(): void
+    }
+
+    class PrivacyController {
+        + returnToSignup(): void
+    }
+
+    class DeleteController {
+        + DeleteController(int)
+        - goToLogin(): void
+    }
+
+    class TrackingController {
+        + TrackingController(Navigator, TrackingService)
+    }
+
+    class TrackingSectionController {
+        # nav: Navigator
+        # view: TrackingView
+        # model: TrackingService
+        + TrackingSectionController(Navigator, TrackingView, TrackingService)
+        + getSearchableText(TrackingData): String
+        + getMenuPage(): Node
+        + getDetailsPage(TrackingData): Node
+        # bullet(String): HBox
+    }
+
+    class TrackingAppointmentController {
+        + TrackingAppointmentController(Navigator, TrackingView, TrackingService)
+        + getSearchableText(TrackingData): String
+        + getMenuPage(): Node
+        + getDetailsPage(TrackingData): Node
+        + getPredicate(String, LocalDate, LocalDate): Predicate<AppointmentDetails>
+        + getComparator(String): Comparator<AppointmentDetails>
+    }
+
+    class TrackingPrescriptionController {
+        + TrackingPrescriptionController(Navigator, TrackingView, TrackingService)
+        + getSearchableText(TrackingData): String
+        + getMenuPage(): Node
+        + getDetailsPage(TrackingData): Node
+        + getPredicate(String, LocalDate, LocalDate): Predicate<PrescriptionSummary>
+        + getComparator(String): Comparator<PrescriptionSummary>
+    }
+
+    class TrackingTestController {
+        + TrackingTestController(Navigator, TrackingView, TrackingService)
+        + getSearchableText(TrackingData): String
+        + getMenuPage(): Node
+        + getDetailsPage(TrackingData): Node
+        + getPredicate(String, LocalDate, LocalDate): Predicate<Test>
+        + getComparator(String): Comparator<Test>
+    }
+
+    class ReminderController {
+        - userId: int
+        - reminderDAO: ReminderDAO
+        - appointmentDAO: AppointmentDAO
+        - prescriptionDAO: PrescriptionDAO
+        - notificationScheduler: NotificationScheduler
+        + getUpcomingAppointments(): List<Appointment>
+        + getPrescriptionsForReminders(): List<Prescription>
+        + getAppointmentReminders(): List<AppointmentReminder>
+        + getPrescriptionReminders(): List<PrescriptionReminder>
+        + getBookingReminders(): List<BookingReminder>
+        + saveAppointmentReminder(int, boolean, String, String): void
+        + savePrescriptionReminder(int, boolean, int, String): void
+        + saveBookingReminder(boolean, int, String): void
+        + scheduleAppointmentReminder(Appointment, String, String, int, String): void
+        + scheduleAppointmentReminderWithSchedule(Appointment, String, String, String, String): void
+        + scheduleTreatmentReminder(Prescription, String, String, int, String): void
+        + scheduleBookingReminder(String, String, int, LocalDate, String): void
+    }
+
+    ' Force horizontal layout (compact grid)
+    MainController -[hidden]right-> BookingController
+    BookingController -[hidden]right-> ViewAppointmentController
+    ViewAppointmentController -[hidden]right-> TrackingController
+    TrackingController -[hidden]right-> ReminderController
+}
+
+VL -[hidden]right-> CL
+
+package "Service Layer" as SL #e6f3ff {
+    class BookingService {
+        - clinicDAO: ClinicRepository
+        - serviceDAO: ServiceRepository
+        - timeslotDAO: TimeslotRepository
+        - appointmentDAO: AppointmentRepository
+        + findAllClinics(): List<Clinic>
+        + findServicesByClinicId(int): List<Service>
+        + getAvailableTimeslots(int, int, LocalDate): List<AvailableTimeslot>
+        + confirmBooking(Book, int): void
+    }
+
+    class TrackingService {
+        - userId: int
+        - testDAO: TestRepository
+        - prescriptionDAO: PrescriptionRepository
+        - appointmentDAO: AppointmentRepository
+        + getTestResults(): List<Test>
+        + getPrescriptions(): List<PrescriptionSummary>
+        + getPastAppointments(): List<AppointmentDetails>
+    }
+
+    class AuthService {
+        - userDAO: UserRepository
+        + signIn(String, String): SignInResult
+        + signUp(String, String, boolean): SignUpResult
+    }
+
+    class NotificationScheduler {
+        + scheduleAppointmentReminder(Appointment, String, String, int, String): void
+        + scheduleAppointmentReminderWithSchedule(Appointment, String, String, String, String): void
+        + scheduleTreatmentReminder(Prescription, String, String, int, String): void
+        + scheduleBookingReminder(String, String, int, LocalDate, String): void
+        + shutdown(): void
+    }
+
+    class NotificationDispatcher {
+        + notifyUser(int, Email, Notification): void
+    }
+
+    ' Force horizontal layout
+    BookingService -[hidden]right-> TrackingService
+    TrackingService -[hidden]right-> AuthService
+    AuthService -[hidden]right-> NotificationScheduler
+    NotificationScheduler -[hidden]right-> NotificationDispatcher
+}
+
+CL -[hidden]down-> SL
+
+package "Model Layer" as ML #EBE3E3 {
+
+    package "Data Access Objects" #f5f5f5 {
+        interface ClinicRepository
+        interface ServiceRepository
+        interface TimeslotRepository
+        interface AppointmentRepository
+        interface UserRepository
+        interface TestRepository
+        interface PrescriptionRepository
+
+        class ClinicDAO {
+            + findAll(): List<Clinic>
+        }
+
+        class ServiceDAO {
+            + findByClinicId(int): List<Service>
+        }
+
+        class TimeslotDAO {
+            + findAvailable(int, int, LocalDate): List<AvailableTimeslot>
+            + incrementBookedCount(int): void
+            + decrementBookedCount(int): void
+            + updateDate(int, LocalDate): void
+        }
+
+        class AppointmentDAO {
+            + save(Book, int, int): void
+            + cancelAppointment(int): void
+            + rescheduleToNewTimeslot(int, int): void
+            + getUpcomingAppointmentDetailsByUserId(int): List<UpcomingAppointmentDetails>
+            + getAvailableTimeslots(int, int, LocalDate): List<AvailableTimeslot>
+            + getClinicAndServiceIdsForAppointment(int): Optional<int[]>
+        }
+
+        class UserDAO {
+            + findById(int): Optional<User>
+            + getUserIdByEmail(String): Integer
+            + insertUser(String, String): boolean
+        }
+
+        class SessionDAO {
+            + save(Session): void
+            + delete(String): void
+            + findById(String): Optional<Session>
+        }
+
+        class TestDAO
+        class PrescriptionDAO
+
+        class ReminderDAO {
+            + getAppointmentRemindersByUserId(int): List<AppointmentReminder>
+            + saveAppointmentReminder(int, int, boolean, String, String): void
+            + getPrescriptionRemindersByUserId(int): List<PrescriptionReminder>
+            + savePrescriptionReminder(int, int, boolean, int, String): void
+            + getBookingRemindersByUserId(int): List<BookingReminder>
+            + saveBookingReminder(int, boolean, int, String): void
+        }
+
+        ' Force horizontal layout for DAOs
+        ClinicRepository -[hidden]right-> ServiceRepository
+        ServiceRepository -[hidden]right-> TimeslotRepository
+        TimeslotRepository -[hidden]right-> AppointmentRepository
+        AppointmentRepository -[hidden]right-> UserRepository
+        UserRepository -[hidden]right-> TestRepository
+        TestRepository -[hidden]right-> PrescriptionRepository
+
+        ClinicDAO -[hidden]right-> ServiceDAO
+        ServiceDAO -[hidden]right-> TimeslotDAO
+        TimeslotDAO -[hidden]right-> AppointmentDAO
+        AppointmentDAO -[hidden]right-> UserDAO
+        UserDAO -[hidden]right-> SessionDAO
+        SessionDAO -[hidden]right-> TestDAO
+        TestDAO -[hidden]right-> PrescriptionDAO
+        PrescriptionDAO -[hidden]right-> ReminderDAO
+    }
+
+    ' Row 1 - Core domain models
+    class User {
+        - userId: int
+        - email: String
+        - firstName: String
+        - lastName: String
+        + getUserId(): int
+        + getEmail(): String
+        + getDisplayName(): String
+    }
+
+    class Session {
+        - sessionId: String
+        - userId: int
+        - user: User
+        + getUser(): User
+        + isValid(): boolean
+    }
+
+    class Book {
+        - clinic: Clinic
+        - service: Service
+        - items: List<Item>
+        - timeslotId: int
+        - date: LocalDate
+        - time: LocalTime
+        - firstName: String
+        - reason: String
+        + getClinic(): Clinic
+        + getService(): Service
+        + setTimeslotId(int): void
+    }
+
+    class Item {
+        - service: Service
+        - date: LocalDate
+        - time: LocalTime
+        - timeslotId: int
+    }
+
+    class Clinic {
+        - id: int
+        - name: String
+        - address: String
+        - postcode: String
+        - services: List<Service>
+        + getId(): int
+        + getName(): String
+        + getServices(): List<Service>
+    }
+
+    class Service {
+        - id: int
+        - name: String
+        - description: String
+        - durationMinutes: int
+        + getId(): int
+        + getName(): String
+        + getDurationMinutes(): int
+    }
+
+    class Appointment {
+        - appId: int
+        - userId: int
+        - serviceName: String
+        - clinicName: String
+        - appointmentDateTime: LocalDateTime
+    }
+
+    class Prescription {
+        - prescriptionId: int
+        - medicineName: String
+        - dosage: String
+        - startDate: LocalDate
+        - endDate: LocalDate
+    }
+
+    class Data {
+        + {static} getBooking(): Book
+        + {static} reset(): void
+        + {static} getCurrentUserId(): int
+        + {static} getCurrentUserEmail(): String
+        + {static} getCurrentUserName(): String
+        + {static} getCurrentSession(): Session
+        + {static} setCurrentUser(int, String, String): void
+        + {static} setCurrentSession(Session): void
+        + {static} clearCurrentUser(): void
+        + {static} getLastSeenTestCount(): int
+        + {static} setLastSeenTestCount(int): void
+    }
+
+    ' Row 2 - Reminders and DTOs
+    class AppointmentReminder {
+        - arRemId: int
+        - userId: int
+        - appId: int
+        - notify: boolean
+        - customDays: String
+        - customMessage: String
+        - notificationMethod: String
+    }
+
+    class PrescriptionReminder {
+        - prRemId: int
+        - prescriptionId: int
+        - notify: boolean
+        - intervalBetweenDoses: int
+        - customMessage: String
+    }
+
+    class BookingReminder {
+        - brRemId: int
+        - notify: boolean
+        - daysSinceLast: int
+        - customMessage: String
+    }
+
+    class ReminderSchedule {
+        + toJson(): String
+        + {static} fromString(String, int): ReminderSchedule
+    }
+
+    class ReminderTemplateOverrides {
+        + toJson(): String
+        + {static} fromString(String): ReminderTemplateOverrides
+    }
+
+    record AvailableTimeslot {
+        timeslotId: int
+        date: LocalDate
+        startTime: LocalTime
+        endTime: LocalTime
+    }
+
+    record UpcomingAppointmentDetails {
+        appId: int
+        date: String
+        startTime: String
+        endTime: String
+        serviceName: String
+        clinicName: String
+        notes: String
+    }
+
+    record AppointmentDetails {
+        date: String
+        startTime: String
+        endTime: String
+        serviceName: String
+        clinicName: String
+        notes: String
+    }
+
+    record Test {
+        testType: String
+        testDate: String
+        treatment: String
+        clinicianNotes: String
+    }
+
+    record TestResult {
+        condition: String
+        result: TestResultStatus
+    }
+
+    record PrescriptionSummary {
+        name: String
+        dosage: String
+        startDate: String
+        endDate: String
+    }
+
+    enum TestResultStatus {
+        POSITIVE
+        NEGATIVE
+        PENDING
+    }
+
+    ' Force horizontal layout - Row 1
+    User -[hidden]right-> Session
+    Session -[hidden]right-> Book
+    Book -[hidden]right-> Clinic
+    Clinic -[hidden]right-> Service
+    Service -[hidden]right-> Appointment
+    Appointment -[hidden]right-> Prescription
+    Prescription -[hidden]right-> Data
+
+    ' Force horizontal layout - Row 2
+    AppointmentReminder -[hidden]right-> PrescriptionReminder
+    PrescriptionReminder -[hidden]right-> BookingReminder
+    BookingReminder -[hidden]right-> ReminderSchedule
+    ReminderSchedule -[hidden]right-> ReminderTemplateOverrides
+    ReminderTemplateOverrides -[hidden]right-> AvailableTimeslot
+    AvailableTimeslot -[hidden]right-> UpcomingAppointmentDetails
+    UpcomingAppointmentDetails -[hidden]right-> AppointmentDetails
+    AppointmentDetails -[hidden]right-> Test
+    Test -[hidden]right-> TestResult
+    TestResult -[hidden]right-> PrescriptionSummary
+    PrescriptionSummary -[hidden]right-> TestResultStatus
+
+    ' Force vertical stacking
+    User -[hidden]down-> AppointmentReminder
+}
+
+CL -[hidden]right-> ML
+ML -[hidden]down-> SL
+
+' View -> Controller connections
+MainView -down-> MainController
+ServiceSelection -down-> BookingController
+PersonalInfo -down-> BookingController
+DateTime -down-> BookingController
+Review -down-> BookingController
+
+ViewBookings -down-> ViewAppointmentController
+Reschedule -down-> ViewAppointmentController
+Cancel -down-> ViewAppointmentController
+
+TrackingView -down-> TrackingController
+TrackingHubView -down-> TrackingController
+
+AccountView -down-> MainController
+AccessibilitySettingsView -down-> MainController
+
+RemindersView -down-> ReminderController
+AppointmentRemindersView -down-> ReminderController
+TreatmentRemindersView -down-> ReminderController
+BookingRemindersView -down-> ReminderController
+
+' Controller -> Service connections
+BookingController -down-> BookingService
+TrackingController -down-> TrackingService
+ReminderController -down-> NotificationScheduler
+
+' Controller -> DAO (direct access)
+ViewAppointmentController -down-> AppointmentDAO
+ReminderController -down-> ReminderDAO
+ReminderController -down-> AppointmentDAO
+ReminderController -down-> PrescriptionDAO
+
+' Service -> DAO connections
+BookingService -down-> ClinicDAO
+BookingService -down-> ServiceDAO
+BookingService -down-> TimeslotDAO
+BookingService -down-> AppointmentDAO
+
+TrackingService -down-> TestDAO
+TrackingService -down-> PrescriptionDAO
+TrackingService -down-> AppointmentDAO
+
+AuthService -down-> UserDAO
+
+' DAO -> Repository implementations
+ClinicDAO ..|> ClinicRepository
+ServiceDAO ..|> ServiceRepository
+TimeslotDAO ..|> TimeslotRepository
+AppointmentDAO ..|> AppointmentRepository
+UserDAO ..|> UserRepository
+TestDAO ..|> TestRepository
+PrescriptionDAO ..|> PrescriptionRepository
+
+' DAO -> Model connections
+UserDAO -down-> User
+SessionDAO -down-> Session
+ClinicDAO -down-> Clinic
+ServiceDAO -down-> Service
+TimeslotDAO -down-> AvailableTimeslot
+AppointmentDAO -down-> Appointment
+TestDAO -down-> Test
+PrescriptionDAO -down-> Prescription
+ReminderDAO -down-> AppointmentReminder
+ReminderDAO -down-> PrescriptionReminder
+ReminderDAO -down-> BookingReminder
+
+' Key interactions
+TimeslotDAO <--> AppointmentDAO : coordinates
+BookingController -down-> Data
+Data -down-> Book
+Data -down-> Session
+
+@enduml

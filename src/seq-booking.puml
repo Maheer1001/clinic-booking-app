@@ -1,0 +1,82 @@
+@startuml Booking Flow - Clinic -> Service -> Date/Time -> Details -> Review -> Confirm
+!theme plain
+skinparam linetype ortho
+skinparam shadowing false
+
+actor User
+boundary "Main App\n(MainView + Navigator)" as MainUI
+control "MainController" as MainC
+
+boundary "Clinic Search" as ClinicUI
+control "ClinicSearchController/Service" as ClinicC
+
+boundary "Service Selection" as ServiceUI
+control "BookingController" as BookingC
+
+boundary "Date & Time" as DateTimeUI
+control "DateTimeSelector + TimeslotProvider" as SlotPicker
+entity "Service/Timeslot DAO" as SlotDAO
+
+boundary "Personal Info / Details" as DetailsUI
+boundary "Review" as ReviewUI
+
+entity "BookingService" as BookingS
+entity "AppointmentDAO/DB" as AppointmentDB
+control "NotificationDispatcher" as Dispatch
+control "BookingCommunicationPrefs" as CommPrefs
+entity "EmailSender" as Mail
+boundary "In-app Notification" as Notif
+
+== Open Booking ==
+User -> MainUI: Click "Book"
+MainUI -> MainC: goToBooking()
+MainC -> ClinicUI: show clinic search
+
+== Choose Clinic ==
+User -> ClinicUI: Search + select clinic
+ClinicUI -> ClinicC: search/select
+ClinicC --> ClinicUI: results + selection
+ClinicUI -> BookingC: setClinic(clinic)
+BookingC -> ServiceUI: show service selection
+
+== Choose Service(s) ==
+User -> ServiceUI: pick service(s)
+ServiceUI -> BookingC: add service items
+BookingC -> DateTimeUI: show date/time step
+
+== Pick Timeslot(s) ==
+User -> DateTimeUI: choose date
+DateTimeUI -> SlotPicker: update available times
+SlotPicker -> SlotDAO: get available dates + timeslots
+SlotDAO --> SlotPicker: available dates + timeslots
+User -> DateTimeUI: choose time slot
+DateTimeUI -> SlotPicker: onSelect(slot)
+SlotPicker -> BookingC: set timeslotId/date/time on booking items
+User -> DateTimeUI: Next
+DateTimeUI -> BookingC: goToDetails()
+
+== Enter Details ==
+User -> DetailsUI: enter notes/personal info
+DetailsUI -> BookingC: update booking details
+User -> DetailsUI: Next
+DetailsUI -> BookingC: goToReview()
+BookingC -> ReviewUI: show booking summary
+
+== Confirm Booking ==
+User -> ReviewUI: Confirm
+ReviewUI -> BookingC: confirmBooking()
+BookingC -> BookingS: confirmBooking(booking, userId)
+BookingS -> AppointmentDB: insert Appointment(s)\nreserve capacity
+AppointmentDB --> BookingS: ok
+
+group Transactional confirmation (if enabled)
+  BookingC -> CommPrefs: load(userId)
+  CommPrefs --> BookingC: discreet + template overrides
+  BookingC -> Dispatch: notifyUser(userId,\nBookingConfirmationEmail,\nBookingConfirmationNotification)
+  Dispatch -> Mail: send email (if configured)
+  Dispatch -> Notif: show in-app notification
+end
+
+BookingC --> MainUI: Navigate to "Booking confirmed" prompt\n(reminders or skip)
+
+@enduml

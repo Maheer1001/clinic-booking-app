@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
+<body>
+<th:block th:fragment="content">
+    <h2>Time to Book an Appointment</h2>
+    <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+    <p th:if="${customIntro} != null" th:text="${customIntro}">We'd like to remind you that it may be time to book an appointment.</p>
+    <p th:if="${customIntro} == null">We'd like to remind you that it may be time to book an appointment.</p>
+
+    <div class="detail-box">
+        <p><span class="detail-label">Reason:</span> <span th:text="${reminderReason}">Routine check-up due</span></p>
+        <p><span class="detail-label">Suggested:</span> <span th:text="${suggestedAppointmentType}">Annual Screening</span></p>
+    </div>
+
+    <p>Taking care of your sexual health is important. Book an appointment at your convenience through your account.</p>
+
+</th:block>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="controller.PrivacyController"
+      styleClass="auth-page"
+      spacing="12">
+
+    <VBox styleClass="auth-heading">
+        <Label text="Privacy Policy" styleClass="subtitle"/>
+        <Label text="Scroll to the bottom to return." styleClass="muted"/>
+    </VBox>
+
+    <VBox styleClass="auth-card" spacing="10">
+        <ScrollPane fx:id="scrollPane" fitToWidth="true">
+            <VBox spacing="10">
+                <Label fx:id="contentLabel" wrapText="true"/>
+            </VBox>
+        </ScrollPane>
+
+        <Button fx:id="returnBtn"
+                text="Return to create account"
+                onAction="#returnToSignup"
+                disable="true"
+                styleClass="secondaryWideBtn"/>
+    </VBox>
+
+</VBox>
+

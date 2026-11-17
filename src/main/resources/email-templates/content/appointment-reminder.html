@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
+<body>
+<th:block th:fragment="content">
+    <h2>Appointment Reminder</h2>
+    <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+    <p th:if="${customIntro} != null" th:text="${customIntro}">This is a friendly reminder that you have an upcoming appointment.</p>
+    <p th:if="${customIntro} == null">This is a friendly reminder that you have an upcoming appointment.</p>
+
+    <div class="detail-box">
+        <p><span class="detail-label">Type:</span> <span th:text="${appointmentType}">Check-up</span></p>
+        <p><span class="detail-label">Date:</span> <span th:text="${appointmentDate}">Sunday, 15 February 2026</span></p>
+        <p><span class="detail-label">Time:</span> <span th:text="${appointmentTime}">10:30</span></p>
+        <p><span class="detail-label">Location:</span> <span th:text="${clinicLocation}">Clinic</span></p>
+        <p><span class="detail-label">Clinician:</span> <span th:text="${doctorName}">Dr. Smith</span></p>
+    </div>
+
+    <p>Please arrive 10 minutes early. If you need to reschedule, log in to your account or contact us.</p>
+
+</th:block>
+</body>
+</html>

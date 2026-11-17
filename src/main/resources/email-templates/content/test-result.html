@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
+<body>
+<th:block th:fragment="content">
+    <h2>Your Test Results Are Ready</h2>
+    <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+    <p>The results for your recent test are now available.</p>
+
+    <div class="detail-box">
+        <p><span class="detail-label">Test:</span> <span th:text="${testType}">STI Screening</span></p>
+        <p><span class="detail-label">Test Date:</span> <span th:text="${testDate}">05 February 2026</span></p>
+        <p><span class="detail-label">Status:</span> <span th:text="${resultStatus}">Available</span></p>
+    </div>
+
+    <p>For confidentiality, your results are not included in this email. Please log in to your account to view them securely.</p>
+
+</th:block>
+</body>
+</html>

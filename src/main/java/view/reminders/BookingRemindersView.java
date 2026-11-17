@@ -1,0 +1,526 @@
+package view.reminders;
+
+import app.Data;
+import controller.ReminderController;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.*;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import model.BookingCommunicationPreferences;
+import model.BookingReminder;
+import model.ReminderTemplateOverrides;
+import service.NotificationDispatcher;
+import service.email.BookingConfirmationEmail;
+import service.email.CancellationEmail;
+import service.email.MakeAppointmentReminderEmail;
+import service.email.RescheduleConfirmationEmail;
+import view.Navigator;
+import view.notification.BookingConfirmationNotification;
+import view.notification.CancellationNotification;
+import view.notification.MakeAppointmentReminderNotification;
+import view.notification.RescheduleConfirmationNotification;
+import view.ui.UI;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.function.Consumer;
+
+/**
+ * Screen for managing booking reminders.
+ */
+public class BookingRemindersView {
+
+    private final Navigator nav;
+    private final ReminderController controller;
+
+    public BookingRemindersView(Navigator nav, ReminderController controller) {
+        this.nav = nav;
+        this.controller = controller;
+    }
+
+    /**
+     * Content for the Reminders hub “Booking reminders” tab (single settings form).
+     */
+    public static Node createBookingReminderTabBody(ReminderController controller) {
+        VBox inner = buildBookingForm(controller);
+        inner.setMaxWidth(Double.MAX_VALUE);
+        ScrollPane sp = new ScrollPane(inner);
+        sp.setFitToWidth(true);
+        return sp;
+    }
+
+    public void show() {
+        ScrollPane scroll = new ScrollPane(UI.page(buildBookingForm(controller)));
+        scroll.setFitToWidth(true);
+
+        nav.goToPage(scroll, "Booking Reminders", false);
+    }
+
+    private static VBox buildBookingForm(ReminderController controller) {
+        BookingCommunicationPreferences commPrefs = controller.getBookingCommunicationPreferences();
+
+        List<BookingReminder> existingReminders = controller.getBookingReminders();
+        BookingReminder existing = existingReminders.isEmpty() ? null : existingReminders.getFirst();
+
+        ChoiceBox<String> notifyChoice = ReminderNotifyChoice.create();
+        ReminderNotifyChoice.applyEnabled(notifyChoice, existing != null && existing.isNotify());
+
+        Label daysLabel = new Label("Remind me if it has been this many days since my last visit:");
+        daysLabel.setWrapText(true);
+        daysLabel.setMaxWidth(Double.MAX_VALUE);
+        Spinner<Integer> daysSpinner = new Spinner<>(30, 365, existing != null ? existing.getDaysSinceLast() : 180);
+        UI.tuneIntSpinner(daysSpinner);
+        HBox daysSpinnerRow = new HBox(10, daysSpinner);
+        daysSpinnerRow.setAlignment(Pos.CENTER_LEFT);
+        VBox daysBlock = new VBox(8, daysLabel, daysSpinnerRow);
+        daysBlock.setMaxWidth(Double.MAX_VALUE);
+
+        ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(
+                existing != null ? existing.getCustomMessage() : null
+        );
+
+        TextField emailFromNameField = new TextField(overrides.getEmailFromName());
+        emailFromNameField.setPromptText("Email sender name (optional)");
+        TextField emailSubjectField = new TextField(overrides.getEmailSubject());
+        emailSubjectField.setPromptText("Email subject (optional)");
+
+        TextField notifTitleField = new TextField(overrides.getNotificationTitle());
+        notifTitleField.setPromptText("Notification title (optional)");
+        TextField notifPreviewField = new TextField(overrides.getNotificationPreview());
+        notifPreviewField.setPromptText("Notification preview line (optional)");
+        TextArea notifBodyField = new TextArea(overrides.getNotificationBody());
+        notifBodyField.setPromptText("Notification full body (optional)");
+        notifBodyField.setPrefRowCount(3);
+
+        ChoiceBox<String> discreetChoice = DiscreetReminderChoice.create();
+        DiscreetReminderChoice.applyFromOverride(discreetChoice, overrides.getDiscreetOverride());
+
+        ChoiceBox<String> confirmationCommChoice = newCommStyleChoice(commPrefs.confirmationDiscreet());
+        ChoiceBox<String> rescheduleCommChoice = newCommStyleChoice(commPrefs.rescheduleDiscreet());
+        ChoiceBox<String> cancellationCommChoice = newCommStyleChoice(commPrefs.cancellationDiscreet());
+
+        BookingCommTemplateFields confirmationFields = new BookingCommTemplateFields(commPrefs.confirmationTemplate());
+        BookingCommTemplateFields rescheduleFields = new BookingCommTemplateFields(commPrefs.rescheduleTemplate());
+        BookingCommTemplateFields cancellationFields = new BookingCommTemplateFields(commPrefs.cancellationTemplate());
+
+        Label saveConfirmReminder = UI.inlineSaveConfirmation();
+        Label saveConfirmConfirmation = UI.inlineSaveConfirmation();
+        Label saveConfirmReschedule = UI.inlineSaveConfirmation();
+        Label saveConfirmCancellation = UI.inlineSaveConfirmation();
+
+        // Plain VBox like other Reminders hub tabs — hub shell already uses UI.PAGE padding.
+        VBox root = new VBox(16);
+        root.setMaxWidth(Double.MAX_VALUE);
+        root.setFillWidth(true);
+
+        root.getChildren().addAll(
+                reminderEmailsNotificationsSection(
+                        controller,
+                        notifyChoice,
+                        daysBlock,
+                        discreetChoice,
+                        emailFromNameField,
+                        emailSubjectField,
+                        notifTitleField,
+                        notifPreviewField,
+                        notifBodyField,
+                        daysSpinner,
+                        saveConfirmReminder),
+                transactionalSection(
+                        "Confirmation emails &\nnotifications",
+                        "Applies when you complete a booking (confirmation email and in-app message).",
+                        confirmationCommChoice,
+                        confirmationFields,
+                        saveConfirmConfirmation,
+                        () -> saveCommunicationPreferences(controller,
+                                confirmationCommChoice,
+                                rescheduleCommChoice,
+                                cancellationCommChoice,
+                                confirmationFields,
+                                rescheduleFields,
+                                cancellationFields),
+                        lbl -> sendConfirmationTest(confirmationFields, confirmationCommChoice, lbl),
+                        () -> showConfirmationTestNotif(confirmationFields, confirmationCommChoice)),
+                transactionalSection(
+                        "Reschedule emails &\nnotifications",
+                        "Applies when you reschedule an appointment.",
+                        rescheduleCommChoice,
+                        rescheduleFields,
+                        saveConfirmReschedule,
+                        () -> saveCommunicationPreferences(controller,
+                                confirmationCommChoice,
+                                rescheduleCommChoice,
+                                cancellationCommChoice,
+                                confirmationFields,
+                                rescheduleFields,
+                                cancellationFields),
+                        lbl -> sendRescheduleTest(rescheduleFields, rescheduleCommChoice, lbl),
+                        () -> showRescheduleTestNotif(rescheduleFields, rescheduleCommChoice)),
+                transactionalSection(
+                        "Cancellation emails &\nnotifications",
+                        "Applies when you cancel an appointment.",
+                        cancellationCommChoice,
+                        cancellationFields,
+                        saveConfirmCancellation,
+                        () -> saveCommunicationPreferences(controller,
+                                confirmationCommChoice,
+                                rescheduleCommChoice,
+                                cancellationCommChoice,
+                                confirmationFields,
+                                rescheduleFields,
+                                cancellationFields),
+                        lbl -> sendCancellationTest(cancellationFields, cancellationCommChoice, lbl),
+                        () -> showCancellationTestNotif(cancellationFields, cancellationCommChoice))
+        );
+
+        return root;
+    }
+
+    /** Section 1 — same layout pattern as appointment / prescription reminder cards. */
+    private static VBox reminderEmailsNotificationsSection(
+            ReminderController controller,
+            ChoiceBox<String> notifyChoice,
+            VBox daysSchedulingBlock,
+            ChoiceBox<String> discreetChoice,
+            TextField emailFromNameField,
+            TextField emailSubjectField,
+            TextField notifTitleField,
+            TextField notifPreviewField,
+            TextArea notifBodyField,
+            Spinner<Integer> daysSpinner,
+            Label saveConfirmReminder) {
+
+        Label explanation = UI.body(
+                "Get reminded to book an appointment if it has been a while since your last visit.");
+        explanation.setWrapText(true);
+
+        HBox notifyDiscreetRow = new HBox(16, notifyChoice, discreetChoice);
+        notifyDiscreetRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label timeIntro = UI.muted(
+                "How long to wait before we nudge you to book again.");
+        timeIntro.setWrapText(true);
+        VBox timeInner = new VBox(8, timeIntro, daysSchedulingBlock);
+        TitledPane timePane = styledPane("Time", timeInner);
+
+        VBox emailInner = new VBox(8,
+                new Label("Email customisation"),
+                emailFromNameField,
+                emailSubjectField
+        );
+        TitledPane emailPane = styledPane("Email", emailInner);
+
+        VBox notifInner = new VBox(8,
+                new Label("Notification customisation"),
+                notifTitleField,
+                notifPreviewField,
+                notifBodyField
+        );
+        TitledPane notifPane = styledPane("Notification", notifInner);
+
+        Button saveBtn = UI.backButton("Save Reminder");
+        Button testEmailBtn = UI.backButton("Send test email");
+        Button previewNotifBtn = UI.backButton("Preview notification");
+
+        saveBtn.setOnAction(e -> {
+            boolean notify = ReminderNotifyChoice.isEnabled(notifyChoice);
+            int days = daysSpinner.getValue();
+            Boolean discreetOverride = DiscreetReminderChoice.toOverride(discreetChoice.getValue());
+
+            ReminderTemplateOverrides toSave = new ReminderTemplateOverrides(
+                    emailSubjectField.getText(),
+                    null,
+                    emailFromNameField.getText(),
+                    notifTitleField.getText(),
+                    notifPreviewField.getText(),
+                    notifBodyField.getText(),
+                    discreetOverride
+            );
+            String customJson = toSave.toJson();
+
+            controller.saveBookingReminder(notify, days, customJson);
+            UI.showSaveConfirmation(saveConfirmReminder);
+
+            if (notify) {
+                String email = Data.getCurrentUserEmail();
+                String name = Data.getCurrentUserName();
+                if (email == null) email = "";
+                if (name == null || name.isBlank()) name = email;
+                var lastDate = controller.getLastAppointmentDate();
+                controller.scheduleBookingReminder(email, name, days, lastDate.orElse(null), customJson);
+            }
+        });
+
+        testEmailBtn.setOnAction(e -> {
+            String recipientEmail = Data.getCurrentUserEmail();
+            String recipientName = Data.getCurrentUserName();
+            if (recipientEmail == null || recipientEmail.isBlank()) {
+                new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+                return;
+            }
+            if (recipientName == null || recipientName.isBlank()) {
+                recipientName = recipientEmail;
+            }
+
+            int days = daysSpinner.getValue();
+            Boolean discreetOverride = DiscreetReminderChoice.toOverride(discreetChoice.getValue());
+
+            ReminderTemplateOverrides current = new ReminderTemplateOverrides(
+                    emailSubjectField.getText(),
+                    null,
+                    emailFromNameField.getText(),
+                    null,
+                    null,
+                    null,
+                    discreetOverride
+            );
+
+            new NotificationDispatcher().notifyUser(
+                    Data.getCurrentUserId(),
+                    new MakeAppointmentReminderEmail(
+                            recipientEmail, recipientName,
+                            "It has been " + days + " days since your last visit",
+                            "Routine Sexual Health Check-up",
+                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName()
+                    ),
+                    null
+            );
+            UI.showTestEmailConfirmation(saveConfirmReminder);
+        });
+
+        previewNotifBtn.setOnAction(e -> {
+            int days = daysSpinner.getValue();
+            ReminderTemplateOverrides current = new ReminderTemplateOverrides(
+                    null,
+                    null,
+                    null,
+                    notifTitleField.getText(),
+                    notifPreviewField.getText(),
+                    notifBodyField.getText(),
+                    null
+            );
+
+            new MakeAppointmentReminderNotification(
+                    Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "",
+                    "It has been " + days + " days since your last visit",
+                    "Routine Sexual Health Check-up",
+                    current.getNotificationTitle(),
+                    current.getNotificationPreview(),
+                    current.getNotificationBody(),
+                    DiscreetReminderChoice.toOverride(discreetChoice.getValue())
+            ).show();
+        });
+
+        saveBtn.setMaxWidth(Double.MAX_VALUE);
+        testEmailBtn.setMaxWidth(Double.MAX_VALUE);
+        previewNotifBtn.setMaxWidth(Double.MAX_VALUE);
+
+        VBox saveBlock = new VBox(8, testEmailBtn, previewNotifBtn, saveBtn, saveConfirmReminder);
+        saveBlock.setAlignment(Pos.TOP_CENTER);
+        saveBlock.setFillWidth(true);
+        saveBlock.setMaxWidth(Double.MAX_VALUE);
+
+        return UI.card(12,
+                UI.titleSmWrapping("Reminder emails &\nnotifications"),
+                explanation,
+                notifyDiscreetRow,
+                timePane,
+                emailPane,
+                notifPane,
+                saveBlock
+        );
+    }
+
+    private static VBox transactionalSection(
+            String sectionTitle,
+            String explanationText,
+            ChoiceBox<String> commChoice,
+            BookingCommTemplateFields fields,
+            Label saveConfirm,
+            Runnable saveAction,
+            Consumer<Label> testEmailAction,
+            Runnable previewNotificationAction) {
+
+        Label explanation = UI.body(explanationText);
+        explanation.setWrapText(true);
+
+        HBox commRow = new HBox(commChoice);
+        commRow.setAlignment(Pos.CENTER_LEFT);
+
+        TitledPane emailPane = styledPane("Email", fields.emailSectionContent());
+        TitledPane notifPane = styledPane("Notification", fields.notificationSectionContent());
+
+        Button saveBtn = UI.backButton("Save Reminder");
+        Button testEmailBtn = UI.backButton("Send test email");
+        Button previewBtn = UI.backButton("Preview notification");
+
+        saveBtn.setOnAction(e -> {
+            saveAction.run();
+            UI.showSaveConfirmation(saveConfirm);
+        });
+        testEmailBtn.setOnAction(e -> testEmailAction.accept(saveConfirm));
+        previewBtn.setOnAction(e -> previewNotificationAction.run());
+
+        saveBtn.setMaxWidth(Double.MAX_VALUE);
+        testEmailBtn.setMaxWidth(Double.MAX_VALUE);
+        previewBtn.setMaxWidth(Double.MAX_VALUE);
+
+        VBox actions = new VBox(8, testEmailBtn, previewBtn, saveBtn, saveConfirm);
+        actions.setAlignment(Pos.TOP_CENTER);
+        actions.setFillWidth(true);
+        actions.setMaxWidth(Double.MAX_VALUE);
+
+        return UI.card(12,
+                UI.titleSmWrapping(sectionTitle),
+                explanation,
+                commRow,
+                emailPane,
+                notifPane,
+                actions
+        );
+    }
+
+    private static void sendConfirmationTest(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice,
+                                             Label testEmailFeedback) {
+        String recipientEmail = Data.getCurrentUserEmail();
+        String recipientName = Data.getCurrentUserName();
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+            return;
+        }
+        if (recipientName == null || recipientName.isBlank()) {
+            recipientName = recipientEmail;
+        }
+        boolean disc = commChoiceIsDiscreet(discreetChoice);
+        ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
+        new NotificationDispatcher().notifyUser(
+                Data.getCurrentUserId(),
+                new BookingConfirmationEmail(
+                        recipientEmail, recipientName,
+                        "APP-999", "Example service",
+                        LocalDateTime.now(), "Example clinic", "Clinician",
+                        disc, ov),
+                null
+        );
+        UI.showTestEmailConfirmation(testEmailFeedback);
+    }
+
+    private static void showConfirmationTestNotif(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice) {
+        String name = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "";
+        boolean disc = commChoiceIsDiscreet(discreetChoice);
+        ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
+        new BookingConfirmationNotification(
+                name, "APP-999", "Example service",
+                LocalDateTime.now(), "Example clinic", "Clinician",
+                disc, ov
+        ).show();
+    }
+
+    private static void sendRescheduleTest(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice,
+                                           Label testEmailFeedback) {
+        String recipientEmail = Data.getCurrentUserEmail();
+        String recipientName = Data.getCurrentUserName();
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+            return;
+        }
+        if (recipientName == null || recipientName.isBlank()) {
+            recipientName = recipientEmail;
+        }
+        boolean disc = commChoiceIsDiscreet(discreetChoice);
+        ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
+        new NotificationDispatcher().notifyUser(
+                Data.getCurrentUserId(),
+                new RescheduleConfirmationEmail(
+                        recipientEmail, recipientName,
+                        "APP-999", "Example service", "Example clinic",
+                        "Previous date/time example", "New date/time example",
+                        disc, ov),
+                null
+        );
+        UI.showTestEmailConfirmation(testEmailFeedback);
+    }
+
+    private static void showRescheduleTestNotif(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice) {
+        String name = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "";
+        boolean disc = commChoiceIsDiscreet(discreetChoice);
+        ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
+        new RescheduleConfirmationNotification(
+                name, "APP-999", "Example service", "Example clinic",
+                "Previous date/time example", "New date/time example",
+                disc, ov
+        ).show();
+    }
+
+    private static void sendCancellationTest(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice,
+                                               Label testEmailFeedback) {
+        String recipientEmail = Data.getCurrentUserEmail();
+        String recipientName = Data.getCurrentUserName();
+        if (recipientEmail == null || recipientEmail.isBlank()) {
+            new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+            return;
+        }
+        if (recipientName == null || recipientName.isBlank()) {
+            recipientName = recipientEmail;
+        }
+        boolean disc = commChoiceIsDiscreet(discreetChoice);
+        ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
+        new NotificationDispatcher().notifyUser(
+                Data.getCurrentUserId(),
+                new CancellationEmail(
+                        recipientEmail, recipientName,
+                        "APP-999", "Example service", "Example clinic",
+                        "Example date/time",
+                        disc, ov),
+                null
+        );
+        UI.showTestEmailConfirmation(testEmailFeedback);
+    }
+
+    private static void showCancellationTestNotif(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice) {
+        String name = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "";
+        boolean disc = commChoiceIsDiscreet(discreetChoice);
+        ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
+        new CancellationNotification(
+                name, "APP-999", "Example service", "Example clinic",
+                "Example date/time",
+                disc, ov
+        ).show();
+    }
+
+    private static void saveCommunicationPreferences(
+            ReminderController controller,
+            ChoiceBox<String> confirmationCommChoice,
+            ChoiceBox<String> rescheduleCommChoice,
+            ChoiceBox<String> cancellationCommChoice,
+            BookingCommTemplateFields confirmationFields,
+            BookingCommTemplateFields rescheduleFields,
+            BookingCommTemplateFields cancellationFields) {
+        controller.saveBookingCommunicationPreferences(new BookingCommunicationPreferences(
+                commChoiceIsDiscreet(confirmationCommChoice),
+                commChoiceIsDiscreet(rescheduleCommChoice),
+                commChoiceIsDiscreet(cancellationCommChoice),
+                confirmationFields.toOverridesJsonOrNull(),
+                rescheduleFields.toOverridesJsonOrNull(),
+                cancellationFields.toOverridesJsonOrNull()
+        ));
+    }
+
+    private static TitledPane styledPane(String title, Node content) {
+        TitledPane p = new TitledPane(title, content);
+        p.setExpanded(false);
+        p.getStyleClass().add(UI.REMINDER_TITLED_PANE);
+        return p;
+    }
+
+    private static ChoiceBox<String> newCommStyleChoice(boolean discreet) {
+        ChoiceBox<String> cb = DiscreetReminderChoice.create();
+        DiscreetReminderChoice.applyFromOverride(cb, discreet ? Boolean.TRUE : Boolean.FALSE);
+        return cb;
+    }
+
+    private static boolean commChoiceIsDiscreet(ChoiceBox<String> cb) {
+        return DiscreetReminderChoice.isDiscreetSelected(cb);
+    }
+}

@@ -1,0 +1,125 @@
+@startuml Auth Flows - Login, Signup, Forgot Password
+!theme plain
+skinparam linetype ortho
+skinparam shadowing false
+
+actor User
+boundary "Login Screen\n(login.fxml)" as LoginUI
+control "LoginController" as LoginC
+control "AuthService" as AuthS
+entity "UserDAO" as UserDAO
+entity "Session DAO/DB" as SessionDB
+
+boundary "Create Account Screen\n(signup.fxml)" as SignUpUI
+control "SignUpController" as SignUpC
+boundary "Terms Screen\n(terms.fxml)" as TermsUI
+control "TermsController" as TermsC
+boundary "Privacy Screen\n(privacy.fxml)" as PrivacyUI
+control "PrivacyController" as PrivacyC
+entity "Data.SignUpDraft" as Draft
+
+boundary "Password Reset Screen\n(password-reset.fxml)" as ResetUI
+control "PasswordResetController" as ResetC
+control "PasswordResetService" as ResetS
+control "EmailSender" as Mail
+
+== Login ==
+User -> LoginUI: Enter email + password\nClick Continue / press Enter
+LoginUI -> LoginC: onLogin(email, password)
+LoginC -> AuthS: signIn(email, password)
+AuthS -> UserDAO: getPasswordHashByEmail(email)\ngetUserIdByEmail(email)
+alt user not found
+  AuthS --> LoginC: USER_NOT_FOUND
+  LoginC --> LoginUI: Show "User not found"
+else wrong password
+  AuthS --> LoginC: WRONG_PASSWORD
+  LoginC --> LoginUI: Show "Wrong password"
+else success
+  AuthS -> SessionDB: create session
+  AuthS --> LoginC: SUCCESS + session/user
+  LoginC --> LoginUI: Navigate to main app
+end
+
+== Create Account ==
+User -> SignUpUI: Fill email + password\n(Terms/Privacy initially disabled)
+SignUpUI -> SignUpC: initialize()
+SignUpC -> Draft: load + bind field changes
+
+group Read Terms/Privacy before agreeing
+  User -> SignUpUI: Click "Terms of Service" hyperlink
+  SignUpUI -> SignUpC: goToTerms()
+  SignUpC -> TermsUI: navigate (draft preserved)
+  User -> TermsUI: Scroll to bottom
+  TermsUI -> TermsC: enable Return button\nmark termsReadToEnd=true
+  TermsC -> Draft: set termsReadToEnd=true
+  User -> TermsUI: Return to create account
+  TermsUI -> SignUpUI: navigate back (fields preserved)
+
+  User -> SignUpUI: Click "Privacy Policy" hyperlink
+  SignUpUI -> SignUpC: goToPrivacy()
+  SignUpC -> PrivacyUI: navigate (draft preserved)
+  User -> PrivacyUI: Scroll to bottom
+  PrivacyUI -> PrivacyC: enable Return button\nmark privacyReadToEnd=true
+  PrivacyC -> Draft: set privacyReadToEnd=true
+  User -> PrivacyUI: Return to create account
+  PrivacyUI -> SignUpUI: navigate back (fields preserved)
+end
+
+User -> SignUpUI: Tick Terms + Privacy\nClick Create Account
+SignUpUI -> SignUpC: onSignUp(email, password, termsOk)
+SignUpC -> AuthS: signUp(email, password, termsOk)
+AuthS -> UserDAO: emailExists(email)
+alt invalid email / weak password / terms not accepted
+  AuthS --> SignUpC: error result
+  SignUpC --> SignUpUI: Show message
+else email already used
+  AuthS --> SignUpC: EMAIL_ALREADY_USED
+  SignUpC --> SignUpUI: Show "Email already used"
+else success
+  AuthS -> UserDAO: insertUser(email, password_hash)
+  AuthS --> SignUpC: SUCCESS
+  SignUpC -> Draft: clear()
+  SignUpC --> LoginUI: navigate to login
+end
+
+== Forgot Password ==
+User -> LoginUI: Click "Forgot password?"
+LoginUI -> LoginC: goToPasswordReset()
+LoginC -> ResetUI: show reset screen
+
+User -> ResetUI: Send OTP
+ResetUI -> ResetC: onSendOtp(email)
+ResetC -> ResetS: sendOtp(email)
+ResetS -> UserDAO: emailExists(email)
+alt email not found / invalid
+  ResetS --> ResetC: error result
+  ResetC --> ResetUI: show message
+else ok
+  ResetS -> Mail: send OTP email (TTL 10 min)\nlatest-only, invalidates previous
+  ResetS --> ResetC: SENT (or failure)
+  ResetC --> ResetUI: show "Email sent"\n+ expiry info
+end
+
+User -> ResetUI: Verify OTP
+ResetUI -> ResetC: onVerifyOtp(email, code)
+ResetC -> ResetS: verifyOtp(email, code)
+alt invalid/expired
+  ResetS --> ResetC: INVALID/EXPIRED
+  ResetC --> ResetUI: show message
+else valid (single-use)
+  ResetS --> ResetC: VALID
+  ResetC --> ResetUI: reveal new password fields
+end
+
+User -> ResetUI: Confirm new password
+ResetUI -> ResetC: onConfirmReset(email, pw1, pw2)
+alt mismatch
+  ResetC --> ResetUI: "Password fields don't match"
+else match
+  ResetC -> ResetS: resetPassword(email, newPassword)
+  ResetS -> UserDAO: updatePasswordHashByEmail(email, hash)
+  ResetS --> ResetC: SUCCESS (or error)
+  ResetC --> LoginUI: navigate back to login on success
+end
+
+@enduml

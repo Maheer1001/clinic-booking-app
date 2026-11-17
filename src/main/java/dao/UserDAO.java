@@ -1,0 +1,444 @@
+package dao;
+
+import app.DB;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import model.AccessibilitySettings;
+import model.AppointmentReminderDefaults;
+import model.BookingCommunicationPreferences;
+import model.User;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Optional;
+
+public class UserDAO implements UserRepository {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
+
+    @Override
+    public boolean emailExists(String email) throws SQLException {
+        String sql = "SELECT 1 FROM \"User\" WHERE email = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    @Override
+    public int getDefaultClinic(int userId) throws SQLException {
+        String sql = "SELECT  default_clinic_id FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return -1;
+                int val = rs.getInt("default_clinic_id");
+                return rs.wasNull() ? -1 : val;
+            }
+        }
+    }
+
+    @Override
+    public boolean updateDefaultClinic(int userId, int clinicId) throws SQLException {
+        String sql = "UPDATE \"User\" SET default_clinic_id = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, clinicId);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() == 1;
+        }
+    }
+    @Override
+    public boolean defaultClinicExists(int userID) throws SQLException {
+        return getDefaultClinic(userID) >= 0;
+    }
+    @Override
+    public boolean insertUser(String email, String passwordHash) throws SQLException {
+        email = email.toLowerCase();
+
+        String sql = """
+        INSERT INTO "User"(user_id, email, password_hash, email_verified)
+        VALUES(?, ?, ?, false)
+        """;
+
+        // In tests (and occasionally under concurrent inserts), MAX(user_id)+1 can race.
+        // Retry on duplicate primary key to keep inserts robust.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            int newId = nextUserId();
+            try (Connection c = DB.connect();
+                 PreparedStatement ps = c.prepareStatement(sql)) {
+                ps.setInt(1, newId);
+                ps.setString(2, email);
+                ps.setString(3, passwordHash);
+                ps.executeUpdate();
+                return true;
+            } catch (SQLException e) {
+                // Postgres unique violation
+                if ("23505".equals(e.getSQLState())) {
+                    continue;
+                }
+                throw e;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public String getPasswordHashByEmail(String email) throws SQLException {
+        String sql = "SELECT password_hash FROM \"User\" WHERE email = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getString("password_hash");
+            }
+        }
+    }
+
+    @Override
+    public boolean updatePasswordHashByEmail(String email, String passwordHash) throws SQLException {
+        String sql = "UPDATE \"User\" SET password_hash = ? WHERE email = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, passwordHash);
+            ps.setString(2, email);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public Integer getUserIdByEmail(String email) throws SQLException {
+        String sql = "SELECT user_id FROM \"User\" WHERE email = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, email.toLowerCase());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getInt("user_id");
+            }
+        }
+    }
+
+    @Override
+    public String getEmailByUserId(int userId) throws SQLException {
+        String sql = "SELECT email FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getString("email");
+            }
+        }
+    }
+
+    @Override
+    public String getDisplayNameByUserId(int userId) throws SQLException {
+        String sql = "SELECT first_name, last_name FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                String first = rs.getString("first_name");
+                String last = rs.getString("last_name");
+                if (first != null && !first.isBlank() && last != null && !last.isBlank())
+                    return first.trim() + " " + last.trim();
+                if (first != null && !first.isBlank()) return first.trim();
+                if (last != null && !last.isBlank()) return last.trim();
+                return null;
+            }
+        }
+    }
+
+    @Override
+    public Optional<User> findById(int userId) throws SQLException {
+        String sql = "SELECT user_id, email, first_name, last_name FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return Optional.of(new User(
+                        rs.getInt("user_id"),
+                        rs.getString("email"),
+                        rs.getString("first_name"),
+                        rs.getString("last_name")));
+            }
+        }
+    }
+
+
+    private int nextUserId() throws SQLException {
+        String sql = "SELECT COALESCE(MAX(user_id), 0) + 1 AS next_id FROM \"User\"";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            rs.next();
+            return rs.getInt("next_id");
+        }
+    }
+
+    public void deleteUserById(int userId) {
+        String sql = "DELETE FROM \"User\" WHERE user_id = ?";
+
+        try (Connection c = DB.connect();
+            PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            ps.executeUpdate();
+            System.out.println(ps.toString());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean updateName(int userId, String firstName, String lastName) throws SQLException {
+        String sql = "UPDATE \"User\" SET first_name = ?, last_name = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, firstName);
+            ps.setString(2, lastName);
+            ps.setInt(3, userId);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    public boolean updateEmail(int userId, String newEmail) throws SQLException {
+        String sql = "UPDATE \"User\" SET email = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, newEmail);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+
+    public service.AccountService.AccountInfo getAccountInfo(int userId) throws SQLException {
+        String sql = """
+        SELECT first_name, last_name, phone_number, dob, email
+        FROM "User"
+        WHERE user_id = ?
+        LIMIT 1
+        """;
+
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+
+                java.sql.Date dobSql = rs.getDate("dob");
+                java.time.LocalDate dob = (dobSql == null) ? null : dobSql.toLocalDate();
+
+                return new service.AccountService.AccountInfo(
+                        rs.getString("first_name"),
+                        rs.getString("last_name"),
+                        rs.getString("phone_number"),
+                        dob,
+                        rs.getString("email")
+                );
+            }
+        }
+    }
+
+
+    public boolean emailUsedByOtherUser(int userId, String email) throws SQLException {
+        String sql = "SELECT user_id FROM \"User\" WHERE email = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                int found = rs.getInt("user_id");
+                return found != userId;
+            }
+        }
+    }
+
+    public boolean updateAccountInfo(int userId,
+                                     String firstName,
+                                     String lastName,
+                                     String phone,
+                                     java.time.LocalDate dob,
+                                     String email) throws SQLException {
+
+        String sql = """
+        UPDATE "User"
+        SET first_name = ?,
+            last_name = ?,
+            phone_number = ?,
+            dob = ?,
+            email = ?
+        WHERE user_id = ?
+        """;
+
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setString(1, firstName);
+            ps.setString(2, lastName);
+            ps.setString(3, phone);
+
+            if (dob == null) ps.setNull(4, java.sql.Types.DATE);
+            else ps.setDate(4, java.sql.Date.valueOf(dob));
+
+            ps.setString(5, email);
+            ps.setInt(6, userId);
+
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public Optional<AppointmentReminderDefaults> getDefaultAppointmentReminderTemplate(int userId) throws SQLException {
+        String sql = "SELECT default_reminder_config FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                String raw = rs.getString("default_reminder_config");
+                if (raw == null || raw.isBlank()) return Optional.empty();
+                try {
+                    return Optional.of(JSON.readValue(raw, AppointmentReminderDefaults.class));
+                } catch (JsonProcessingException e) {
+                    e.printStackTrace();
+                    return Optional.empty();
+                }
+            }
+        }
+    }
+
+    @Override
+    public void saveDefaultAppointmentReminderTemplate(int userId, AppointmentReminderDefaults defaults) throws SQLException {
+        String json;
+        try {
+            json = JSON.writeValueAsString(defaults);
+        } catch (JsonProcessingException e) {
+            throw new SQLException("Failed to serialize default reminder template", e);
+        }
+        String sql = "UPDATE \"User\" SET default_reminder_config = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, json);
+            ps.setInt(2, userId);
+            ps.executeUpdate();
+        }
+    }
+
+    @Override
+    public BookingCommunicationPreferences getBookingCommunicationPreferences(int userId) throws SQLException {
+        String sql = "SELECT booking_comm_prefs FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return BookingCommunicationPreferences.defaults();
+                }
+                return parseBookingCommunicationPreferences(rs.getString("booking_comm_prefs"));
+            }
+        }
+    }
+
+    private static BookingCommunicationPreferences parseBookingCommunicationPreferences(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return BookingCommunicationPreferences.defaults();
+        }
+        try {
+            JsonNode n = JSON.readTree(raw);
+            BookingCommunicationPreferences d = BookingCommunicationPreferences.defaults();
+            boolean confirmation = n.hasNonNull("confirmation_discreet")
+                    ? n.get("confirmation_discreet").asBoolean()
+                    : d.confirmationDiscreet();
+            boolean reschedule = n.hasNonNull("reschedule_discreet")
+                    ? n.get("reschedule_discreet").asBoolean()
+                    : d.rescheduleDiscreet();
+            boolean cancellation = n.hasNonNull("cancellation_discreet")
+                    ? n.get("cancellation_discreet").asBoolean()
+                    : d.cancellationDiscreet();
+            String confirmationOv = extractOverridesJson(n, "confirmation_overrides");
+            String rescheduleOv = extractOverridesJson(n, "reschedule_overrides");
+            String cancellationOv = extractOverridesJson(n, "cancellation_overrides");
+            return new BookingCommunicationPreferences(confirmation, reschedule, cancellation,
+                    confirmationOv, rescheduleOv, cancellationOv);
+        } catch (Exception e) {
+            return BookingCommunicationPreferences.defaults();
+        }
+    }
+
+    private static String extractOverridesJson(JsonNode parent, String key) {
+        if (!parent.has(key) || parent.get(key).isNull()) {
+            return null;
+        }
+        JsonNode v = parent.get(key);
+        if (v.isTextual()) {
+            String t = v.asText();
+            return t != null && t.isBlank() ? null : t;
+        }
+        return v.toString();
+    }
+
+    @Override
+    public void saveBookingCommunicationPreferences(int userId, BookingCommunicationPreferences prefs) throws SQLException {
+        String json;
+        try {
+            json = JSON.writeValueAsString(prefs);
+        } catch (JsonProcessingException e) {
+            throw new SQLException("Failed to serialize booking communication preferences", e);
+        }
+        String sql = "UPDATE \"User\" SET booking_comm_prefs = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, json);
+            ps.setInt(2, userId);
+            ps.executeUpdate();
+        }
+    }
+
+    public static AccessibilitySettings getAccessibilitySettingsByUserId(int userId) throws SQLException {
+        String sql = "SELECT accessibility_settings FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+        PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return new AccessibilitySettings();
+                } else {
+                    String json = rs.getString("accessibility_settings");
+                    if (json == null || json.isBlank()) {
+                        return new AccessibilitySettings();
+                    } else {
+                        return JSON.readValue(json, AccessibilitySettings.class);
+                    }
+                }
+            } catch (JsonProcessingException e) {
+                throw new SQLException("Failed to load accessibility settings, resetting to default", e);
+            }
+        }
+    }
+
+    public static void setAccessibilitySettingsByUserId(int userId, AccessibilitySettings settings) throws SQLException {
+        String sql = "UPDATE \"User\" SET accessibility_settings = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+        PreparedStatement ps = c.prepareStatement(sql)) {
+            String settingsJSON = JSON.writeValueAsString(settings);
+            ps.setString(1, settingsJSON);
+            ps.setInt(2, userId);
+            ps.executeUpdate();
+        } catch (JsonProcessingException e) {
+            throw new SQLException("Failed to set accessibility settings, previous retained", e);
+        }
+    }
+}
+
+

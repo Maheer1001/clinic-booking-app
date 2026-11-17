@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
+<body>
+<th:block th:fragment="content">
+    <th:block th:if="${discreet}">
+        <h2>Appointment Updated</h2>
+        <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+        <p th:if="${customIntro}" th:text="${customIntro}">Custom intro</p>
+        <p th:unless="${customIntro}">Your appointment has been rescheduled. For privacy, details are not included in this email — please sign in to your account to view them.</p>
+    </th:block>
+    <th:block th:if="${!discreet}">
+        <h2>Appointment Rescheduled</h2>
+        <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+        <p th:if="${customIntro}" th:text="${customIntro}">Custom intro</p>
+        <p th:unless="${customIntro}">Your appointment has been successfully rescheduled. Here are the updated details:</p>
+
+        <div class="detail-box">
+            <p><span class="detail-label">Reference:</span> <span th:text="${appointmentRef}">APP-001</span></p>
+            <p><span class="detail-label">Service:</span> <span th:text="${serviceName}">STI Screening</span></p>
+            <p><span class="detail-label">Location:</span> <span th:text="${clinicName}">Clinic</span></p>
+            <p><span class="detail-label">Previous date:</span> <span th:text="${oldDate}">20 Feb 2026</span></p>
+            <p><span class="detail-label">New date:</span> <span th:text="${newDate}">25 Feb 2026</span></p>
+        </div>
+
+        <p>You can manage your appointments through your account.</p>
+    </th:block>
+
+</th:block>
+</body>
+</html>

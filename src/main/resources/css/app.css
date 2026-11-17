@@ -1,0 +1,876 @@
+.root {
+    -fx-background-color: linear-gradient(
+            from 0% 0% to 0% 100%,
+            #FFFFFF 0%,
+            #F2ECF8 100%
+    );
+    -fx-font-family: "Nunito";
+    -fx-snap-to-pixel: true;
+}
+
+.alert {
+    -fx-background-color: #F2ECF8;
+}
+
+.alert .header-panel {
+    -fx-background-color: #F2ECF8;
+}
+
+.alert .button-bar {
+    -fx-padding: 5 0 5 0;
+}
+
+.alert-agree {
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-padding: 7 10 7 10;
+}
+
+.alert-agree:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-cursor: hand;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+}
+
+.alert-ignore {
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-text-fill: #5B2A86;
+    -fx-background-radius: 8px, 7px;
+    -fx-background-insets: 0, 1;
+    -fx-font-size: 14px;
+    -fx-padding: 7 10 7 10;
+}
+
+.alert-ignore:hover {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+}
+
+.label {
+    -fx-text-fill: #121212;
+    -fx-font-size: 14px;
+}
+
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.text-field,
+.combo-box,
+.date-picker,
+.date-picker .editor {
+    -fx-focus-color: #5B2A86;
+    -fx-faint-focus-color: rgba(91,42,134,0.2);
+}
+
+.choice-box {
+    -fx-background-color: #5B2A86, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #DDC9EE 0%,
+            #C6A6E3 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+    -fx-text-fill: #5B2A86;
+    -fx-mark-color: #5B2A86;
+}
+
+.choice-box:hover {
+    -fx-background-color: #5B2A86, #C1A3E2;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4px, 2px;
+    -fx-cursor: hand;
+}
+
+.choice-box > .label {
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.context-menu {
+    -fx-background-color: #ffffff;
+}
+
+.menu-item:hover {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.menu-item:focused {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.menu-item > .label {
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.combo-box {
+    -fx-background-color: #5B2A86, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #DDC9EE 0%,
+            #C6A6E3 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+}
+
+.combo-box:hover {
+    -fx-background-color: #5B2A86, #C1A3E2;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4px, 2px;
+    -fx-cursor: hand;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.combo-box .list-cell:hover {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.combo-box:focused {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.combo-box .arrow-button .arrow {
+    -fx-background-color: #5B2A86;
+}
+
+.date-picker {
+    -fx-background-color: #5B2A86, #DDC9EE;
+    -fx-background-radius: 4px, 3px;
+    -fx-background-insets: 0, 1;
+    -fx-font-size: 14px;
+}
+
+.date-picker .arrow-button {
+    -fx-background-color: #5B2A86, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #DDC9EE 0%,
+            #C6A6E3 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 0 4 4 0, 0 3 3 0;
+}
+
+.date-picker .arrow-button:hover {
+    -fx-background-color: #5B2A86, #C1A3E2;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 0 4 4 0, 0 2 2 0;
+    -fx-cursor: hand;
+}
+
+.date-picker .arrow {
+    -fx-background-color: #5B2A86;
+}
+
+.date-picker .text-field:hover {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4 0 0 4, 2 0 0 2;
+}
+
+.text-field {
+    -fx-highlight-fill: #5B2A86;
+    -fx-highlight-text-fill: white;
+}
+
+.app-text-field {
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+    -fx-prompt-text-fill: #666666;
+    -fx-text-fill: #121212;
+    -fx-font-size: 14px;
+}
+
+.app-text-field:hover {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4px, 2px;
+}
+
+.text-area {
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+    -fx-prompt-text-fill: #666666;
+    -fx-text-fill: #121212;
+    -fx-font-size: 14px;
+}
+
+.titled-pane > .title {
+    -fx-alignment: CENTER_LEFT;
+    -fx-font-size: 14px;
+    -fx-text-fill: #5B2A86;
+    -fx-pref-width: 300px;
+    -fx-background-color: #C1A3E2, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #F2ECF8 0%,
+            #DDC9EE 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 2px, 1px;
+}
+
+.titled-pane > .title > .text {
+    -fx-fill: #5B2A86;
+}
+
+.titled-pane > .title > .arrow-button .arrow {
+    -fx-background-color: #5B2A86;
+}
+
+.titled-pane:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.list-view {
+    -fx-background-color: #FAFAFA;
+    -fx-background-radius: 8px;
+    -fx-border-color: #5B2A86;
+    -fx-border-radius: 8px;
+    -fx-padding: 4 0 0 0;
+}
+
+.list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #5B2A86; /* #251136; */
+    -fx-font-size: 14px;
+    -fx-background-insets: 2;
+    -fx-background-radius: 6px;
+}
+
+/* some list views don't require hover due to having unique list cells */
+.list-view-with-hover .list-cell:hover {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.list-view .list-cell:selected {
+    -fx-background-color: #6A39A0;
+    -fx-text-fill: #ffffff;
+}
+
+.check-box {
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.check-box .box {
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-background-radius: 4px, 3px;
+    -fx-background-insets: 0, 1;
+}
+
+.check-box:hover .box {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-radius: 4px, 2px;
+    -fx-background-insets: 0, 2;
+    -fx-cursor: hand;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: #5B2A86;
+}
+
+.title {
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-text-alignment: center;
+    -fx-alignment: center;
+    -fx-text-fill: #121212;
+}
+
+.subtitle {
+    -fx-font-size: 18px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #121212;
+}
+
+.muted {
+    -fx-text-fill: #6B7280;
+    -fx-font-size: 14px;
+    -fx-font-weight: 300;
+}
+
+.card {
+    -fx-max-width: 360px;
+    -fx-padding: 18px;
+    -fx-background-radius: 14px;
+    -fx-border-radius: 14px;
+    -fx-border-color: #E5E5E5;
+    -fx-background-color: #FAFAFA;
+}
+
+.input {
+    -fx-pref-height: 40px;
+    -fx-font-size: 16px;
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+    -fx-border-color: #d9d9d9;
+    -fx-background-color: #ffffff;
+    -fx-padding: 0 12px 0 12px;
+}
+
+.input-invalid {
+    -fx-border-color: #d32f2f;
+    -fx-border-width: 2px;
+}
+
+.primaryBtn {
+    -fx-pref-height: 40px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: 700;
+    -fx-font-size: 16px;
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+}
+
+.primaryBtn:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+}
+
+.secondaryBtn {
+    -fx-pref-height: 36px;
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: 300;
+    -fx-font-size: 14px;
+    -fx-padding: 0 14px 0 14px;
+}
+
+.secondaryBtn:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+}
+
+.secondaryWideBtn {
+    -fx-pref-height: 40px;
+
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: 600;
+}
+
+.secondaryWideBtn:hover {
+    -fx-pref-height: 40px;
+
+    -fx-background-color: #251136, #4A216E;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: 600;
+}
+
+.error {
+    -fx-text-fill: #d00000;
+    -fx-font-size: 14px;
+    -fx-font-weight: 300;
+}
+
+.auth-page {
+    -fx-alignment: top-center;
+    -fx-spacing: 16px;
+    -fx-padding: 48px 24px 24px 24px;
+    -fx-background-color: #ffffff;
+}
+
+.auth-home {
+    -fx-spacing: 18px;
+}
+
+.auth-heading {
+    -fx-alignment: top-center;
+    -fx-spacing: 8px;
+}
+
+.auth-card {
+    -fx-max-width: 360px;
+    -fx-padding: 18px;
+    -fx-background-radius: 14px;
+    -fx-border-radius: 14px;
+    -fx-border-color: #E5E5E5;
+    -fx-background-color: #FAFAFA;
+    -fx-spacing: 10px;
+}
+
+.auth-inline-actions {
+    -fx-alignment: center;
+    -fx-spacing: 10px;
+}
+
+.auth-check-group {
+    -fx-spacing: 6px;
+}
+
+.auth-check {
+    -fx-text-fill: #333333;
+}
+
+.auth-link {
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+    -fx-padding: 0;
+    -fx-underline: true;
+}
+
+.auth-link:hover {
+    -fx-text-fill: #6A39A0;
+    -fx-cursor: hand;
+}
+
+.account-form-grid {
+    -fx-hgap: 10px;
+    -fx-vgap: 10px;
+    -fx-padding: 20px;
+}
+
+.app-inline-save-confirm {
+    -fx-text-fill: #d00000;
+    -fx-font-size: 14px;
+    -fx-text-alignment: center;
+}
+
+.app-reminder-tab {
+    -fx-background-radius: 8px, 7px;
+    -fx-padding: 8px 10px;
+    -fx-background-color: #D1C4E9, #F2ECF8;
+    -fx-background-insets: 0, 1;
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.app-reminder-tab:hover {
+    -fx-background-color: #D1C4E9, #E6DBF4;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+}
+
+.app-reminder-tab:selected {
+    -fx-background-color: #5B2A86, #6A39A0;
+    -fx-text-fill: #ffffff;
+}
+
+.app-reminder-tab:selected:hover {
+    -fx-background-color: #5B2A86, #5B2A86;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+}
+
+.app-main-nav {
+    -fx-background-color: #fafafa;
+    -fx-border-color: #e8e8e8;
+    -fx-border-width: 2 0 0 0;
+}
+
+.app-tracking-list-row {
+    -fx-pref-width: 300px;
+    -fx-padding: 0 4px 6px 4px;
+}
+
+.app-reminder-card-header {
+    -fx-padding: 0 2px 4px 2px;
+}
+
+/* Compact reminder sections (collapsible); default TitledPane title bars are over-sized */
+.app-reminder-titled-pane > .title {
+    -fx-padding: 4px 10px;
+    -fx-font-size: 14px;
+}
+
+.app-reminder-titled-pane > *.content {
+    -fx-padding: 6px 10px 10px 10px;
+    -fx-border-width: 0;
+}
+
+/* ========== In-app views (Booking, Tracking, Reminders) – change here to update all ========== */
+
+.app-page {
+    -fx-padding: 20px;
+    -fx-spacing: 15px;
+    -fx-alignment: center;
+}
+
+.app-page-top {
+    -fx-padding: 20px;
+    -fx-spacing: 15px;
+    -fx-alignment: top-center;
+}
+
+.app-page-wide {
+    -fx-padding: 30px;
+    -fx-spacing: 20px;
+    -fx-alignment: center;
+}
+
+/* Optional: use for pages that should stay left-aligned (e.g. forms) */
+.app-page-left {
+    -fx-padding: 20px;
+    -fx-spacing: 15px;
+    -fx-alignment: top-left;
+}
+
+/* Centered content box (e.g. button groups inside a page) */
+.app-center {
+    -fx-alignment: center;
+}
+
+.app-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #121212;
+}
+
+.app-title-sm {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #121212;
+}
+
+.app-heading {
+    -fx-font-weight: bold;
+    -fx-text-fill: #121212;
+}
+
+.app-card {
+    -fx-padding: 10px;
+    -fx-border-color: #E5E5E5;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-background-color: #fafafa;
+    -fx-text-fill: #121212;
+}
+
+.app-card-inner {
+    -fx-padding: 18px;
+    -fx-background-radius: 14px;
+    -fx-border-radius: 14px;
+    -fx-border-color: #D1C4E9;
+    -fx-background-color: #F2ECF8;
+    -fx-text-fill: #121212;
+}
+
+.app-btn {
+    -fx-min-width: 80px;
+    -fx-font-size: 16px;
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: 600;
+    -fx-padding: 10 15 10 15;
+}
+
+.app-btn:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-cursor: hand;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+}
+
+.app-btn-back {
+    -fx-pref-height: 36px;
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-text-fill: #5B2A86;
+    -fx-background-radius: 8px, 6px;
+    -fx-background-insets: 0, 2;
+}
+
+.app-btn-back:hover {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 3;
+    -fx-background-radius: 8px, 5px;
+    -fx-cursor: hand;
+    -fx-font-weight: 600;
+}
+
+.app-btn-icon {
+    -fx-background-color: #5B2A86;
+    -fx-background-insets: 4;
+}
+
+.app-btn-danger {
+    -fx-pref-height: 36px;
+    -fx-min-width: 80px;
+    -fx-background-color: #e57373, #fff5f5;
+    -fx-text-fill: #b71c1c;
+    -fx-background-radius: 8px, 7px;
+    -fx-background-insets: 0, 1;
+    -fx-font-weight: 600;
+    -fx-font-size: 14px;
+}
+
+.app-btn-danger:hover {
+    -fx-background-color: #e57373, #FBE0E0;
+    -fx-background-radius: 8px, 6px;
+    -fx-background-insets: 0, 2;
+    -fx-cursor: hand;
+}
+
+.app-btn-positive {
+    -fx-pref-height: 36px;
+    -fx-min-width: 80px;
+    -fx-background-color: #f1faf4;
+    -fx-text-fill: #1b5e20;
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+    -fx-border-color: #81c784;
+    -fx-font-weight: 600;
+    -fx-font-size: 14px;
+}
+
+.app-list-btn {
+    -fx-pref-width: 300px;
+    -fx-pref-height: 50px;
+    -fx-background-color: #3A1F4D, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #8A5CC2 0%,
+            #6F3FA3 100%
+    );
+    -fx-text-fill: #FAFAFA;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+}
+
+.app-list-btn .label {
+    -fx-font-size: 15px;
+    -fx-text-fill: #FAFAFA;
+}
+
+.app-list-btn:hover {
+    -fx-background-color: #3A1F4D, #5B2A86;
+    -fx-cursor: hand;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4px, 2px;
+}
+
+.app-menu-btn {
+    -fx-pref-width: 200px;
+    -fx-pref-height: 44px;
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 16px;
+}
+
+.app-menu-btn:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-cursor: hand;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+}
+
+.app-nav-btn {
+    -fx-pref-width: 130px;
+    -fx-pref-height: 44px;
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-text-fill: #5B2A86;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-font-size: 18px;
+}
+
+.app-nav-btn:hover {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 3;
+    -fx-background-radius: 8px, 5px;
+    -fx-cursor: hand;
+}
+
+.app-nav-btn:selected {
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-text-fill: #ffffff;
+}
+.app-nav-btn:selected:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-cursor: hand;
+    -fx-background-insets: 0, 3;
+    -fx-background-radius: 8px, 5px;
+}
+
+.app-shortcut-btn {
+    -fx-background-color: #251136, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #6A39A0 0%,
+            #5B2A86 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-alignment: center;
+    -fx-padding: 10 0 10 0;
+}
+
+.app-shortcut-btn:hover {
+    -fx-background-color: #251136, #4A216E;
+    -fx-cursor: hand;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+}
+
+.app-spinner {
+    -fx-pref-width: 80px;
+}
+
+.app-spinner .text-field {
+    -fx-font-size: 14px;
+    -fx-pref-height: 36px;
+}
+
+/* Make spinner arrows match the purple theme */
+.app-spinner .increment-arrow-button,
+.app-spinner .decrement-arrow-button {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 0 4px 0 0, 0 3px 0 0;
+}
+
+.app-spinner .decrement-arrow-button {
+    -fx-background-radius: 0 0 4px 0, 0 0 3px 0;
+}
+
+.app-spinner .increment-arrow-button:hover,
+.app-spinner .decrement-arrow-button:hover {
+    -fx-background-color: #5B2A86, #DDC9EE;
+    -fx-background-insets: 0, 2;
+}
+
+.app-spinner .increment-arrow,
+.app-spinner .decrement-arrow {
+    -fx-background-color: #5B2A86;
+}
+
+.app-muted {
+    -fx-text-fill: #666666;
+    -fx-font-size: 12px;
+}
+
+.app-body {
+    -fx-font-size: 14px;
+}
+
+/* Notification popup (BaseNotification) */
+.app-notification {
+    -fx-padding: 16px;
+    -fx-spacing: 12px;
+    -fx-min-width: 360px;
+    -fx-pref-width: 420px;
+    -fx-max-width: 520px;
+}
+
+/* Applied to date picker in tracking */
+.tracking-date {
+    -fx-max-width: 120px;
+    -fx-pref-width: 110px;
+    -fx-min-width: 80px;
+    -fx-font-size: 14px;
+}
+
+/* Applied to search in tracking */
+.tracking-search {
+    -fx-pref-width: 220px;
+    -fx-background-color: #5B2A86, #ffffff;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+    -fx-prompt-text-fill: #666666;
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.tracking-search:hover {
+    -fx-background-color: #5B2A86, #F2ECF8;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4px, 2px;
+}
+
+/* Applied to sort in tracking */
+.tracking-sort {
+    -fx-pref-width: 100px;
+}
+
+.tracking-clear-btn {
+    -fx-pref-width: 100px;
+    -fx-background-color: #5B2A86, linear-gradient(
+            from 0% 0% to 0% 100%,
+            #DDC9EE 0%,
+            #C6A6E3 100%
+    );
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px, 7px;
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+}
+
+.tracking-clear-btn:hover {
+    -fx-background-color: #5B2A86, #C1A3E2;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 8px, 6px;
+    -fx-cursor: hand;
+}
+
+.icon {
+    -fx-background-color: #5B2A86;
+}

@@ -1,0 +1,152 @@
+/* All style classes with font-size are changed here */
+
+.label {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.alert-agree {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.alert-ignore {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.choice-box > .label {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.menu-item > .label {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.combo-box .list-cell {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.date-picker {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-text-field {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.text-area {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.titled-pane > .title {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.check-box {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.list-view .list-cell {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.title {
+    -fx-font-size: 30px; /* +4 */
+}
+
+.subtitle {
+    -fx-font-size: 22px; /* +4 */
+}
+
+.muted {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.input {
+    -fx-font-size: 18px; /* +2 */
+}
+
+.primaryBtn {
+    -fx-font-size: 18px; /* +2 */
+}
+
+.secondaryBtn {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.error {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-inline-save-confirm {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-reminder-tab {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-reminder-titled-pane > .title {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-title {
+    -fx-font-size: 24px; /* +4 */
+}
+
+.app-title-sm {
+    -fx-font-size: 22px; /* +4 */
+}
+
+.app-btn {
+    -fx-font-size: 18px; /* +2 */
+}
+
+.app-btn-danger {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-btn-positive {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-list-btn .label {
+    -fx-font-size: 17px; /* +2 */
+}
+
+.app-menu-btn {
+    -fx-font-size: 18px; /* +2 */
+}
+
+.app-nav-btn {
+    -fx-font-size: 20px; /* +2 */
+}
+
+.app-shortcut-btn {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.spinner .text-field {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.app-muted {
+    -fx-font-size: 14px; /* +2 */
+}
+
+.app-body {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.tracking-date {
+    -fx-font-size: 16px; /* +2 */
+    -fx-max-width: 110px;
+    -fx-pref-width: 100px;
+    -fx-min-width: 70px;
+}
+
+.tracking-search {
+    -fx-font-size: 16px; /* +2 */
+}
+
+.tracking-clear-btn {
+    -fx-font-size: 16px; /* +2 */
+}

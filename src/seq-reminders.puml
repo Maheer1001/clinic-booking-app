@@ -1,0 +1,83 @@
+@startuml Reminders - Configure, Save, Test Email, Reset to Defaults
+!theme plain
+skinparam linetype ortho
+skinparam shadowing false
+
+actor User
+boundary "Reminders Screen\n(RemindersView)" as RemindersUI
+boundary "Booking Reminders" as BookingRemUI
+boundary "Appointment Reminders" as ApptRemUI
+boundary "Prescription Reminders" as RxRemUI
+
+control "ReminderController" as RemC
+entity "UserDAO/DB\n(default_reminder_config,\nbooking_comm_prefs)" as UserDB
+entity "AppointmentReminder DAO/DB" as ApptRemDB
+entity "PrescriptionReminder DAO/DB" as RxRemDB
+
+control "EmailSender" as Mail
+control "NotificationDispatcher" as Dispatch
+
+== Open Reminders ==
+User -> RemindersUI: Open reminders settings
+RemindersUI -> RemC: load current settings\n+ saved defaults
+RemC -> UserDB: load user's default reminder template\n+ booking comm prefs
+RemC -> ApptRemDB: load appointment reminders (custom)
+RemC -> RxRemDB: load prescription reminders (custom)
+RemC --> RemindersUI: render cards\n(prefill only if custom exists)
+
+== Booking reminders ==
+User -> BookingRemUI: edit reminder fields\n(schedule, message, channels)
+User -> BookingRemUI: Click "Send test email"
+BookingRemUI -> RemC: sendTestEmail(template)
+RemC -> Mail: send rendered email
+RemC --> BookingRemUI: show inline confirmation\n(same label as Save)
+
+User -> BookingRemUI: Click "Save reminder"
+BookingRemUI -> RemC: saveBookingReminder(...)
+RemC -> UserDB: update booking reminder rows/prefs
+RemC --> BookingRemUI: show "Saved" confirmation
+
+== Appointment reminders ==
+User -> ApptRemUI: open a reminder card
+alt User has saved defaults
+  ApptRemUI -> ApptRemUI: show "Reset to default" button
+end
+
+User -> ApptRemUI: Click "Reset to default"
+ApptRemUI -> RemC: load defaults + apply
+RemC -> UserDB: load default reminder config
+RemC --> ApptRemUI: update all fields\n(no autosave)\nshow "Reset to your saved defaults."
+
+User -> ApptRemUI: Click "Send test email"
+ApptRemUI -> RemC: sendTestEmail(template)
+RemC -> Mail: send
+RemC --> ApptRemUI: show "Test email sent." confirmation
+
+User -> ApptRemUI: Click "Save reminder"
+ApptRemUI -> RemC: saveAppointmentReminder(...)
+RemC -> ApptRemDB: upsert appointment reminder row
+RemC --> ApptRemUI: show "Saved" confirmation
+
+== Prescription reminders ==
+User -> RxRemUI: open a reminder card
+alt User has saved defaults AND doses_per_day known
+  RxRemUI -> RxRemUI: show "Reset to default" button
+end
+
+User -> RxRemUI: Click "Reset to default"
+RxRemUI -> RemC: compute interval from prescription.doses_per_day\ninterval = floor(24 / doses)\n(null/0 -> hidden/disabled, 1 -> 24h)
+RemC -> UserDB: load default reminder config
+RemC -> RxRemDB: load prescription + doses_per_day
+RemC --> RxRemUI: update all fields\n(no autosave)\nshow confirmation
+
+User -> RxRemUI: Click "Send test email"
+RxRemUI -> RemC: sendTestEmail(template)
+RemC -> Mail: send
+RemC --> RxRemUI: show confirmation
+
+User -> RxRemUI: Click "Save reminder"
+RxRemUI -> RemC: savePrescriptionReminder(...)
+RemC -> RxRemDB: upsert prescription reminder row
+RemC --> RxRemUI: show "Saved" confirmation
+
+@enduml

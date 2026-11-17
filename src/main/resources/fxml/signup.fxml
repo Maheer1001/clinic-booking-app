@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="controller.SignUpController"
+      styleClass="auth-page">
+
+    <VBox styleClass="auth-heading">
+        <Label text="Health Tracking and&#10;Appointments" styleClass="title"/>
+        <Label text="Create an account" styleClass="subtitle"/>
+        <Label text="Enter your email to sign up for this app" styleClass="muted"/>
+    </VBox>
+
+    <VBox styleClass="auth-card">
+        <TextField fx:id="emailField" promptText="email@domain.com" styleClass="input"/>
+        <PasswordField fx:id="passwordField" promptText="Enter Password" styleClass="input"/>
+        <PasswordField fx:id="confirmPasswordField" promptText="Re-enter Password" styleClass="input"/>
+
+        <VBox styleClass="auth-check-group">
+            <HBox spacing="4" alignment="BASELINE_LEFT">
+                <CheckBox fx:id="termsCheck" text="I agree to the" styleClass="auth-check"/>
+                <Hyperlink text="Terms of Service" onAction="#goToTerms" styleClass="auth-link"/>
+            </HBox>
+            <HBox spacing="4" alignment="BASELINE_LEFT">
+                <CheckBox fx:id="privacyCheck" text="I agree to the" styleClass="auth-check"/>
+                <Hyperlink text="Privacy Policy" onAction="#goToPrivacy" styleClass="auth-link"/>
+            </HBox>
+        </VBox>
+
+        <Button text="Continue" onAction="#onSignUp" styleClass="primaryBtn"/>
+        <Button text="Back to Login" onAction="#goToLogin" styleClass="secondaryWideBtn"/>
+
+        <Label fx:id="messageLabel" text="" styleClass="error"/>
+    </VBox>
+
+</VBox>

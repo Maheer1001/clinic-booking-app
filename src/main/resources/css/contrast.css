@@ -1,0 +1,449 @@
+.root {
+    -fx-background-color: #ffffff;
+}
+
+.alert {
+    -fx-background-color: #ffffff;
+}
+
+.alert .header-panel {
+    -fx-background-color: #ffffff;
+}
+
+.alert .button-bar {
+    -fx-padding: 5 0 5 0;
+}
+
+.alert-agree {
+    -fx-background-color: #000000, #4A216E;
+}
+
+.alert-agree:hover {
+    -fx-background-color: #000000, #3A1A57;
+}
+
+.alert-ignore {
+    -fx-background-color: #000000, #ffffff;
+    -fx-text-fill: #5B2A86;
+}
+
+.alert-ignore:hover {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.label {
+    -fx-text-fill: #000000;
+}
+
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.text-field,
+.combo-box,
+.date-picker,
+.date-picker .editor {
+    -fx-focus-color: #5B2A86;
+    -fx-faint-focus-color: rgba(91,42,134,0.2);
+}
+
+.choice-box {
+    -fx-background-color: #000000, #DDC9EE;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 4px, 3px;
+    -fx-text-fill: #000000;
+    -fx-mark-color: #000000;
+}
+
+.choice-box:hover {
+    -fx-background-color: #000000, #C1A3E2;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 4px, 2px;
+    -fx-cursor: hand;
+}
+
+.choice-box > .label {
+    -fx-text-fill: #000000;
+    -fx-font-size: 14px;
+}
+
+.context-menu {
+    -fx-background-color: #ffffff;
+}
+
+.menu-item:hover {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.menu-item:focused {
+    -fx-background-color: #DDC9EE;
+    -fx-cursor: hand;
+}
+
+.menu-item > .label {
+    -fx-text-fill: #000000;
+    -fx-font-size: 14px;
+}
+
+.combo-box {
+    -fx-background-color: #000000, #DDC9EE;
+}
+
+.combo-box:hover {
+    -fx-background-color: #000000, #C1A3E2;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: #000000;
+}
+
+.combo-box .list-cell:hover {
+    -fx-background-color: #DDC9EE;
+}
+
+.combo-box .arrow-button .arrow {
+    -fx-background-color: #000000;
+}
+
+.date-picker {
+    -fx-background-color: #000000, #DDC9EE;
+}
+
+.date-picker .arrow-button {
+    -fx-background-color: #000000, #DDC9EE;
+}
+
+.date-picker .arrow-button:hover {
+    -fx-background-color: #000000, #C1A3E2;
+}
+
+.date-picker .arrow {
+    -fx-background-color: #000000;
+}
+
+.date-picker .text-field:hover {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.text-field {
+    -fx-highlight-fill: #5B2A86;
+    -fx-highlight-text-fill: white;
+}
+
+.app-text-field {
+    -fx-background-color: #000000, #ffffff;
+    -fx-prompt-text-fill: #666666;
+    -fx-text-fill: #000000;
+}
+
+.app-text-field:hover {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.text-area {
+    -fx-background-color: #000000, #ffffff;
+    -fx-prompt-text-fill: #666666;
+    -fx-text-fill: #000000;
+}
+
+/* COME BACK TO */
+.titled-pane > .title {
+    -fx-text-fill: #ffffff;
+    -fx-background-color: #000000, #6A39A0;
+}
+
+.titled-pane > .title > .text {
+    -fx-fill: #ffffff;
+}
+
+.titled-pane > .title > .arrow-button .arrow {
+    -fx-background-color: #ffffff;
+}
+
+.list-view {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #000000;
+}
+
+.list-view .list-cell {
+    -fx-text-fill: #000000;
+}
+
+/* some list views don't require hover due to having unique list cells */
+.list-view-with-hover .list-cell:hover {
+    -fx-background-color: #DDC9EE;
+}
+
+.list-view .list-cell:selected {
+    -fx-background-color: #6A39A0;
+    -fx-text-fill: #ffffff;
+}
+
+.check-box {
+    -fx-text-fill: #000000;
+}
+
+.check-box .box {
+    -fx-background-color: #000000, #ffffff;
+}
+
+.check-box:hover .box {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.check-box:selected .mark {
+    -fx-background-color: #000000;
+}
+
+.title {
+    -fx-text-fill: #000000;
+}
+
+.subtitle {
+    -fx-text-fill: #000000;
+}
+
+.muted {
+    -fx-text-fill: #333333;
+}
+
+.card {
+    -fx-border-color: #333333;
+    -fx-background-color: #ffffff;
+}
+
+.input {
+    -fx-border-color: #000000;
+    -fx-background-color: #ffffff;
+}
+
+.primaryBtn {
+    -fx-text-fill: #ffffff;
+    -fx-background-color: #000000, #6A39A0;
+}
+
+.primaryBtn:hover {
+    -fx-background-color: #000000, #4A216E;
+}
+
+.secondaryBtn {
+    -fx-background-color: #000000, #6A39A0;
+    -fx-text-fill: #ffffff;
+}
+
+.secondaryBtn:hover {
+    -fx-background-color: #000000, #4A216E;
+}
+
+.secondaryWideBtn {
+    -fx-background-color: #000000, #6A39A0;
+    -fx-text-fill: #ffffff;
+}
+
+.secondaryWideBtn:hover {
+    -fx-background-color: #000000, #4A216E;
+    -fx-text-fill: #ffffff;
+}
+
+.error {
+    -fx-text-fill: #d00000;
+}
+
+.auth-page {
+    -fx-background-color: #ffffff;
+}
+
+.auth-card {
+    -fx-border-color: #333333;
+    -fx-background-color: #ffffff;
+}
+
+.auth-check {
+    -fx-text-fill: #333333;
+}
+
+.auth-link {
+    -fx-text-fill: #5B2A86;
+}
+
+.auth-link:hover {
+    -fx-text-fill: #6A39A0;
+}
+
+.app-inline-save-confirm {
+    -fx-text-fill: #d00000;
+}
+
+.app-reminder-tab {
+    -fx-background-color: #000000, #ffffff;
+    -fx-text-fill: #000000;
+}
+
+.app-reminder-tab:hover {
+    -fx-background-color: #000000, #E6DBF4;
+}
+
+.app-reminder-tab:selected {
+    -fx-background-color: #000000, #5B2A86;
+    -fx-text-fill: #ffffff;
+}
+
+.app-reminder-tab:selected:hover {
+    -fx-background-color: #000000, #4A216E;
+}
+
+.app-main-nav {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #333333;
+}
+
+/* ========== In-app views (Booking, Tracking, Reminders) – change here to update all ========== */
+
+/* Optional: use for pages that should stay left-aligned (e.g. forms) */
+
+.app-title {
+    -fx-text-fill: #000000;
+}
+
+.app-title-sm {
+    -fx-text-fill: #000000;
+}
+
+.app-heading {
+    -fx-text-fill: #000000;
+}
+
+.app-card {
+    -fx-border-color: #333333;
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #000000;
+}
+
+.app-card-inner {
+    -fx-border-color: #333333;
+    -fx-background-color: #F2ECF8;
+    -fx-text-fill: #000000;
+}
+
+.app-btn {
+    -fx-background-color: #000000, #4A216E;
+    -fx-text-fill: #ffffff;
+}
+
+.app-btn:hover {
+    -fx-background-color: #000000, #3A1A57;
+}
+
+.app-btn-back {
+    -fx-background-color: #000000, #ffffff;
+    -fx-text-fill: #000000;
+}
+
+.app-btn-back:hover {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.app-btn-icon {
+    -fx-background-color: #000000;
+}
+
+.app-btn-danger {
+    -fx-background-color: #d00000, #fff5f5;
+    -fx-text-fill: #d00000;
+}
+
+.app-btn-danger:hover {
+    -fx-background-color: #d00000, #FBE0E0;
+}
+
+/* COME BACK TO */
+.app-btn-positive {
+    -fx-background-color: #f1faf4;
+    -fx-text-fill: #1b5e20;
+    -fx-border-color: #81c784;
+}
+
+.app-btn-positive:hover {
+
+}
+
+.app-list-btn {
+    -fx-background-color: #000000, #8A5CC2;
+    -fx-text-fill: #ffffff;
+}
+
+.app-list-btn .label {
+    -fx-text-fill: #ffffff;
+}
+
+.app-list-btn:hover {
+    -fx-background-color: #000000, #5B2A86;
+}
+
+.app-menu-btn {
+    -fx-background-color: #000000, #4A216E;
+    -fx-text-fill: #ffffff;
+}
+
+.app-menu-btn:hover {
+    -fx-background-color: #000000, #3A1A57;
+}
+
+.app-nav-btn {
+    -fx-background-color: #000000, #ffffff;
+    -fx-text-fill: #000000;
+}
+
+.app-nav-btn:hover {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.app-nav-btn:selected {
+    -fx-background-color: #000000, #4A216E;
+    -fx-text-fill: #ffffff;
+}
+.app-nav-btn:selected:hover {
+    -fx-background-color: #000000, #3A1A57;
+}
+
+.app-shortcut-btn {
+    -fx-background-color: #000000, #4A216E;
+    -fx-text-fill: #ffffff;
+}
+
+.app-shortcut-btn:hover {
+    -fx-background-color: #000000, #3A1A57;
+}
+
+.app-muted {
+    -fx-text-fill: #666666;
+}
+
+/* Applied to search in tracking */
+.tracking-search {
+    -fx-background-color: #000000, #ffffff;
+    -fx-prompt-text-fill: #666666;
+    -fx-text-fill: #000000;
+}
+
+.tracking-search:hover {
+    -fx-background-color: #000000, #F2ECF8;
+}
+
+.tracking-clear-btn {
+    -fx-background-color: #000000, #DDC9EE;
+    -fx-text-fill: #000000;
+}
+
+.tracking-clear-btn:hover {
+    -fx-background-color: #000000, #C1A3E2;
+}
+
+.icon {
+    -fx-background-color: #000000;
+}

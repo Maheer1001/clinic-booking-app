@@ -1,0 +1,239 @@
+@startuml Sexual Health System - ERD
+!theme plain
+skinparam linetype ortho
+skinparam backgroundcolor white
+skinparam shadowing false
+
+' Larger font sizes
+skinparam class {
+    BackgroundColor white
+    BorderColor #2c3e50
+    BorderThickness 2
+    ArrowColor #34495e
+    ArrowThickness 2
+    FontSize 15
+    AttributeFontSize 13
+}
+
+' LEFT: User & Auth
+together {
+    entity "**User**" as user <<Core>> #e3f2fd {
+        **user_id** : INTEGER <<PK>>
+        ==
+        first_name : VARCHAR(50)
+        last_name : VARCHAR(50)
+        email : VARCHAR(255)
+        password_hash : VARCHAR(255)
+        phone_number : VARCHAR(20)
+        dob : DATE
+        gender : VARCHAR(50)
+        sexuality : VARCHAR(50)
+        disabilities : VARCHAR(255)
+        email_verified : BOOLEAN
+        verification_token : VARCHAR(255)
+        v_token_expiry : TIMESTAMP
+        default_reminder_config : TEXT
+        booking_comm_prefs : TEXT
+        accessibility_settings : TEXT
+        default_clinic_id : INTEGER <<FK>> <<I>>
+        created : TIMESTAMP
+        updated : TIMESTAMP
+    }
+
+    entity "**Session**" as session <<Auth>> #e3f2fd {
+        **session_id** : VARCHAR(255) <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        created_at : TIMESTAMP
+        expires_at : TIMESTAMP
+    }
+
+    entity "**BookingReminder**" as book_reminder <<Notification>> #fce4ec {
+        **br_rem_id** : INTEGER <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        notify : BOOLEAN
+        days_since_last : INTEGER
+        custom_message : TEXT
+        notification_method : VARCHAR(20)
+        created_at : TIMESTAMP
+        updated_at : TIMESTAMP
+    }
+}
+
+' CENTER-LEFT: Clinic & Services
+together {
+    entity "**Clinic**" as clinic <<Facility>> #e8f5e9 {
+        **clinic_id** : INTEGER <<PK>>
+        ==
+        name : VARCHAR(100)
+        address : VARCHAR(255)
+        postcode : VARCHAR(20)
+        phone : VARCHAR(20)
+        rating : DECIMAL(2,1)
+        photo_url : VARCHAR(255)
+        opening_hours : VARCHAR(255)
+        updated_at : TIMESTAMP
+        latitude : DOUBLE PRECISION
+        longitude : DOUBLE PRECISION
+    }
+
+    entity "**Service**" as service <<Facility>> #e8f5e9 {
+        **service_id** : INTEGER <<PK>>
+        ==
+        name : VARCHAR(50)
+        description : TEXT
+        duration_minutes : INTEGER
+    }
+
+    entity "**ClinicService**" as clinic_service <<Junction>> #f1f8e9 {
+        **clinic_id** : INTEGER <<PK>>
+        **service_id** : INTEGER <<PK,FK>>
+        ==
+        created_at : TIMESTAMP
+    }
+}
+
+' CENTER: Booking
+together {
+    entity "**Timeslot**" as timeslot <<Booking>> #f3e5f5 {
+        **timeslot_id** : INTEGER <<PK>>
+        ==
+        date : DATE
+        start_time : TIME
+        end_time : TIME
+        service_id : INTEGER <<FK>> <<I>>
+        clinic_id : INTEGER
+        capacity : INTEGER
+        booked_count : INTEGER
+    }
+
+    entity "**Appointment**" as appointment <<Booking>> #f3e5f5 {
+        **app_id** : INTEGER <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        timeslot_id : INTEGER <<FK>> <<I>>
+        notes : VARCHAR(255)
+        status : VARCHAR(20)
+        created_at : TIMESTAMP
+        updated_at : TIMESTAMP
+        canceled_at : TIMESTAMP
+    }
+
+    entity "**AppointmentReminder**" as app_reminder <<Notification>> #fce4ec {
+        **ar_rem_id** : INTEGER <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        app_id : INTEGER <<FK>> <<I>>
+        notify : BOOLEAN
+        custom_days : TEXT          ' JSON schedule / rules
+        custom_message : TEXT       ' JSON overrides / template
+        notification_method : VARCHAR(20)
+        created_at : TIMESTAMP
+        updated_at : TIMESTAMP
+    }
+}
+
+' CENTER-RIGHT: Medical Records
+together {
+    entity "**Test**" as test <<Medical>> #fff3e0 {
+        **test_id** : INTEGER <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        clinic_id : INTEGER
+        test_type : VARCHAR(50)
+        test_date : DATE
+        clinician_notes : TEXT
+        treatment_instructions : TEXT
+        created_at : TIMESTAMP
+        updated_at : TIMESTAMP
+    }
+
+    entity "**TestResult**" as test_result <<Medical>> #fff3e0 {
+        **result_id** : INTEGER <<PK>>
+        ==
+        test_id : INTEGER <<FK>> <<I>>
+        condition : VARCHAR(50)
+        result : VARCHAR(20)
+        created_at : TIMESTAMP
+    }
+
+    entity "**Prescription**" as prescription <<Medical>> #fff3e0 {
+        **prescription_id** : INTEGER <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        clinic_id : INTEGER
+        medicine_id : INTEGER <<FK>> <<I>>
+        test_id : INTEGER <<FK>> <<I>>
+        dosage : VARCHAR(50)
+        doses_per_day : INTEGER
+        days_between_doses : INTEGER
+        start_date : DATE
+        end_date : DATE
+        instructions : TEXT
+        actively_taking : BOOLEAN
+        prescribing_clinician_id : INTEGER
+        created_at : TIMESTAMP
+        updated_at : TIMESTAMP
+    }
+
+    entity "**PrescriptionReminder**" as presc_reminder <<Notification>> #fce4ec {
+        **pr_rem_id** : INTEGER <<PK>>
+        ==
+        user_id : INTEGER <<FK>> <<I>>
+        prescription_id : INTEGER <<FK>> <<I>>
+        notify : BOOLEAN
+        interval_between_doses : INTEGER
+        custom_message : TEXT
+        notification_method : VARCHAR(20)
+        created_at : TIMESTAMP
+        updated_at : TIMESTAMP
+    }
+}
+
+' RIGHT: Medicine
+entity "**Medicine**" as medicine <<Medical>> #fff3e0 {
+    **medicine_id** : INTEGER <<PK>>
+    ==
+    name : VARCHAR(50)
+}
+
+' Force left-to-right layout with hidden connections
+user -[hidden]right-> clinic
+clinic -[hidden]right-> timeslot
+timeslot -[hidden]right-> test
+test -[hidden]right-> medicine
+
+session -[hidden]down-> book_reminder
+service -[hidden]down-> clinic_service
+appointment -[hidden]down-> app_reminder
+prescription -[hidden]down-> presc_reminder
+
+' Visible relationships
+user ||--o{ session : "  has  "
+user ||--o{ appointment : "  books  "
+user ||--o{ test : "  receives  "
+user ||--o{ prescription : "  prescribed  "
+user ||--o{ app_reminder : "  sets  "
+user ||--o{ presc_reminder : "  sets  "
+user ||--o| book_reminder : "  has  "
+clinic ||--o{ user : "  default clinic  "
+
+service ||--o{ clinic_service : "  offered at  "
+
+service ||--o{ timeslot : "  scheduled in  "
+
+timeslot ||--o{ appointment : "  booked for  "
+
+test ||--|{ test_result : "  contains  "
+test ||--o{ prescription : "  triggers  "
+
+medicine ||--o{ prescription : "  used in  "
+
+appointment ||--o{ app_reminder : "  has  "
+prescription ||--o{ presc_reminder : "  has  "
+
+' Note: clinic_id columns exist on Timeslot/Test/Prescription, and ClinicService has clinic_id,
+' but in the live DB metadata those relationships are not enforced as foreign keys.
+
+@enduml

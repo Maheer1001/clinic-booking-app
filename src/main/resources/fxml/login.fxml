@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="controller.LoginController"
+      styleClass="auth-page">
+
+    <VBox styleClass="auth-heading">
+        <Label text="Health Tracking and&#10;Appointments" styleClass="title"/>
+        <Label text="Log In" styleClass="subtitle"/>
+    </VBox>
+
+    <VBox styleClass="auth-card">
+        <TextField fx:id="emailField"
+                   promptText="email@domain.com"
+                   styleClass="input"/>
+
+        <PasswordField fx:id="passwordField"
+                       promptText="Password"
+                       styleClass="input"/>
+
+        <Button fx:id="continueBtn"
+                text="Continue"
+                onAction="#onLogin"
+                defaultButton="true"
+                styleClass="primaryBtn"/>
+
+        <HBox styleClass="auth-inline-actions">
+            <Label text="New User?" styleClass="muted"/>
+            <Button text="Create Account"
+                    onAction="#goToSignUp"
+                    styleClass="secondaryBtn"/>
+        </HBox>
+
+        <HBox styleClass="auth-inline-actions">
+            <Label text="Forgot password?" styleClass="muted"/>
+            <Button text="Reset"
+                    onAction="#goToPasswordReset"
+                    styleClass="secondaryBtn"/>
+        </HBox>
+
+        <Label fx:id="messageLabel"
+               text=""
+               styleClass="error"/>
+    </VBox>
+
+</VBox>

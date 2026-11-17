@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
+<body>
+<th:block th:fragment="content">
+    <th:block th:if="${discreet}">
+        <h2>Booking Confirmed</h2>
+        <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+        <p th:if="${customIntro}" th:text="${customIntro}">Custom intro</p>
+        <p th:unless="${customIntro}">Your appointment has been confirmed. For privacy, details are not included in this email — please sign in to your account to view them.</p>
+    </th:block>
+    <th:block th:if="${!discreet}">
+        <h2>Booking Confirmed</h2>
+        <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+        <p th:if="${customIntro}" th:text="${customIntro}">Custom intro</p>
+        <p th:unless="${customIntro}">Your appointment has been successfully booked. Here are the details:</p>
+
+        <div class="detail-box">
+            <p><span class="detail-label">Reference:</span> <span th:text="${bookingReference}">BK-000</span></p>
+            <p><span class="detail-label">Type:</span> <span th:text="${appointmentType}">Check-up</span></p>
+            <p><span class="detail-label">Date:</span> <span th:text="${appointmentDate}">Friday, 20 February 2026</span></p>
+            <p><span class="detail-label">Time:</span> <span th:text="${appointmentTime}">14:00</span></p>
+            <p><span class="detail-label">Location:</span> <span th:text="${clinicLocation}">Clinic</span></p>
+            <p><span class="detail-label">Clinician:</span> <span th:text="${doctorName}">Dr. Smith</span></p>
+        </div>
+
+        <p>Please save your booking reference. You can manage your appointment through your account.</p>
+    </th:block>
+
+</th:block>
+</body>
+</html>

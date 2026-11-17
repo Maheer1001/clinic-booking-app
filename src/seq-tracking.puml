@@ -1,0 +1,49 @@
+@startuml Tracking - View Records + New Results Notification Logic
+!theme plain
+skinparam linetype ortho
+skinparam shadowing false
+
+actor User
+boundary "Main App\n(MainView + Navigator)" as MainUI
+boundary "Tracking Hub\n(TrackingHubView/TrackingView)" as TrackingUI
+control "TrackingController" as TrackingC
+control "TrackingService" as TrackingS
+entity "Test/Prescription/Appointment DAOs/DB" as TrackingDB
+entity "Data (lastSeen counters)" as Data
+control "NotificationDispatcher" as Dispatch
+entity "EmailSender" as Mail
+boundary "In-app Notification" as Notif
+
+== Open Tracking ==
+User -> MainUI: Click "Tracking"
+MainUI -> TrackingUI: show tracking hub
+TrackingUI -> TrackingC: initialize / refresh
+TrackingC -> TrackingS: getTestResults/getPrescriptions/getPastAppointments
+TrackingS -> TrackingDB: query records
+TrackingDB --> TrackingS: lists
+TrackingS --> TrackingC: lists
+TrackingC --> TrackingUI: render entries
+
+== New test results notification logic ==
+TrackingUI -> TrackingC: notifyForNewTestResults(model)
+TrackingC -> Data: read lastSeenTestCount
+TrackingC -> TrackingS: getTestResults()
+TrackingS -> TrackingDB: query tests
+TrackingDB --> TrackingS: tests list (most recent first)
+TrackingS --> TrackingC: tests
+
+alt first open (baseline)
+  TrackingC -> Data: set lastSeenTestCount = currentCount
+  TrackingC --> TrackingUI: no notifications
+else subsequent open
+  alt new tests exist (currentCount > lastSeen)
+    TrackingC -> Dispatch: notifyUser(userId,\nTestResultEmail,\nTestResultNotification)\n(for new ones)
+    Dispatch -> Mail: send email (if configured)
+    Dispatch -> Notif: show popup notification(s)
+    TrackingC -> Data: update lastSeenTestCount
+  else no changes
+    TrackingC --> TrackingUI: no notifications
+  end
+end
+
+@enduml

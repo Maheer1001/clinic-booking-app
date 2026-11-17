@@ -1,0 +1,72 @@
+@startuml View Bookings - Cancel / Reschedule
+!theme plain
+skinparam linetype ortho
+skinparam shadowing false
+
+actor User
+boundary "Main App\n(MainView + Navigator)" as MainUI
+control "Navigator" as Nav
+
+boundary "View Bookings" as BookingsUI
+control "ViewAppointmentController" as ViewAptC
+entity "AppointmentDAO/DB" as AppointmentDB
+
+boundary "Cancel Screen" as CancelUI
+control "NotificationDispatcher" as Dispatch
+control "BookingCommunicationPrefs" as CommPrefs
+entity "EmailSender" as Mail
+boundary "In-app Notification" as Notif
+
+boundary "Reschedule Screen" as ReschedUI
+control "DateTimeSelector + TimeslotProvider" as SlotPicker
+entity "Timeslot DAO/DB" as TimeslotDB
+
+== Open appointment list ==
+User -> MainUI: Click "View bookings"
+MainUI -> Nav: goToPage(ViewBookings)
+Nav -> BookingsUI: show list
+
+User -> BookingsUI: Select appointment
+BookingsUI -> ViewAptC: getAppointmentDetails(appId)
+ViewAptC -> AppointmentDB: query upcoming appointment details
+AppointmentDB --> ViewAptC: details
+ViewAptC --> BookingsUI: render details + buttons
+
+== Cancel ==
+User -> BookingsUI: Click "Cancel appointment"
+BookingsUI -> ViewAptC: cancelAppointment(appId)
+ViewAptC -> AppointmentDB: mark cancelled + timestamp
+AppointmentDB --> ViewAptC: ok
+
+BookingsUI -> CommPrefs: load(userId)
+CommPrefs --> BookingsUI: cancellation discreet + overrides
+BookingsUI -> Dispatch: notifyUser(userId,\nCancellationEmail,\nCancellationNotification)
+Dispatch -> Mail: send cancellation email
+Dispatch -> Notif: show cancellation notification
+BookingsUI --> BookingsUI: Return to bookings list
+
+== Reschedule ==
+User -> BookingsUI: Click "Reschedule"
+BookingsUI -> Nav: goToPage(Reschedule(appId))
+Nav -> ReschedUI: show reschedule screen\n(appId prefilled)
+
+User -> ReschedUI: pick date
+ReschedUI -> SlotPicker: request available dates + timeslots
+SlotPicker -> AppointmentDB: get clinic/service for appointment
+AppointmentDB --> SlotPicker: clinic_id + service_id
+SlotPicker -> TimeslotDB: list available dates/timeslots
+TimeslotDB --> SlotPicker: slots
+
+User -> ReschedUI: pick time slot\nClick Reschedule
+ReschedUI -> ViewAptC: rescheduleToNewTimeslot(appId, newTimeslotId)
+ViewAptC -> AppointmentDB: update appointment.timeslot_id\nupdate booked_count (old--, new++)
+AppointmentDB --> ViewAptC: ok
+
+ReschedUI -> CommPrefs: load(userId)
+CommPrefs --> ReschedUI: reschedule discreet + overrides
+ReschedUI -> Dispatch: notifyUser(userId,\nRescheduleConfirmationEmail,\nRescheduleConfirmationNotification)
+Dispatch -> Mail: send reschedule email
+Dispatch -> Notif: show reschedule notification
+ReschedUI --> ReschedUI: Show "Rescheduled successfully"
+
+@enduml

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
+<body>
+<th:block th:fragment="content">
+    <th:block th:if="${discreet}">
+        <h2>Appointment Cancelled</h2>
+        <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+        <p th:if="${customIntro}" th:text="${customIntro}">Custom intro</p>
+        <p th:unless="${customIntro}">Your appointment has been cancelled. For privacy, details are not included in this email — please sign in to your account if you need more information.</p>
+    </th:block>
+    <th:block th:if="${!discreet}">
+        <h2>Appointment Cancelled</h2>
+        <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
+        <p th:if="${customIntro}" th:text="${customIntro}">Custom intro</p>
+        <p th:unless="${customIntro}">Your appointment has been successfully cancelled. Details of the cancelled appointment:</p>
+
+        <div class="detail-box">
+            <p><span class="detail-label">Reference:</span> <span th:text="${appointmentRef}">APP-001</span></p>
+            <p><span class="detail-label">Service:</span> <span th:text="${serviceName}">STI Screening</span></p>
+            <p><span class="detail-label">Location:</span> <span th:text="${clinicName}">Clinic</span></p>
+            <p><span class="detail-label">Date:</span> <span th:text="${dateTime}">20 Feb 2026</span></p>
+        </div>
+
+        <p>If you need to book a new appointment, please visit the booking section in your account.</p>
+    </th:block>
+
+</th:block>
+</body>
+</html>
