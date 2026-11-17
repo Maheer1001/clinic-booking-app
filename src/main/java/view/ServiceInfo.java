@@ -20,10 +20,13 @@ public class ServiceInfo {
             return UI.page(UI.muted("Please select a clinic first."));
         }
 
-        List<Service> services = clinic.getServices();
+        List<Service> services = clinic.getServices() != null ? clinic.getServices() : List.of();
 
-        Label clinicName = UI.heading("Services Provided by clinic: " + clinic.getName());
-        Label emptyMessage = services.isEmpty() ? UI.muted("No services available for this clinic.") : new Label();
+        Label clinicName = UI.heading("Services provided by " + clinic.getName());
+        clinicName.setWrapText(true);
+        if (services.isEmpty()) {
+            return UI.page(clinicName, UI.muted("No services available for this clinic."));
+        }
 
         ListView<Service> listview = new ListView<>();
         listview.setItems(FXCollections.observableArrayList(services));
@@ -34,26 +37,19 @@ public class ServiceInfo {
             protected void updateItem(Service service, boolean empty) {
                 super.updateItem(service, empty);
 
+                setText(null);
                 if (empty || service == null) {
                     setGraphic(null);
                     return;
                 }
 
-                Label name = new Label(service.getName());
-                name.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+                Label name = UI.heading(service.getName());
+                Label duration = UI.muted("Estimated duration: " + service.getDurationMinutes() + " minutes");
 
-                Label duration = new Label(
-                        "Estimated duration: " + service.getDurationMinutes() + " Minutes"
-                );
-
-                Label descriptionTitle = new Label("Description:");
-                descriptionTitle.setStyle("-fx-font-weight: bold;");
-
-                Label description = new Label(service.getDescription());
-                description.setWrapText(true);
+                Label description = UI.body(service.getDescription() != null ? service.getDescription() : "");
                 description.setMaxWidth(Double.MAX_VALUE);
 
-                VBox container = new VBox(5, name, duration, descriptionTitle, description);
+                VBox container = new VBox(5, name, duration, description);
                 container.setFillWidth(true);
                 container.setPadding(new Insets(10));
 
@@ -62,7 +58,7 @@ public class ServiceInfo {
         });
         listview.setFixedCellSize(-1);
 
-        return UI.page(listview, emptyMessage);
+        return UI.page(clinicName, listview);
 
     }
 }
