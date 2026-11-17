@@ -3,9 +3,6 @@ package service;
 import dao.UserDAO;
 import dao.UserRepository;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.SQLException;
 import java.util.regex.Pattern;
 
@@ -31,7 +28,17 @@ public class AuthService {
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
-    private static final int MIN_PASSWORD_LENGTH = 8;
+    public static final int MIN_PASSWORD_LENGTH = 8;
+
+    /** Shown to users wherever a new password is chosen, so the rules are known up front. */
+    public static final String PASSWORD_RULES =
+            "At least " + MIN_PASSWORD_LENGTH + " characters, including a letter and a number.";
+
+    /**
+     * Hash checked when the email is unknown, so a failed login takes about as long
+     * whether or not the account exists.
+     */
+    private static final String DUMMY_HASH = PasswordHasher.hash("not-a-real-password-0");
 
     private final UserRepository userDAO;
 
@@ -75,20 +82,32 @@ public class AuthService {
 
         try {
             String storedHash = userDAO.getPasswordHashByEmail(email);
-            if (storedHash == null) return SignInResult.USER_NOT_FOUND;
+            if (storedHash == null) {
+                PasswordHasher.verify(password, DUMMY_HASH);
+                return SignInResult.USER_NOT_FOUND;
+            }
 
-            String inputHash = hashPassword(password);
-            return storedHash.equals(inputHash) ? SignInResult.SUCCESS : SignInResult.WRONG_PASSWORD;
+            if (!PasswordHasher.verify(password, storedHash)) return SignInResult.WRONG_PASSWORD;
+
+            if (PasswordHasher.needsRehash(storedHash)) {
+                // Upgrade legacy unsalted hashes now that we know the plaintext.
+                try {
+                    userDAO.updatePasswordHashByEmail(email, hashPassword(password));
+                } catch (SQLException ignored) {
+                    // Login still succeeds; the upgrade is retried next time.
+                }
+            }
+            return SignInResult.SUCCESS;
         } catch (SQLException e) {
             return SignInResult.DB_ERROR;
         }
     }
 
-    static boolean isValidEmail(String email) {
+    public static boolean isValidEmail(String email) {
         return !isBlank(email) && EMAIL_PATTERN.matcher(email).matches();
     }
 
-    static boolean isStrongEnoughPassword(String password) {
+    public static boolean isStrongEnoughPassword(String password) {
         if (isBlank(password)) return false;
         if (password.length() < MIN_PASSWORD_LENGTH) return false;
 
@@ -105,25 +124,11 @@ public class AuthService {
     }
 
     static String hashPassword(String password) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(password.getBytes(StandardCharsets.UTF_8));
-            return toHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        return PasswordHasher.hash(password);
     }
 
-    private static String toHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            sb.append(Character.forDigit((b >> 4) & 0xF, 16));
-            sb.append(Character.forDigit(b & 0xF, 16));
-        }
-        return sb.toString();
-    }
-
-    private static String normalize(String s) {
+    /** Trims and lower-cases an email the same way sign-up and sign-in do. */
+    public static String normalize(String s) {
         if (s == null) return null;
         return s.trim().toLowerCase();
     }

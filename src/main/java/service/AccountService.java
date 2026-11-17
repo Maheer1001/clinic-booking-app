@@ -28,6 +28,7 @@ public class AccountService {
         SUCCESS,
         INVALID_EMAIL,
         EMAIL_ALREADY_USED,
+        INVALID_NAME,
         INVALID_PHONE,
         INVALID_DOB,
         DB_ERROR
@@ -65,7 +66,12 @@ public class AccountService {
         }
 
 
-        if (dob == null || dob.isAfter(LocalDate.now())) {
+        // first_name / last_name are VARCHAR(50); longer values used to fail as a generic DB error.
+        if (tooLong(firstName) || tooLong(lastName)) {
+            return SaveResult.INVALID_NAME;
+        }
+
+        if (!isValidDob(dob)) {
             return SaveResult.INVALID_DOB;
         }
 
@@ -87,6 +93,20 @@ public class AccountService {
         } catch (SQLException e) {
             return SaveResult.DB_ERROR;
         }
+    }
+
+    public static final int MAX_NAME_LENGTH = 50;
+    /** Oldest date of birth accepted; anything earlier is almost certainly a typo. */
+    public static final int MAX_AGE_YEARS = 120;
+
+    public static boolean isValidDob(LocalDate dob) {
+        if (dob == null) return false;
+        LocalDate today = LocalDate.now();
+        return !dob.isAfter(today) && !dob.isBefore(today.minusYears(MAX_AGE_YEARS));
+    }
+
+    private static boolean tooLong(String name) {
+        return name != null && name.trim().length() > MAX_NAME_LENGTH;
     }
 
     private static String trim(String s) {

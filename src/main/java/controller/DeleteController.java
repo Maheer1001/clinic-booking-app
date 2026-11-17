@@ -1,20 +1,15 @@
 package controller;
 
 import app.Data;
-import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Scene;
 import javafx.scene.control.*;
 
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 import service.UserService;
-import view.reminders.AppointmentRemindersView;
 import view.ui.UI;
 
-import java.io.IOException;
-import java.sql.SQLException;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Controller for the deleting user information.
@@ -22,51 +17,62 @@ import java.util.Optional;
 
 public class DeleteController {
 
-    public DeleteController(int userId) throws SQLException {
+    /**
+     * Asks for confirmation, then deletes the account and all its data.
+     *
+     * @param onDeleted called on the FX thread after a successful delete, with a message to show
+     *                  on the login screen; responsible for clearing the session and leaving the app UI.
+     */
+    public DeleteController(int userId, Consumer<String> onDeleted) {
         UserService userService = new UserService();
 
-
-        ButtonType delete = new ButtonType("Delete");
+        ButtonType delete = new ButtonType("Delete my account");
         ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Confirm Deletion");
-        alert.setHeaderText("Delete User");
-        alert.setContentText("Are you sure you want to delete all user information? \n*Note: this action cannot be undone*");
+        alert.setHeaderText("Delete your account?");
+        alert.setContentText("This permanently deletes your account, appointments, test results, "
+                + "prescriptions and reminders. Upcoming bookings will be cancelled.\n\nThis cannot be undone.");
+        styleDialog(alert);
+        alert.getButtonTypes().setAll(delete, cancel);
 
         DialogPane dialogPane = alert.getDialogPane();
-        dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
+        Button deleteBtn = (Button) dialogPane.lookupButton(delete);
+        deleteBtn.getStyleClass().add(UI.BTN_DANGER);
+        // Enter should never trigger the destructive action.
+        deleteBtn.setDefaultButton(false);
+        Button cancelBtn = (Button) dialogPane.lookupButton(cancel);
+        cancelBtn.getStyleClass().add(UI.ALERT_IGNORE);
+        cancelBtn.setDefaultButton(true);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isEmpty() || result.get() != delete) return;
+
+        Background.run(() -> {
+            try {
+                userService.deleteUser(userId);
+                return null;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, ignored -> onDeleted.accept("Your account and its data have been deleted."), ex -> {
+            Alert error = new Alert(Alert.AlertType.ERROR);
+            error.setTitle("Could not delete account");
+            error.setHeaderText("Your account was not deleted");
+            error.setContentText("Something went wrong and nothing was removed. Please try again later.");
+            styleDialog(error);
+            error.showAndWait();
+        });
+    }
+
+    private void styleDialog(Alert alert) {
+        DialogPane dialogPane = alert.getDialogPane();
+        if (Data.getScene() != null) {
+            dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
+        }
         Stage stage = (Stage) dialogPane.getScene().getWindow();
         stage.getIcons().add(new Image(getClass().getResource("/icons/safe.png").toExternalForm()));
         dialogPane.setGraphic(null);
-
-        alert.getButtonTypes().setAll(delete, cancel);
-
-        Button defaultBtn = (Button) dialogPane.lookupButton(delete);
-        defaultBtn.getStyleClass().add(UI.BTN_DANGER);
-        Button ignoreBtn = (Button) dialogPane.lookupButton(cancel);
-        ignoreBtn.getStyleClass().add(UI.ALERT_IGNORE);
-
-        Optional<ButtonType> result = alert.showAndWait();
-
-        if (result.isPresent() && result.get() == delete) {
-            userService.deleteUser(userId);
-            goToLogin();
-            }
-
-        }
-
-    private void goToLogin() {
-        try {
-            Stage stage = (Stage) Data.getScene().getWindow();
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/login.fxml"));
-            Scene scene = new Scene(loader.load(), 420, 720);
-            scene.getStylesheets().add(UI.STYLE);
-            stage.setScene(scene);
-        } catch (IOException e) {
-            //if user cannot be logged out, exit app instead
-            Platform.exit();
-        }
     }
-
 }

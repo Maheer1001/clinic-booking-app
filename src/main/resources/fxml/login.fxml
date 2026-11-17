@@ -6,7 +6,8 @@
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
       fx:controller="controller.LoginController"
-      styleClass="auth-page">
+      styleClass="auth-page"
+      stylesheets="@../css/auth.css">
 
     <VBox styleClass="auth-heading">
         <Label text="HEALTH TRACKING &amp; APPOINTMENTS" styleClass="auth-brand"/>
@@ -17,10 +18,12 @@
     <VBox styleClass="auth-card">
         <TextField fx:id="emailField"
                    promptText="Email"
+                   accessibleText="Email"
                    styleClass="input"/>
 
         <PasswordField fx:id="passwordField"
                        promptText="Password"
+                       accessibleText="Password"
                        styleClass="input"/>
 
         <Button fx:id="continueBtn"
@@ -32,6 +35,7 @@
 
         <Label fx:id="messageLabel"
                text=""
+               wrapText="true"
                styleClass="error"/>
 
         <HBox styleClass="auth-footer">

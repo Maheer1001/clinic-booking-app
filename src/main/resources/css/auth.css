@@ -1,0 +1,36 @@
+/* Styles used only by the login, sign-up and password-reset screens. Loaded from those FXML files. */
+
+/* Short helper text under a field, e.g. the password rules. */
+.auth-hint {
+    -fx-text-fill: #6B6478;
+    -fx-font-size: 12px;
+    -fx-wrap-text: true;
+}
+
+/* Inline message under a single field when its value is not valid. */
+.auth-field-error {
+    -fx-text-fill: #b00020;
+    -fx-font-size: 12px;
+    -fx-wrap-text: true;
+}
+
+/* Positive status message (e.g. "We've sent a code"). */
+.auth-success {
+    -fx-text-fill: #1b5e20;
+    -fx-font-size: 14px;
+    -fx-wrap-text: true;
+}
+
+.auth-field-label {
+    -fx-text-fill: #1E1030;
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+}
+
+.auth-step {
+    -fx-spacing: 8px;
+}
+
+.error {
+    -fx-wrap-text: true;
+}

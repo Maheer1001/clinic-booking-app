@@ -131,4 +131,42 @@ public class AuthServiceTest {
         assertEquals(AuthService.SignInResult.INVALID_INPUT,
                 auth.signIn("user@soton.ac.uk", "   "));
     }
+
+    @Test
+    void signUp_storesSaltedHash_notPlainOrSha256() throws Exception {
+        AuthService auth = new AuthService();
+        auth.signUp("salt1@soton.ac.uk", "password123", true);
+        auth.signUp("salt2@soton.ac.uk", "password123", true);
+
+        dao.UserDAO dao = new dao.UserDAO();
+        String h1 = dao.getPasswordHashByEmail("salt1@soton.ac.uk");
+        String h2 = dao.getPasswordHashByEmail("salt2@soton.ac.uk");
+        assertTrue(h1.startsWith("pbkdf2$"));
+        assertNotEquals(h1, h2, "same password must not produce the same stored hash");
+        assertNotEquals(PasswordHasher.legacySha256Hex("password123"), h1);
+    }
+
+    @Test
+    void signIn_legacySha256Hash_stillWorks_andIsUpgraded() throws Exception {
+        dao.UserDAO dao = new dao.UserDAO();
+        String email = "legacy@soton.ac.uk";
+        dao.insertUser(email, PasswordHasher.legacySha256Hex("password123"));
+
+        AuthService auth = new AuthService();
+        assertEquals(AuthService.SignInResult.WRONG_PASSWORD, auth.signIn(email, "password124"));
+        assertEquals(AuthService.SignInResult.SUCCESS, auth.signIn(email, "password123"));
+
+        String upgraded = dao.getPasswordHashByEmail(email);
+        assertTrue(upgraded.startsWith("pbkdf2$"), "legacy hash should be replaced after login");
+        assertEquals(AuthService.SignInResult.SUCCESS, auth.signIn(email, "password123"));
+    }
+
+    @Test
+    void signIn_emailIsTrimmedAndCaseInsensitive() {
+        AuthService auth = new AuthService();
+        auth.signUp("Mixed.Case@soton.ac.uk", "password123", true);
+
+        assertEquals(AuthService.SignInResult.SUCCESS,
+                auth.signIn("  MIXED.case@SOTON.ac.uk ", "password123"));
+    }
 }

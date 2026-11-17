@@ -2,6 +2,10 @@ package controller;
 
 import app.Data;
 import dao.UserDAO;
+import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import model.AccessibilitySettings;
 import service.AuthService;
 import view.MainView;
 import view.Navigator;
@@ -19,6 +23,10 @@ import java.sql.SQLException;
 
 public class LoginController {
 
+    /** One message for unknown email and wrong password, so login can't be used to discover accounts. */
+    static final String BAD_CREDENTIALS_MESSAGE = "Incorrect email or password.";
+    static final String DB_ERROR_MESSAGE = "We couldn't reach the server. Please try again.";
+
     @FXML private TextField emailField;
     @FXML private PasswordField passwordField;
     @FXML private Label messageLabel;
@@ -26,6 +34,11 @@ public class LoginController {
 
     private final AuthService authService = new AuthService();
     private final UserDAO userDAO = new UserDAO();
+    private final BooleanProperty busy = new SimpleBooleanProperty(false);
+
+    /** What a successful login needs from the database, loaded off the FX thread. */
+    private record LoginData(AuthService.SignInResult result, Integer userId, String name,
+                             AccessibilitySettings settings) {}
 
     @FXML
     private void initialize() {
@@ -34,37 +47,88 @@ public class LoginController {
         messageLabel.visibleProperty().bind(messageLabel.textProperty().isNotEmpty());
 
         continueBtn.disableProperty().bind(
-                emailField.textProperty().isEmpty()
+                busy.or(emailField.textProperty().isEmpty())
                         .or(passwordField.textProperty().isEmpty())
         );
+        emailField.disableProperty().bind(busy);
+        passwordField.disableProperty().bind(busy);
 
-        emailField.textProperty().addListener((obs, o, n) -> messageLabel.setText(""));
-        passwordField.textProperty().addListener((obs, o, n) -> messageLabel.setText(""));
+        emailField.textProperty().addListener((obs, o, n) -> clearMessage());
+        passwordField.textProperty().addListener((obs, o, n) -> clearMessage());
+
+        Platform.runLater(emailField::requestFocus);
+    }
+
+    /** Shows a positive message (e.g. after sign-up or a password reset) on this screen. */
+    public void showInfo(String message) {
+        messageLabel.getStyleClass().setAll("label", "auth-success");
+        messageLabel.setText(message);
+    }
+
+    private void showError(String message) {
+        messageLabel.getStyleClass().setAll("label", UI.ERROR);
+        messageLabel.setText(message);
+    }
+
+    private void clearMessage() {
+        messageLabel.setText("");
     }
 
     @FXML
     public void onLogin() {
-        String email = emailField.getText();
+        if (continueBtn.isDisabled()) return;
+        String email = AuthService.normalize(emailField.getText());
         String password = passwordField.getText();
+        clearMessage();
+        busy.set(true);
+        continueBtn.setText("Logging in…");
 
-        AuthService.SignInResult result = authService.signIn(email, password);
-
-        switch (result) {
-            case SUCCESS -> {
-                try {
-                    Integer userId = userDAO.getUserIdByEmail(email);
-                    String name = userId != null ? userDAO.getDisplayNameByUserId(userId) : null;
-                    Data.setCurrentUser(userId != null ? userId : -1, email, name);
+        Background.run(() -> loadLogin(email, password), data -> {
+            busy.set(false);
+            continueBtn.setText("Log in");
+            switch (data.result()) {
+                case SUCCESS -> {
+                    if (data.userId() == null) {
+                        showError(DB_ERROR_MESSAGE);
+                        return;
+                    }
+                    Data.setCurrentUser(data.userId(), email, data.name());
+                    Data.setSettings(data.settings());
                     Stage stage = (Stage) emailField.getScene().getWindow();
-                    createNavigator(stage, userId != null ? userId : 0);
-                } catch (SQLException ex) {
-                    messageLabel.setText("Database error.");
+                    createNavigator(stage, data.userId());
                 }
+                case INVALID_INPUT -> showError("Enter a valid email address and your password.");
+                case USER_NOT_FOUND, WRONG_PASSWORD -> {
+                    showError(BAD_CREDENTIALS_MESSAGE);
+                    passwordField.clear();
+                    passwordField.requestFocus();
+                }
+                case DB_ERROR -> showError(DB_ERROR_MESSAGE);
             }
-            case INVALID_INPUT -> messageLabel.setText("Invalid email or password.");
-            case USER_NOT_FOUND -> messageLabel.setText("User not found.");
-            case WRONG_PASSWORD -> messageLabel.setText("Wrong password.");
-            case DB_ERROR -> messageLabel.setText("Database error.");
+        }, ex -> {
+            busy.set(false);
+            continueBtn.setText("Log in");
+            showError(DB_ERROR_MESSAGE);
+        });
+    }
+
+    private LoginData loadLogin(String email, String password) {
+        AuthService.SignInResult result = authService.signIn(email, password);
+        if (result != AuthService.SignInResult.SUCCESS) return new LoginData(result, null, null, null);
+        try {
+            Integer userId = userDAO.getUserIdByEmail(email);
+            if (userId == null) return new LoginData(AuthService.SignInResult.DB_ERROR, null, null, null);
+            String name = userDAO.getDisplayNameByUserId(userId);
+            AccessibilitySettings settings;
+            try {
+                settings = UserDAO.getAccessibilitySettingsByUserId(userId);
+            } catch (SQLException e) {
+                // Unreadable settings must not block login; fall back to defaults.
+                settings = new AccessibilitySettings();
+            }
+            return new LoginData(result, userId, name, settings);
+        } catch (SQLException ex) {
+            return new LoginData(AuthService.SignInResult.DB_ERROR, null, null, null);
         }
     }
 
@@ -86,22 +150,25 @@ public class LoginController {
             scene.getStylesheets().add(UI.STYLE);
             stage.setScene(scene);
         } catch (Exception e) {
-            messageLabel.setText("ERROR");
+            showError("Could not open that screen.");
         }
     }
 
     public void createNavigator(Stage stage, int userID) {
+        if (Data.getSettings() == null) {
+            Data.setSettings(new AccessibilitySettings());
+        }
+
         MainView mainView = new MainView();
         Navigator nav = new Navigator(mainView);
 
         javafx.scene.Scene scene = new javafx.scene.Scene(nav.getRoot(), 420, 720);
         scene.getStylesheets().add(UI.STYLE);
         Data.setScene(scene);
-        try {
-            Data.setSettings(UserDAO.getAccessibilitySettingsByUserId(userID));
-        } catch (SQLException ignored) {}
 
         MainController mainController = new MainController(nav, mainView, userID);
+        // save a settings change made just before the window is closed
+        stage.setOnHidden(e -> mainController.flushSettings());
         stage.setScene(scene);
     }
 

@@ -187,15 +187,70 @@ public class UserDAO implements UserRepository {
         }
     }
 
-    public void deleteUserById(int userId) {
-        String sql = "DELETE FROM \"User\" WHERE user_id = ?";
+    /**
+     * Deletes the user and everything that references them, in one transaction.
+     * Upcoming confirmed bookings give their timeslot capacity back first.
+     *
+     * Previously this only ran {@code DELETE FROM "User"}, which the foreign keys from
+     * Appointment, Test, Prescription, reminders and Session reject for any user with data,
+     * and the error was swallowed, so the account silently survived.
+     *
+     * @throws SQLException if anything fails; nothing is deleted in that case.
+     */
+    @Override
+    public void deleteUserById(int userId) throws SQLException {
+        String[] statements = {
+                // free the slots held by bookings that are still going ahead
+                """
+                UPDATE "Timeslot" t
+                SET booked_count = GREATEST(COALESCE(t.booked_count, 0) - (
+                        SELECT COUNT(*) FROM "Appointment" a
+                        WHERE a.timeslot_id = t.timeslot_id AND a.user_id = ? AND a.status = 'CONFIRMED'), 0)
+                WHERE t.date >= CURRENT_DATE AND t.timeslot_id IN (
+                        SELECT a.timeslot_id FROM "Appointment" a
+                        WHERE a.user_id = ? AND a.status = 'CONFIRMED')
+                """,
+                """
+                DELETE FROM "AppointmentReminder"
+                WHERE user_id = ? OR app_id IN (SELECT app_id FROM "Appointment" WHERE user_id = ?)
+                """,
+                """
+                DELETE FROM "PrescriptionReminder"
+                WHERE user_id = ? OR prescription_id IN (
+                        SELECT prescription_id FROM "Prescription"
+                        WHERE user_id = ? OR test_id IN (SELECT test_id FROM "Test" WHERE user_id = ?))
+                """,
+                "DELETE FROM \"BookingReminder\" WHERE user_id = ?",
+                "DELETE FROM \"Appointment\" WHERE user_id = ?",
+                """
+                DELETE FROM "Prescription"
+                WHERE user_id = ? OR test_id IN (SELECT test_id FROM "Test" WHERE user_id = ?)
+                """,
+                "DELETE FROM \"TestResult\" WHERE test_id IN (SELECT test_id FROM \"Test\" WHERE user_id = ?)",
+                "DELETE FROM \"Test\" WHERE user_id = ?",
+                "DELETE FROM \"Session\" WHERE user_id = ?",
+                "DELETE FROM \"User\" WHERE user_id = ?"
+        };
 
-        try (Connection c = DB.connect();
-            PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try (Connection c = DB.connect()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                for (String sql : statements) {
+                    try (PreparedStatement ps = c.prepareStatement(sql)) {
+                        // every placeholder in these statements is the user id
+                        long params = sql.chars().filter(ch -> ch == '?').count();
+                        for (int i = 1; i <= params; i++) ps.setInt(i, userId);
+                        ps.executeUpdate();
+                    }
+                }
+                c.commit();
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
+            }
         }
     }
 

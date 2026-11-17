@@ -53,6 +53,23 @@ public class AccountServiceTest {
     }
 
     @Test
+    void saveAccount_implausiblyOldDob_shouldReturnInvalidDob() {
+        AccountService s = new AccountService();
+        assertEquals(AccountService.SaveResult.INVALID_DOB, s.saveAccount(
+                1, "Alex", "Taylor", null, LocalDate.of(1850, 1, 1), "a@test.com"));
+    }
+
+    @Test
+    void saveAccount_nameLongerThanColumn_shouldReturnInvalidName() {
+        AccountService s = new AccountService();
+        String longName = "a".repeat(AccountService.MAX_NAME_LENGTH + 1);
+        assertEquals(AccountService.SaveResult.INVALID_NAME, s.saveAccount(
+                1, longName, "Taylor", null, LocalDate.of(2000, 1, 1), "a@test.com"));
+        assertEquals(AccountService.SaveResult.INVALID_NAME, s.saveAccount(
+                1, "Alex", longName, null, LocalDate.of(2000, 1, 1), "a@test.com"));
+    }
+
+    @Test
     @Tag("db")
     void saveAccount_emailAlreadyUsed_shouldReturnEmailAlreadyUsed() throws Exception {
         // 需要真实 DB：插入一个用户占用 email，然后用另一个 userId 保存同一个 email

@@ -1,6 +1,7 @@
 package controller;
 
 import app.Data;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
@@ -15,16 +16,25 @@ public class PrivacyController {
     @FXML private ScrollPane scrollPane;
     @FXML private Label contentLabel;
     @FXML private Button returnBtn;
+    @FXML private Label statusLabel;
 
     @FXML
     private void initialize() {
         contentLabel.setText(buildPrivacyText());
-        scrollPane.vvalueProperty().addListener((obs, o, v) -> {
-            if (v != null && v.doubleValue() >= 0.999) {
-                returnBtn.setDisable(false);
+        if (Data.getSignUpDraft().privacyReadToEnd) {
+            markRead();
+        } else {
+            ReadToEndTracker.onReadToEnd(scrollPane, () -> {
                 Data.getSignUpDraft().privacyReadToEnd = true;
-            }
-        });
+                markRead();
+            });
+        }
+        Platform.runLater(scrollPane::requestFocus);
+    }
+
+    private void markRead() {
+        statusLabel.setText("You can now tick the Privacy Policy box on the sign-up screen.");
+        statusLabel.getStyleClass().setAll("label", "auth-success");
     }
 
     @FXML
