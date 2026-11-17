@@ -55,9 +55,11 @@ public class TrackingTestController extends TrackingSectionController {
         ObservableList<Test> tests = FXCollections.observableList(model.getTestResults());
         FilteredList<Test> filteredTests = new FilteredList<>(tests, p -> true);
         SortedList<Test> sortedTests = new SortedList<>(filteredTests);
+        // Newest first until the user picks another order (the list was previously in raw DB order).
+        sortedTests.setComparator(getComparator(null));
 
         if (tests.isEmpty()) {
-            return UI.page(UI.muted("You have no test results."));
+            return UI.page(UI.muted("You have no test results yet. Results added by the clinic will appear here."));
         }
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
@@ -66,7 +68,7 @@ public class TrackingTestController extends TrackingSectionController {
 
         for (Test test : sortedTests) {
             String left = test.testType();
-            String right = test.testDate();
+            String right = TrackingDates.display(test.testDate());
             Button button = view.getEntryButton(left, right);
             button.setOnAction(e -> nav.goToPage(getDetailsPage(test), "View Test Details", false));
             buttonMap.put(test, button);
@@ -155,57 +157,51 @@ public class TrackingTestController extends TrackingSectionController {
         search.textProperty().addListener((obs, oldVal, newVal) -> new Update().updateFilteredTestEntries());
         sort.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateSortedTestEntries());
 
-        ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, list));
+        ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, list, noMatchesLabel(filteredTests)));
         sp.setFitToWidth(true);
         return sp;
     }
 
     public Predicate<Test> getPredicate(String searchText, LocalDate dateFrom, LocalDate dateTo) {
         return test -> {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
-
-            String testDate = test.testDate();
-            LocalDate date = LocalDate.parse(testDate, formatter);
-
-            boolean afterFrom = (dateFrom == null) || !date.isBefore(dateFrom);
-            boolean beforeTo = (dateTo == null) || !date.isAfter(dateTo);
+            // A missing / malformed date used to throw here and break the whole list.
+            LocalDate date = TrackingDates.parse(test.testDate());
             boolean matchesSearch = getSearchableText(test).toLowerCase().contains(searchText);
-
-            return afterFrom && beforeTo && matchesSearch;
+            return TrackingDates.inRange(date, dateFrom, dateTo) && matchesSearch;
         };
     }
 
     public Comparator<Test> getComparator(String val) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
         if (val == null) {
-            return Comparator.comparing((Test test) -> LocalDate.parse(test.testDate(), formatter)).reversed();
-        } else {
-            return switch (val) {
-                case "Date (Oldest)" -> Comparator.comparing(test -> LocalDate.parse(test.testDate(), formatter));
-                case "Name (A-Z)" -> Comparator.comparing(Test::testType);
-                default -> Comparator.comparing((Test test) -> LocalDate.parse(test.testDate(), formatter)).reversed();
-            };
+            return TrackingDates.newestFirst(Test::testDate);
         }
+        return switch (val) {
+            case "Date (Oldest)" -> TrackingDates.oldestFirst(Test::testDate);
+            case "Name (A-Z)" -> TrackingDates.byName(Test::testType);
+            default -> TrackingDates.newestFirst(Test::testDate);
+        };
     }
 
     @Override
     public Node getDetailsPage(TrackingData td) {
         Test test = (Test) td;
 
-        HBox graphic = (HBox) view.getEntryButton(test.testType(), test.testDate()).getGraphic();
+        HBox graphic = (HBox) view.getEntryButton(test.testType(), TrackingDates.display(test.testDate())).getGraphic();
 
         Label title = UI.heading("Results:");
-        VBox resultsInfo = new VBox(title);
+        VBox resultsInfo = new VBox(6, title);
 
         boolean isPositive = false;
 
         List<TestResult> results = test.testResults();
+        if (results.isEmpty()) {
+            resultsInfo.getChildren().add(UI.muted("No results have been recorded for this test yet."));
+        }
         for (TestResult result : results) {
-            HBox hbox = bullet(result.condition() + ": " + result.result());
             if (result.result() == TestResultStatus.POSITIVE) {
                 isPositive = true;
             }
-            resultsInfo.getChildren().add(hbox);
+            resultsInfo.getChildren().add(resultRow(result));
         }
 
         VBox info = new VBox(10, resultsInfo);
@@ -240,9 +236,28 @@ public class TrackingTestController extends TrackingSectionController {
             HBox booking = UI.equalSpacing(new HBox(10, newBookingLabel, newBookingButton));
             booking.getStyleClass().add(UI.PAGE);
 
-            return UI.page(UI.card(10, graphic, info), new VBox(booking, reminder));
+            return withTrackingStyles(UI.page(UI.card(10, graphic, info), new VBox(booking, reminder)));
         } else {
-            return UI.page(UI.card(10, graphic, info), reminder);
+            return withTrackingStyles(UI.page(UI.card(10, graphic, info), reminder));
         }
+    }
+
+    /** "Chlamydia   [Negative]" with a coloured status label instead of the raw enum name. */
+    private static HBox resultRow(TestResult result) {
+        Label condition = UI.body(result.condition());
+        condition.setWrapText(true);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox row = new HBox(10, condition, spacer, statusLabel(result.result()));
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    static Label statusLabel(TestResultStatus status) {
+        TestResultStatus s = status != null ? status : TestResultStatus.PENDING;
+        Label label = new Label(s.label());
+        label.getStyleClass().addAll("tracking-status", "tracking-status-" + s.name().toLowerCase());
+        label.setMinWidth(Region.USE_PREF_SIZE);
+        return label;
     }
 }

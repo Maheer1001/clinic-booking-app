@@ -42,8 +42,8 @@ public class TrackingPrescriptionController extends TrackingSectionController {
     public String getSearchableText(TrackingData td) {
         PrescriptionSummary pres = (PrescriptionSummary) td;
         String text = pres.name() + " " + pres.dosage() + " " + pres.getCourse() + " " + pres.instructions();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
-        text += pres.endDate().isEmpty() || LocalDate.parse(pres.endDate(), formatter).isAfter(LocalDate.now()) ? " active current" : " inactive past history";
+        LocalDate end = TrackingDates.parse(pres.endDate());
+        text += end == null || end.isAfter(LocalDate.now()) ? " active current" : " inactive past history";
         return text;
     }
 
@@ -58,6 +58,8 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         ObservableList<PrescriptionSummary> prescriptionsHistory = FXCollections.observableList(splitPres.get(false));
         FilteredList<PrescriptionSummary> filteredHistory = new FilteredList<>(prescriptionsHistory, p -> true);
         SortedList<PrescriptionSummary> sortedHistory = new SortedList<>(filteredHistory);
+        sortedCurrent.setComparator(getComparator(null));
+        sortedHistory.setComparator(getComparator(null));
 
         if (prescriptionsCurrent.isEmpty() && prescriptionsHistory.isEmpty()) {
             return UI.page(UI.muted("You have no prescriptions."));
@@ -202,30 +204,25 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         search.textProperty().addListener((obs, oldVal, newVal) -> new Update().updateFilteredPrescriptions());
         sort.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateSortedPrescriptions());
 
-        ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, current, listCurrent, history, listHistory));
+        Label noMatches = UI.muted("Nothing matches your search or dates. Try clearing the filters.");
+        noMatches.setWrapText(true);
+        noMatches.visibleProperty().bind(Bindings.isEmpty(filteredCurrent).and(Bindings.isEmpty(filteredHistory)));
+        noMatches.managedProperty().bind(noMatches.visibleProperty());
+
+        ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, current, listCurrent, history, listHistory, noMatches));
         sp.setFitToWidth(true);
         return sp;
     }
 
     public Predicate<PrescriptionSummary> getPredicate(String searchText, LocalDate dateFrom, LocalDate dateTo) {
         return pres -> {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
-
             //uses both start and end date - so long as active time overlaps search it will appear
-            String startDateStr = pres.startDate();
-            String endDateStr = pres.endDate();
-            LocalDate startDate = LocalDate.parse(startDateStr, formatter);
+            LocalDate startDate = TrackingDates.parse(pres.startDate());
+            //a missing end date represents long-term ongoing medication
+            LocalDate endDate = TrackingDates.parse(pres.endDate());
 
-            //to control for null values representing long-term ongoing medication
-            boolean afterFrom;
-            if (endDateStr.isEmpty()) {
-                afterFrom = true;
-            } else {
-                LocalDate endDate = LocalDate.parse(endDateStr, formatter);
-                afterFrom = (dateFrom == null) || !endDate.isBefore(dateFrom);
-            }
-
-            boolean beforeTo = (dateTo == null) || !startDate.isAfter(dateTo);
+            boolean afterFrom = endDate == null || dateFrom == null || !endDate.isBefore(dateFrom);
+            boolean beforeTo = startDate == null || dateTo == null || !startDate.isAfter(dateTo);
             boolean matchesSearch = getSearchableText(pres).toLowerCase().contains(searchText);
 
             return afterFrom && beforeTo && matchesSearch;
@@ -233,16 +230,15 @@ public class TrackingPrescriptionController extends TrackingSectionController {
     }
 
     public Comparator<PrescriptionSummary> getComparator(String val) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
+        // No selection now means newest first, like the other tracking lists (it used to sort oldest first).
         if (val == null) {
-            return Comparator.comparing((PrescriptionSummary pres) -> LocalDate.parse(pres.startDate(), formatter));
-        } else {
-            return switch (val) {
-                case "Date (Oldest)" -> Comparator.comparing(pres -> LocalDate.parse(pres.startDate(), formatter));
-                case "Name (A-Z)" -> Comparator.comparing(PrescriptionSummary::name);
-                default -> Comparator.comparing((PrescriptionSummary pres) -> LocalDate.parse(pres.startDate(), formatter)).reversed();
-            };
+            return TrackingDates.newestFirst(PrescriptionSummary::startDate);
         }
+        return switch (val) {
+            case "Date (Oldest)" -> TrackingDates.oldestFirst(PrescriptionSummary::startDate);
+            case "Name (A-Z)" -> TrackingDates.byName(PrescriptionSummary::name);
+            default -> TrackingDates.newestFirst(PrescriptionSummary::startDate);
+        };
     }
 
     @Override
