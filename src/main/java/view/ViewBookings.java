@@ -74,7 +74,12 @@ public class ViewBookings {
         reschedule.setOnAction(e -> nav.goToPage(Reschedule.getPageWithAppId(nav, appId), "Reschedule", false));
         Button cancel = UI.primaryButton("Cancel appointment");
         cancel.setOnAction(e -> {
-            controller.cancelAppointment(appId);
+            cancel.setDisable(true);
+            if (!controller.cancelAppointment(appId)) {
+                // Already cancelled or no longer upcoming: don't send a cancellation email.
+                nav.goToPage(getPage(nav), "View Bookings", false);
+                return;
+            }
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "Patient";
             if (recipientEmail != null && !recipientEmail.isBlank()) {
