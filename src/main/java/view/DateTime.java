@@ -2,8 +2,10 @@ package view;
 
 import app.Data;
 import controller.BookingController;
+import javafx.beans.Observable;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
+import javafx.beans.binding.StringBinding;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
@@ -27,18 +29,20 @@ public class DateTime {
         Clinic clinic = Data.getBooking().getClinic();
         List<Item> items = Data.getBooking().getItems();
 
-        if (clinic == null || items.isEmpty()) {
+        if (clinic == null || items == null || items.isEmpty()) {
             return UI.page(UI.muted("Please select clinic and service first."));
         }
 
         VBox container = new VBox(15);
+        container.getChildren().add(UI.muted("Times shown are at " + clinic.getName() + "."));
 
         List<ComboBox<AvailableTimeslot>> comboBoxes = new ArrayList<>();
 
         for (Item item : items) {
 
             Service service = item.getService();
-            Label serviceLabel = new Label("Service: " + service.getName());
+            Label serviceLabel = UI.heading(service.getName());
+            Label duration = UI.muted(service.getDurationMinutes() + " minutes");
 
             int clinicId = clinic.getId();
             int serviceId = service.getId();
@@ -75,22 +79,45 @@ public class DateTime {
             comboBoxes.add(selector.getTimeCombo());
 
             container.getChildren().add(UI.card(10,
-                    serviceLabel,
+                    new VBox(2, serviceLabel, duration),
                     selector
             ));
         }
 
+        Observable[] values = comboBoxes.stream()
+                .map(ComboBox::valueProperty)
+                .toArray(Observable[]::new);
+
         BooleanBinding allSelected = Bindings.createBooleanBinding(() ->
                         comboBoxes.stream().allMatch(cb -> cb.getValue() != null),
-                comboBoxes.stream()
-                        .map(ComboBox::valueProperty)
-                        .toArray(javafx.beans.Observable[]::new)
+                values
         );
+
+        // Two services booked for overlapping times can't both be attended.
+        StringBinding clash = Bindings.createStringBinding(() -> {
+            for (int i = 0; i < comboBoxes.size(); i++) {
+                for (int j = i + 1; j < comboBoxes.size(); j++) {
+                    AvailableTimeslot a = comboBoxes.get(i).getValue();
+                    AvailableTimeslot b = comboBoxes.get(j).getValue();
+                    if (a != null && b != null && overlaps(a, b)) {
+                        return items.get(i).getService().getName() + " and " + items.get(j).getService().getName()
+                                + " are at overlapping times. Please choose different times.";
+                    }
+                }
+            }
+            return "";
+        }, values);
+
+        Label clashMessage = UI.error("");
+        clashMessage.setWrapText(true);
+        clashMessage.textProperty().bind(clash);
+        clashMessage.managedProperty().bind(clashMessage.textProperty().isNotEmpty());
+        clashMessage.visibleProperty().bind(clashMessage.textProperty().isNotEmpty());
 
         Button next = UI.primaryButton("Next");
         next.setOnAction(e -> controller.goToDetails());
-        next.disableProperty().bind(allSelected.not());
-        VBox nextBox = new VBox(next);
+        next.disableProperty().bind(allSelected.not().or(clash.isNotEmpty()));
+        VBox nextBox = new VBox(10, clashMessage, next);
         nextBox.setAlignment(Pos.CENTER);
 
         container.getChildren().add(nextBox);
@@ -99,7 +126,12 @@ public class DateTime {
         sp.setFitToWidth(true);
 
         return sp;
+    }
 
-
+    /** True if two slots on the same day share any time. */
+    static boolean overlaps(AvailableTimeslot a, AvailableTimeslot b) {
+        return a.date().equals(b.date())
+                && a.startTime().isBefore(b.endTime())
+                && b.startTime().isBefore(a.endTime());
     }
 }

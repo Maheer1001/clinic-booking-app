@@ -40,7 +40,10 @@ public class Cancel {
                     return;
                 }
                 model.UpcomingAppointmentDetails apt = aptOpt.get();
-                controller.cancelAppointment(id);
+                if (!controller.cancelAppointment(id)) {
+                    result.setText("This appointment could not be cancelled. It may already be cancelled.");
+                    return;
+                }
                 result.setText("Appointment cancelled.");
                 String recipientEmail = Data.getCurrentUserEmail();
                 String recipientName = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "Patient";

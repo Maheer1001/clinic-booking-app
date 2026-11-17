@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -44,9 +45,10 @@ class BookingServiceTest {
         }
 
         // Unused methods in these tests; provide no-op or empty implementations.
-        @Override public void cancelAppointment(int appointmentId) {}
+        @Override public boolean cancelAppointment(int appointmentId) { return false; }
         @Override public void rescheduleAppointment(int appointmentId, LocalDate newDate) {}
-        @Override public void rescheduleToNewTimeslot(int appointmentId, int newTimeslotId) {}
+        @Override public boolean rescheduleToNewTimeslot(int appointmentId, int newTimeslotId) { return false; }
+        @Override public Optional<Integer> getTimeslotIdByAppointmentId(int appointmentId) { return Optional.empty(); }
         @Override public boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot) { return false; }
         @Override public Optional<int[]> getClinicAndServiceIdsForAppointment(int appointmentId) { return Optional.empty(); }
         @Override public boolean isUpcomingAppointmentForUser(int appointmentId, int userId) { return false; }
@@ -192,6 +194,59 @@ class BookingServiceTest {
         assertTrue(ids.isEmpty());
         assertEquals(1, repo.saves.size());
         assertEquals(1, slots.rows.get(fullSlot)[0]);
+    }
+
+    @Test
+    void placeBooking_slotThatHasAlreadyStarted_isNotBooked() {
+        CapturingAppointmentRepo repo = new CapturingAppointmentRepo();
+        FakeTimeslotRepo slots = new FakeTimeslotRepo();
+        BookingService service = new BookingService(new NoopClinicRepo(), new NoopServiceRepo(), slots, repo);
+
+        Item stale = newSlotItem(LocalTime.of(10, 0));
+        stale.setDate(LocalDate.now().minusDays(1)); // page left open overnight
+
+        BookingService.BookingResult result = service.placeBooking(bookAtClinic(stale), 42);
+
+        assertFalse(result.anyBooked());
+        assertEquals(List.of("STI Test"), result.unavailable());
+        assertTrue(repo.saves.isEmpty());
+        assertTrue(slots.rows.isEmpty(), "no slot row should be reserved");
+    }
+
+    @Test
+    void placeBooking_reportsWhichItemsCouldNotBeBooked() {
+        CapturingAppointmentRepo repo = new CapturingAppointmentRepo();
+        FakeTimeslotRepo slots = new FakeTimeslotRepo();
+        BookingService service = new BookingService(new NoopClinicRepo(), new NoopServiceRepo(), slots, repo);
+
+        service.confirmBooking(bookAtClinic(newSlotItem(LocalTime.of(10, 0))), 1);
+        int fullSlot = repo.saves.get(0).timeslotId();
+
+        Item full = new Item(new Service(4, "HIV Test", "desc", 30));
+        full.setTimeslotId(fullSlot);
+        full.setDate(LocalDate.now().plusDays(3));
+        full.setTime(LocalTime.of(10, 0));
+        Item free = newSlotItem(LocalTime.of(11, 0));
+
+        BookingService.BookingResult result = service.placeBooking(bookAtClinic(full, free), 2);
+
+        assertEquals(1, result.booked().size());
+        assertEquals(LocalTime.of(11, 0), result.booked().get(0).time());
+        assertEquals("STI Test", result.booked().get(0).service().getName());
+        assertEquals(List.of("HIV Test"), result.unavailable());
+    }
+
+    @Test
+    void placeBooking_newSlotWithoutClinic_isNotBooked() {
+        CapturingAppointmentRepo repo = new CapturingAppointmentRepo();
+        BookingService service = new BookingService(new NoopClinicRepo(), new NoopServiceRepo(), new FakeTimeslotRepo(), repo);
+        Book book = new Book();
+        book.setItems(List.of(newSlotItem(LocalTime.of(10, 0))));
+
+        BookingService.BookingResult result = service.placeBooking(book, 42);
+
+        assertFalse(result.anyBooked());
+        assertTrue(repo.saves.isEmpty());
     }
 
     @Test
