@@ -31,7 +31,7 @@ public class ReminderController {
     private final UserRepository userRepository;
 
     public ReminderController(int userId) {
-        this(userId, new ReminderDAO(), new AppointmentDAO(), new PrescriptionDAO(), new NotificationScheduler(),
+        this(userId, new ReminderDAO(), new AppointmentDAO(), new PrescriptionDAO(), NotificationScheduler.shared(),
                 new UserDAO());
     }
 
@@ -74,16 +74,41 @@ public class ReminderController {
         return appointmentDAO.getLastAppointmentDateByUserId(userId);
     }
 
-    public void saveAppointmentReminder(int appId, boolean notify, String customDays, String customMessage) {
-        reminderDAO.saveAppointmentReminder(userId, appId, notify, customDays, customMessage);
+    /**
+     * Saves the reminder settings. Turning reminders off also cancels any reminder already scheduled
+     * for this appointment.
+     *
+     * @return true if the settings were saved
+     */
+    public boolean saveAppointmentReminder(int appId, boolean notify, String customDays, String customMessage) {
+        boolean saved = reminderDAO.saveAppointmentReminder(userId, appId, notify, customDays, customMessage);
+        if (!notify) {
+            notificationScheduler.cancelAppointmentReminders(appId);
+        }
+        return saved;
     }
 
-    public void savePrescriptionReminder(int prescriptionId, boolean notify, int intervalHours, String customMessage) {
-        reminderDAO.savePrescriptionReminder(userId, prescriptionId, notify, intervalHours, customMessage);
+    public boolean savePrescriptionReminder(int prescriptionId, boolean notify, int intervalHours, String customMessage) {
+        boolean saved = reminderDAO.savePrescriptionReminder(userId, prescriptionId, notify, intervalHours, customMessage);
+        if (!notify) {
+            notificationScheduler.cancelTreatmentReminders(prescriptionId);
+        }
+        return saved;
     }
 
-    public void saveBookingReminder(boolean notify, int daysSinceLast, String customMessage) {
-        reminderDAO.saveBookingReminder(userId, notify, daysSinceLast, customMessage);
+    /**
+     * @param recipientEmail used to cancel a booking reminder already scheduled when notify is false (may be null)
+     */
+    public boolean saveBookingReminder(boolean notify, int daysSinceLast, String customMessage, String recipientEmail) {
+        boolean saved = reminderDAO.saveBookingReminder(userId, notify, daysSinceLast, customMessage);
+        if (!notify && recipientEmail != null) {
+            notificationScheduler.cancelBookingReminders(recipientEmail);
+        }
+        return saved;
+    }
+
+    public boolean saveBookingReminder(boolean notify, int daysSinceLast, String customMessage) {
+        return saveBookingReminder(notify, daysSinceLast, customMessage, null);
     }
 
     public void scheduleAppointmentReminder(Appointment appt, String email, String name, int days) {

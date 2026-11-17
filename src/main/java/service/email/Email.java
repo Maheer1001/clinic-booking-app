@@ -40,4 +40,12 @@ public interface Email {
     default String getFromName() {
         return null;
     }
+
+    /**
+     * True when the email must not reveal sensitive details (service type, clinic, treatment,
+     * clinic branding in the sender name). Discreet emails get a neutral sender name and header.
+     */
+    default boolean isDiscreet() {
+        return false;
+    }
 }

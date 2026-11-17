@@ -1,0 +1,28 @@
+/* Tracking screens only (loaded by the tracking controllers). Shared styles live in app.css. */
+
+.tracking-status {
+    -fx-padding: 2 10 2 10;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-font-weight: bold;
+    -fx-font-size: 0.9em;
+}
+
+.tracking-status-negative {
+    -fx-background-color: #e3f4e8;
+    -fx-border-color: #2e7d4f;
+    -fx-text-fill: #1d5235;
+}
+
+.tracking-status-positive {
+    -fx-background-color: #fdecea;
+    -fx-border-color: #b3261e;
+    -fx-text-fill: #8c1d18;
+}
+
+.tracking-status-pending {
+    -fx-background-color: #f1f1f4;
+    -fx-border-color: #6b6b78;
+    -fx-text-fill: #3d3d47;
+}

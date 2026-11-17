@@ -9,10 +9,11 @@
 
     <div class="detail-box">
         <p><span class="detail-label">Reason:</span> <span th:text="${reminderReason}">Routine check-up due</span></p>
-        <p><span class="detail-label">Suggested:</span> <span th:text="${suggestedAppointmentType}">Annual Screening</span></p>
+        <p th:unless="${discreet}"><span class="detail-label">Suggested:</span> <span th:text="${suggestedAppointmentType}">Annual Screening</span></p>
     </div>
 
-    <p>Taking care of your sexual health is important. Book an appointment at your convenience through your account.</p>
+    <p th:unless="${discreet}">Taking care of your sexual health is important. Book an appointment at your convenience through your account.</p>
+    <p th:if="${discreet}">You can book an appointment at your convenience through your account.</p>
 
 </th:block>
 </body>

@@ -17,6 +17,35 @@ import java.util.List;
  */
 public class ReminderDAO {
 
+    @FunctionalInterface
+    private interface SqlWork {
+        void run(Connection c) throws SQLException;
+    }
+
+    /**
+     * Runs the delete + insert of a reminder save atomically, so a failed insert cannot leave the
+     * user's reminder deleted.
+     */
+    private static boolean inTransaction(SqlWork work) {
+        try (Connection c = DB.connect()) {
+            boolean autoCommit = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                work.run(c);
+                c.commit();
+                return true;
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public List<AppointmentReminder> getAppointmentRemindersByUserId(int userId) {
         String sql = "SELECT ar_rem_id, user_id, app_id, notify, custom_days, custom_message, notification_method FROM \"AppointmentReminder\" WHERE user_id = ?";
         List<AppointmentReminder> list = new ArrayList<>();
@@ -41,8 +70,9 @@ public class ReminderDAO {
         return list;
     }
 
-    public void saveAppointmentReminder(int userId, int appId, boolean notify, String customDays, String customMessage) {
-        try (Connection c = DB.connect()) {
+    /** @return true if saved, false if the database update failed */
+    public boolean saveAppointmentReminder(int userId, int appId, boolean notify, String customDays, String customMessage) {
+        return inTransaction(c -> {
             try (PreparedStatement del = c.prepareStatement("DELETE FROM \"AppointmentReminder\" WHERE user_id = ? AND app_id = ?")) {
                 del.setInt(1, userId);
                 del.setInt(2, appId);
@@ -57,9 +87,7 @@ public class ReminderDAO {
                 ins.setString(5, customMessage != null ? customMessage : "");
                 ins.executeUpdate();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        });
     }
 
     public List<PrescriptionReminder> getPrescriptionRemindersByUserId(int userId) {
@@ -86,8 +114,9 @@ public class ReminderDAO {
         return list;
     }
 
-    public void savePrescriptionReminder(int userId, int prescriptionId, boolean notify, int intervalHours, String customMessage) {
-        try (Connection c = DB.connect()) {
+    /** @return true if saved, false if the database update failed */
+    public boolean savePrescriptionReminder(int userId, int prescriptionId, boolean notify, int intervalHours, String customMessage) {
+        return inTransaction(c -> {
             try (PreparedStatement del = c.prepareStatement("DELETE FROM \"PrescriptionReminder\" WHERE user_id = ? AND prescription_id = ?")) {
                 del.setInt(1, userId);
                 del.setInt(2, prescriptionId);
@@ -102,9 +131,7 @@ public class ReminderDAO {
                 ins.setString(5, customMessage != null ? customMessage : "");
                 ins.executeUpdate();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        });
     }
 
     public List<BookingReminder> getBookingRemindersByUserId(int userId) {
@@ -130,8 +157,9 @@ public class ReminderDAO {
         return list;
     }
 
-    public void saveBookingReminder(int userId, boolean notify, int daysSinceLast, String customMessage) {
-        try (Connection c = DB.connect()) {
+    /** @return true if saved, false if the database update failed */
+    public boolean saveBookingReminder(int userId, boolean notify, int daysSinceLast, String customMessage) {
+        return inTransaction(c -> {
             try (PreparedStatement del = c.prepareStatement("DELETE FROM \"BookingReminder\" WHERE user_id = ?")) {
                 del.setInt(1, userId);
                 del.executeUpdate();
@@ -144,8 +172,6 @@ public class ReminderDAO {
                 ins.setString(4, customMessage != null ? customMessage : "");
                 ins.executeUpdate();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        });
     }
 }

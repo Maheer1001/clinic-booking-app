@@ -39,7 +39,8 @@ public class TrackingAppointmentController extends TrackingSectionController {
     @Override
     public String getSearchableText(TrackingData td) {
         AppointmentDetails app = (AppointmentDetails) td;
-        return app.serviceName() + " " + app.clinicName() + " " + app.notes();
+        // notes may be null; don't let the word "null" become searchable
+        return app.serviceName() + " " + app.clinicName() + " " + (app.notes() != null ? app.notes() : "");
     }
 
     @Override
@@ -47,6 +48,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
         ObservableList<AppointmentDetails> appointments = FXCollections.observableList(model.getPastAppointments());
         FilteredList<AppointmentDetails> filteredAppointments = new FilteredList<>(appointments, p -> true);
         SortedList<AppointmentDetails> sortedAppointments = new SortedList<>(filteredAppointments);
+        sortedAppointments.setComparator(getComparator(null));
         if (appointments.isEmpty()) {
             return UI.page(UI.muted("You have no past appointments."));
         }
@@ -57,7 +59,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
 
         for (AppointmentDetails appointment : sortedAppointments) {
             String left = appointment.serviceName();
-            String right = appointment.startTime() + " " + appointment.date();
+            String right = when(appointment);
             Button button = view.getEntryButton(left, right);
             button.setOnAction(e -> nav.goToPage(getDetailsPage(appointment), "View Appointment Details", false));
             buttonMap.put(appointment, button);
@@ -146,42 +148,40 @@ public class TrackingAppointmentController extends TrackingSectionController {
         sort.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateSortedAppointments());
 
 
-        ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, list));
+        ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, list, noMatchesLabel(filteredAppointments)));
         sp.setFitToWidth(true);
         return sp;
     }
 
     public Predicate<AppointmentDetails> getPredicate(String searchText, LocalDate dateFrom, LocalDate dateTo) {
         return app -> {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
-            String testDate = app.date();
-            LocalDate date = LocalDate.parse(testDate, formatter);
-
-            boolean afterFrom = (dateFrom == null) || !date.isBefore(dateFrom);
-            boolean beforeTo = (dateTo == null) || !date.isAfter(dateTo);
+            LocalDate date = TrackingDates.parse(app.date());
             boolean matchesSearch = getSearchableText(app).toLowerCase().contains(searchText);
-
-            return afterFrom && beforeTo && matchesSearch;
+            return TrackingDates.inRange(date, dateFrom, dateTo) && matchesSearch;
         };
     }
 
     public Comparator<AppointmentDetails> getComparator(String val) {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yy");
         if (val == null) {
-            return Comparator.comparing((AppointmentDetails app) -> LocalDate.parse(app.date(), formatter)).reversed();
-        } else {
-            return switch (val) {
-                case "Date (Oldest)" -> Comparator.comparing(app -> LocalDate.parse(app.date(), formatter));
-                case "Name (A-Z)" -> Comparator.comparing(AppointmentDetails::serviceName);
-                default -> Comparator.comparing((AppointmentDetails app) -> LocalDate.parse(app.date(), formatter)).reversed();
-            };
+            return TrackingDates.newestFirst(AppointmentDetails::date);
         }
+        return switch (val) {
+            case "Date (Oldest)" -> TrackingDates.oldestFirst(AppointmentDetails::date);
+            case "Name (A-Z)" -> TrackingDates.byName(AppointmentDetails::serviceName);
+            default -> TrackingDates.newestFirst(AppointmentDetails::date);
+        };
+    }
+
+    /** "5 Mar 2026, 14:00" instead of "14:00 05/03/26". */
+    private static String when(AppointmentDetails app) {
+        String time = app.startTime() == null || app.startTime().isBlank() ? "" : ", " + app.startTime();
+        return TrackingDates.display(app.date()) + time;
     }
 
     @Override
     public Node getDetailsPage(TrackingData td) {
         AppointmentDetails appointment = (AppointmentDetails) td;
-        HBox graphic = (HBox) view.getEntryButton(appointment.serviceName(), (appointment.startTime() + " " + appointment.date())).getGraphic();
+        HBox graphic = (HBox) view.getEntryButton(appointment.serviceName(), when(appointment)).getGraphic();
 
         VBox info = new VBox(
                 UI.heading("Clinic:"),

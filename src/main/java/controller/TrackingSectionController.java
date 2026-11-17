@@ -1,6 +1,9 @@
 package controller;
 
+import javafx.beans.binding.Bindings;
+import javafx.collections.ObservableList;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import model.TrackingData;
@@ -9,12 +12,17 @@ import view.Navigator;
 import view.TrackingView;
 import view.ui.UI;
 
+import java.net.URL;
+
 /**
  * Abstract class defining functions for each controller section
  * Includes abstract search text, menu page and details page for
  * Also includes helper function for bullet pointing text
  */
 public abstract class TrackingSectionController {
+    /** Extra styles for the tracking screens (status pills); app.css stays shared. */
+    private static final URL TRACKING_CSS = TrackingSectionController.class.getResource("/css/tracking.css");
+
     protected final Navigator nav;
     protected final TrackingView view;
     protected final TrackingService model;
@@ -36,5 +44,22 @@ public abstract class TrackingSectionController {
         Label point = UI.body(text);
         point.setWrapText(true);
         return new HBox(10, dot, point);
+    }
+
+    /** Shown only while search / date filters leave nothing to list, so the page is never just blank. */
+    protected Label noMatchesLabel(ObservableList<?> filtered) {
+        Label label = UI.muted("Nothing matches your search or dates. Try clearing the filters.");
+        label.setWrapText(true);
+        label.visibleProperty().bind(Bindings.isEmpty(filtered));
+        label.managedProperty().bind(label.visibleProperty());
+        return label;
+    }
+
+    /** Adds the tracking stylesheet to a page root. */
+    protected static <T extends Parent> T withTrackingStyles(T root) {
+        if (TRACKING_CSS != null) {
+            root.getStylesheets().add(TRACKING_CSS.toExternalForm());
+        }
+        return root;
     }
 }

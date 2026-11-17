@@ -2,18 +2,23 @@
 <html xmlns:th="http://www.thymeleaf.org" th:replace="~{../layout :: html}">
 <body>
 <th:block th:fragment="content">
-    <h2>Treatment Reminder</h2>
+    <h2 th:text="${discreet} ? 'Reminder' : 'Treatment Reminder'">Treatment Reminder</h2>
     <p>Dear <span th:text="${recipientName}">Patient</span>,</p>
     <p th:if="${customIntro} != null" th:text="${customIntro}">This is a reminder about your ongoing treatment.</p>
-    <p th:if="${customIntro} == null">This is a reminder about your ongoing treatment.</p>
+    <p th:if="${customIntro} == null and !${discreet}">This is a reminder about your ongoing treatment.</p>
+    <p th:if="${customIntro} == null and ${discreet}">This is a friendly reminder from your account.</p>
 
-    <div class="detail-box">
+    <div class="detail-box" th:unless="${discreet}">
         <p><span class="detail-label">Treatment:</span> <span th:text="${treatmentName}">Medication Course</span></p>
         <p><span class="detail-label">Instructions:</span> <span th:text="${treatmentInstructions}">Follow prescribed dosage</span></p>
-        <p><span class="detail-label">Next Due:</span> <span th:text="${nextDueDate}">Tuesday, 17 February 2026</span></p>
+        <p th:if="${nextDueDate} != null"><span class="detail-label">Next Due:</span> <span th:text="${nextDueDate}">Tuesday, 17 February 2026</span></p>
+    </div>
+    <div class="detail-box" th:if="${discreet} and ${nextDueDate} != null">
+        <p><span class="detail-label">Date:</span> <span th:text="${nextDueDate}">Tuesday, 17 February 2026</span></p>
     </div>
 
-    <p>It is important to complete your full course of treatment as prescribed. If you have any concerns or side effects, please contact us.</p>
+    <p th:unless="${discreet}">It is important to complete your full course of treatment as prescribed. If you have any concerns or side effects, please contact us.</p>
+    <p th:if="${discreet}">For privacy, details are not included in this email. Please sign in to your account to view them.</p>
 
 </th:block>
 </body>

@@ -195,7 +195,14 @@ public class EmailSender {
         }
 
         // Prepare message content once
-        String htmlContent = renderHtml(email);
+        String htmlContent;
+        try {
+            htmlContent = renderHtml(email);
+        } catch (RuntimeException e) {
+            // A template error must not escape send(): callers (and the reminder scheduler) rely on a boolean result.
+            System.err.println("[Email] Failed to render template '" + email.getTemplateName() + "': " + e.getMessage());
+            return false;
+        }
         MimeMessage message = createMessage(email, htmlContent);
         if (message == null) {
             return false;
@@ -262,10 +269,7 @@ public class EmailSender {
     private MimeMessage createMessage(Email email, String htmlContent) {
         try {
             MimeMessage message = new MimeMessage(mailSessionStartTLS);
-            String fromName = email.getFromName();
-            if (fromName == null || fromName.isBlank()) {
-                fromName = resolveFromName();
-            }
+            String fromName = resolveFromName(email);
             message.setFrom(new InternetAddress(MAIL_FROM, fromName));
             message.setRecipient(Message.RecipientType.TO,
                     new InternetAddress(email.getRecipientEmail(), email.getRecipientName()));
@@ -285,10 +289,7 @@ public class EmailSender {
     private boolean trySSLFallback(Email email, String htmlContent) {
         try {
             MimeMessage message = new MimeMessage(mailSessionSSL);
-            String fromName = email.getFromName();
-            if (fromName == null || fromName.isBlank()) {
-                fromName = resolveFromName();
-            }
+            String fromName = resolveFromName(email);
             message.setFrom(new InternetAddress(MAIL_FROM, fromName));
             message.setRecipient(Message.RecipientType.TO,
                     new InternetAddress(email.getRecipientEmail(), email.getRecipientName()));
@@ -385,7 +386,21 @@ public class EmailSender {
         return message != null ? message : className;
     }
 
-    private static String resolveFromName() {
+    /** Neutral sender name for discreet emails, so the inbox list does not reveal the clinic type. */
+    static final String DISCREET_FROM_NAME = "Your Appointments";
+
+    /**
+     * Sender display name: the email's own override first, then a neutral name for discreet
+     * emails, then the configured MAIL_FROM_NAME (or the clinic name).
+     */
+    static String resolveFromName(Email email) {
+        String custom = email.getFromName();
+        if (custom != null && !custom.isBlank()) {
+            return custom.trim();
+        }
+        if (email.isDiscreet()) {
+            return DISCREET_FROM_NAME;
+        }
         if (MAIL_FROM_NAME != null && !MAIL_FROM_NAME.isEmpty()) {
             return MAIL_FROM_NAME;
         }

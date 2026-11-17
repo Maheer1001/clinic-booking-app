@@ -78,4 +78,9 @@ public class RescheduleConfirmationEmail extends BaseEmail {
         }
         return null;
     }
+
+    @Override
+    public boolean isDiscreet() {
+        return discreet;
+    }
 }

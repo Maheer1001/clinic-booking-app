@@ -61,9 +61,16 @@ public class ReminderDefaultsView {
 
         saveBtn.setOnAction(e -> {
             ReminderTemplateForm.Payload p = form.collectPayload();
-            controller.saveDefaultAppointmentReminderTemplate(
-                    new AppointmentReminderDefaults(p.notificationsEnabled(), p.scheduleJson(), p.templateOverridesJson()));
-            UI.showSaveConfirmation(saveConfirm);
+            boolean saved;
+            try {
+                controller.saveDefaultAppointmentReminderTemplate(
+                        new AppointmentReminderDefaults(p.notificationsEnabled(), p.scheduleJson(), p.templateOverridesJson()));
+                saved = true;
+            } catch (RuntimeException ex) {
+                System.err.println("Could not save reminder defaults: " + ex.getMessage());
+                saved = false;
+            }
+            ReminderFeedback.saveResult(saveConfirm, saved);
         });
 
         testEmailBtn.setOnAction(e -> {
@@ -77,16 +84,22 @@ public class ReminderDefaultsView {
                 recipientName = recipientEmail;
             }
             ReminderTemplateOverrides current = form.collectOverridesForPreview();
-            new NotificationDispatcher().notifyUser(
+            ReminderFeedback.sending(saveConfirm);
+            testEmailBtn.setDisable(true);
+            new NotificationDispatcher().notifyUserAsync(
                     Data.getCurrentUserId(),
                     new AppointmentReminderEmail(
                             recipientEmail, recipientName,
                             previewAppt.getServiceName(), previewAppt.getAppointmentDateTime(),
                             previewAppt.getClinicName(), previewAppt.getDoctorName(),
-                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName()),
-                    null
+                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
+                            DiscreetReminderChoice.isDiscreet(current)),
+                    null,
+                    sent -> {
+                        testEmailBtn.setDisable(false);
+                        ReminderFeedback.testEmailResult(saveConfirm, sent);
+                    }
             );
-            UI.showTestEmailConfirmation(saveConfirm);
         });
 
         testNotifBtn.setOnAction(e -> {
