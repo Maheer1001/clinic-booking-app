@@ -37,8 +37,16 @@ public class ViewAppointmentController {
                 .findFirst();
     }
 
-    public void cancelAppointment(int appointmentId) {
-        appointmentDAO.cancelAppointment(appointmentId);
+    /**
+     * Cancels one of this user's upcoming appointments.
+     *
+     * @return false if the appointment is not this user's, has already started, or was already cancelled
+     */
+    public boolean cancelAppointment(int appointmentId) {
+        if (!appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId)) {
+            return false;
+        }
+        return appointmentDAO.cancelAppointment(appointmentId);
     }
 
     public boolean rescheduleAppointment(int appointmentId, LocalDate newDate) {
@@ -56,11 +64,16 @@ public class ViewAppointmentController {
         return appointmentDAO.getClinicAndServiceIdsForAppointment(appointmentId);
     }
 
+    /** Slots the appointment could move to on {@code date}, leaving out the slot it is already in. */
     public List<AvailableTimeslot> getAvailableTimeslotsForReschedule(int appointmentId, LocalDate date) {
+        if (date == null || !appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId)) return List.of();
         Optional<int[]> ids = appointmentDAO.getClinicAndServiceIdsForAppointment(appointmentId);
-        if (ids.isEmpty() || date == null) return List.of();
+        if (ids.isEmpty()) return List.of();
         int[] clinicService = ids.get();
-        return appointmentDAO.getAvailableTimeslots(clinicService[0], clinicService[1], date);
+        Optional<Integer> current = appointmentDAO.getTimeslotIdByAppointmentId(appointmentId);
+        return appointmentDAO.getAvailableTimeslots(clinicService[0], clinicService[1], date).stream()
+                .filter(s -> current.isEmpty() || s.timeslotId() != current.get())
+                .toList();
     }
 
     public boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot) {
@@ -74,6 +87,7 @@ public class ViewAppointmentController {
         return appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId);
     }
     public List<LocalDate> getAvailableDatesForReschedule(int appointmentId) {
+        if (!appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId)) return List.of();
         Optional<int[]> ids = appointmentDAO.getClinicAndServiceIdsForAppointment(appointmentId);
 
         if (ids.isEmpty()) return List.of();
