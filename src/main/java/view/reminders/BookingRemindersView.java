@@ -239,7 +239,7 @@ public class BookingRemindersView {
             );
             String customJson = toSave.toJson();
 
-            controller.saveBookingReminder(notify, days, customJson);
+            controller.saveBookingReminder(notify, days, customJson, Data.getCurrentUserEmail());
             UI.showSaveConfirmation(saveConfirmReminder);
 
             if (notify) {
