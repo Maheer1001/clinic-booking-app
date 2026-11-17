@@ -5,12 +5,17 @@ import controller.TrackingController;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.*;
+import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.Tooltip;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.shape.SVGPath;
 import service.TrackingService;
@@ -39,6 +44,15 @@ public class Navigator {
     private final Map<String, Supplier<Page>> homePages = new HashMap<>();
     private final BooleanProperty isSettings = new SimpleBooleanProperty(false);
 
+    private static final String HEADER_BTN = "app-header-btn";
+    private static final PseudoClass ACTIVE = PseudoClass.getPseudoClass("active");
+    /** Horizontal space reserved on each side of the header title for the icon buttons. */
+    private static final double TITLE_SIDE_GUTTER = 64;
+
+    private static final String BACK_ICON = "M19,11H9l3.29-3.29a1,1,0,0,0,0-1.42,1,1,0,0,0-1.41,0l-4.29,4.3A2,2,0,0,0,6,12H6a2,2,0,0,0,.59,1.4l4.29,4.3a1,1,0,1,0,1.41-1.42L9,13H19a1,1,0,0,0,0-2Z";
+    private static final String SETTINGS_ICON = "M34.283,384c17.646,30.626,56.779,41.148,87.405,23.502c0.021-0.012,0.041-0.024,0.062-0.036l9.493-5.483   c17.92,15.332,38.518,27.222,60.757,35.072V448c0,35.346,28.654,64,64,64s64-28.654,64-64v-10.944   c22.242-7.863,42.841-19.767,60.757-35.115l9.536,5.504c30.633,17.673,69.794,7.167,87.467-23.467   c17.673-30.633,7.167-69.794-23.467-87.467l0,0l-9.472-5.461c4.264-23.201,4.264-46.985,0-70.187l9.472-5.461   c30.633-17.673,41.14-56.833,23.467-87.467c-17.673-30.633-56.833-41.14-87.467-23.467l-9.493,5.483   C362.862,94.638,342.25,82.77,320,74.944V64c0-35.346-28.654-64-64-64s-64,28.654-64,64v10.944   c-22.242,7.863-42.841,19.767-60.757,35.115l-9.536-5.525C91.073,86.86,51.913,97.367,34.24,128s-7.167,69.794,23.467,87.467l0,0   l9.472,5.461c-4.264,23.201-4.264,46.985,0,70.187l-9.472,5.461C27.158,314.296,16.686,353.38,34.283,384z M256,170.667   c47.128,0,85.333,38.205,85.333,85.333S303.128,341.333,256,341.333S170.667,303.128,170.667,256S208.872,170.667,256,170.667z";
+    private static final String EXIT_ICON = "M301.258,256.01L502.645,54.645c12.501-12.501,12.501-32.769,0-45.269c-12.501-12.501-32.769-12.501-45.269,0l0,0   L256.01,210.762L54.645,9.376c-12.501-12.501-32.769-12.501-45.269,0s-12.501,32.769,0,45.269L210.762,256.01L9.376,457.376   c-12.501,12.501-12.501,32.769,0,45.269s32.769,12.501,45.269,0L256.01,301.258l201.365,201.387   c12.501,12.501,32.769,12.501,45.269,0c12.501-12.501,12.501-32.769,0-45.269L301.258,256.01z";
+
     public Navigator(MainView view) {
         this.view = view;
 
@@ -57,43 +71,28 @@ public class Navigator {
 
         Label title = new Label();
         title.getStyleClass().add(UI.TITLE);
+        title.setTextOverrun(OverrunStyle.ELLIPSIS);
         Button settingsButton = UI.backButton("");
         Button backButton = UI.backButton("");
+        settingsButton.getStyleClass().add(HEADER_BTN);
+        backButton.getStyleClass().add(HEADER_BTN);
 
-        SVGPath backIcon = new SVGPath();
-        backIcon.setContent("M19,11H9l3.29-3.29a1,1,0,0,0,0-1.42,1,1,0,0,0-1.41,0l-4.29,4.3A2,2,0,0,0,6,12H6a2,2,0,0,0,.59,1.4l4.29,4.3a1,1,0,1,0,1.41-1.42L9,13H19a1,1,0,0,0,0-2Z");
-        SVGPath settingsIcon = new SVGPath();
-        settingsIcon.setContent("M34.283,384c17.646,30.626,56.779,41.148,87.405,23.502c0.021-0.012,0.041-0.024,0.062-0.036l9.493-5.483   c17.92,15.332,38.518,27.222,60.757,35.072V448c0,35.346,28.654,64,64,64s64-28.654,64-64v-10.944   c22.242-7.863,42.841-19.767,60.757-35.115l9.536,5.504c30.633,17.673,69.794,7.167,87.467-23.467   c17.673-30.633,7.167-69.794-23.467-87.467l0,0l-9.472-5.461c4.264-23.201,4.264-46.985,0-70.187l9.472-5.461   c30.633-17.673,41.14-56.833,23.467-87.467c-17.673-30.633-56.833-41.14-87.467-23.467l-9.493,5.483   C362.862,94.638,342.25,82.77,320,74.944V64c0-35.346-28.654-64-64-64s-64,28.654-64,64v10.944   c-22.242,7.863-42.841,19.767-60.757,35.115l-9.536-5.525C91.073,86.86,51.913,97.367,34.24,128s-7.167,69.794,23.467,87.467l0,0   l9.472,5.461c-4.264,23.201-4.264,46.985,0,70.187l-9.472,5.461C27.158,314.296,16.686,353.38,34.283,384z M256,170.667   c47.128,0,85.333,38.205,85.333,85.333S303.128,341.333,256,341.333S170.667,303.128,170.667,256S208.872,170.667,256,170.667z");
-        SVGPath exitIcon = new SVGPath();
-        exitIcon.setContent("M301.258,256.01L502.645,54.645c12.501-12.501,12.501-32.769,0-45.269c-12.501-12.501-32.769-12.501-45.269,0l0,0   L256.01,210.762L54.645,9.376c-12.501-12.501-32.769-12.501-45.269,0s-12.501,32.769,0,45.269L210.762,256.01L9.376,457.376   c-12.501,12.501-12.501,32.769,0,45.269s32.769,12.501,45.269,0L256.01,301.258l201.365,201.387   c12.501,12.501,32.769,12.501,45.269,0c12.501-12.501,12.501-32.769,0-45.269L301.258,256.01z");
-
-        Region backRegion = new Region();
-        backRegion.setShape(backIcon);
-        backRegion.setPrefHeight(20);
-        backRegion.setPrefWidth(30);
-        backIcon.setScaleX(0.8);
-        backIcon.setScaleY(0.8);
-        backRegion.getStyleClass().add("app-btn-icon");
-
-        Region settingsRegion = new Region();
-        settingsRegion.setShape(settingsIcon);
-        settingsRegion.setPrefHeight(20);
-        settingsRegion.setPrefWidth(26);
-        exitIcon.setScaleX(0.8);
-        exitIcon.setScaleY(0.8);
-        settingsRegion.getStyleClass().add("app-btn-icon");
-
-        Region exitRegion = new Region();
-        exitRegion.setShape(exitIcon);
-        exitRegion.setPrefHeight(20);
-        exitRegion.setPrefWidth(25);
-        exitIcon.setScaleX(0.8);
-        exitIcon.setScaleY(0.8);
-        exitRegion.getStyleClass().add("app-btn-icon");
+        Region backRegion = icon(BACK_ICON, 30);
+        Region settingsRegion = icon(SETTINGS_ICON, 26);
+        Region exitRegion = icon(EXIT_ICON, 25);
 
         settingsButton.setGraphic(settingsRegion);
+        settingsButton.setAccessibleText("Settings");
+        settingsButton.setTooltip(new Tooltip("Settings"));
         backButton.graphicProperty().bind(Bindings.when(isHome).then(exitRegion).otherwise(backRegion));
+        Tooltip backTip = new Tooltip();
+        backTip.textProperty().bind(Bindings.when(isHome).then("Close app").otherwise("Back (Alt+Left)"));
+        backButton.setTooltip(backTip);
+        backButton.accessibleTextProperty().bind(Bindings.when(isHome).then("Close app").otherwise("Back"));
+
         StackPane header = getHeader(backButton, title, settingsButton);
+        // Keep long titles clear of the buttons on either side; they are truncated with an ellipsis.
+        title.maxWidthProperty().bind(header.widthProperty().subtract(TITLE_SIDE_GUTTER * 2));
         root.setTop(header);
         StackPane navBar = getNavBar(view.getBookingButton(), view.getTrackingButton(), view.getRemindersButton());
         root.setBottom(navBar);
@@ -102,6 +101,10 @@ public class Navigator {
         title.textProperty().bind(this.title);
 
         isSettings.bind(this.title.isEqualTo("Settings"));
+        isSettings.addListener((obs, was, now) -> settingsButton.pseudoClassStateChanged(ACTIVE, now));
+
+        // Keep the highlighted tab in sync however the tab changed (click, cross-tab link, ...).
+        currentTab.addListener((obs, old, tab) -> selectTabButton(tab));
 
         backButton.setOnAction(e -> {
             if (isHome.get()) {
@@ -109,19 +112,43 @@ public class Navigator {
             } else {
                 goBack();
             }
-                }
-        );
-        settingsButton.setOnAction(e -> {
-            /* if (isHome.get()) {
-                goToSettings();
-            } else {
-                goToHome();
-            }
-             */
-            goToSettings();
         });
+        settingsButton.setOnAction(e -> goToSettings());
 
+        // Keyboard shortcut for Back, like a browser.
+        root.addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.LEFT && e.isAltDown() && !isHome.get()) {
+                goBack();
+                e.consume();
+            }
+        });
     }
+
+    private static Region icon(String svg, double width) {
+        SVGPath path = new SVGPath();
+        path.setContent(svg);
+        Region region = new Region();
+        region.setShape(path);
+        region.setPrefSize(width, 20);
+        region.setMaxSize(width, 20);
+        region.getStyleClass().add("app-btn-icon");
+        return region;
+    }
+
+    private void selectTabButton(String tab) {
+        ToggleButton button = switch (tab) {
+            case "booking" -> view.getBookingButton();
+            case "tracking" -> view.getTrackingButton();
+            case "reminders" -> view.getRemindersButton();
+            default -> null;
+        };
+        if (button != null && !button.isSelected()) {
+            button.setSelected(true);
+        }
+    }
+
+    /** The tab whose pages are currently shown ("booking", "tracking" or "reminders"). */
+    public String getCurrentTab() { return currentTab.get(); }
 
     /** Returns the root BorderPane for the main scene. */
     public BorderPane getRoot() { return root; }
@@ -140,11 +167,7 @@ public class Navigator {
     }
 
     private void switchTab(String tab) {
-        String oldTab = currentTab.get();
-        Node oldPage = currentPage.get();
-        if (oldPage != null) {
-            tabHistory.get(oldTab).push(new Page(oldPage, title.get(), isHome.get()));
-        }
+        pushCurrentPage(currentTab.get());
         currentTab.set(tab);
         Stack<Page> stack = tabHistory.get(tab);
         if (stack.isEmpty()) {
@@ -159,21 +182,16 @@ public class Navigator {
         }
     }
 
+    /**
+     * Shows a page in another tab (e.g. "Set up reminders" from a booking). The current page is kept
+     * in its own tab's history, so returning to that tab later restores it.
+     */
     public void goToPageNewTab(String tab, Node page, String title, boolean isHome) {
-        Stack<Page> oldStack = tabHistory.get(currentTab.get());
-        oldStack.push(new Page(currentPage.get(), this.title.get(), this.isHome.get()));
-        currentTab.set(tab);
-        switch (tab) {
-            case "booking":
-                view.getBookingButton().selectedProperty().set(true);
-                break;
-            case "tracking":
-                view.getTrackingButton().selectedProperty().set(true);
-                break;
-            case "reminders":
-                view.getRemindersButton().selectedProperty().set(true);
-                break;
+        if (!tabHistory.containsKey(tab)) {
+            throw new IllegalArgumentException("Unknown tab: " + tab);
         }
+        pushCurrentPage(currentTab.get());
+        currentTab.set(tab); // the listener highlights the matching nav button
         Stack<Page> stack = tabHistory.get(tab);
         if (isHome) {
             stack.clear();
@@ -199,9 +217,22 @@ public class Navigator {
             navigateTo(page, title, true);
             stack.clear();
         } else {
-            stack.push(new Page(currentPage.get(), this.title.get(), this.isHome.get()));
+            pushCurrentPage(currentTab.get());
             navigateTo(page, title, false);
         }
+    }
+
+    /** Remembers the page on screen in the given tab's history (nothing is on screen before the first page). */
+    private void pushCurrentPage(String tab) {
+        Node page = currentPage.get();
+        if (page != null) {
+            tabHistory.get(tab).push(new Page(page, title.get(), isHome.get()));
+        }
+    }
+
+    /** Number of pages Back can return to in the current tab (for tests and diagnostics). */
+    int backStackSize() {
+        return tabHistory.get(currentTab.get()).size();
     }
 
     /** Pops the previous page from the stack and displays it (bound to the Back button). */
@@ -229,15 +260,17 @@ public class Navigator {
         return header;
     }
 
+    /** Bottom tab bar: three equal-width tabs that share the window width as it is resized. */
     public StackPane getNavBar(ToggleButton booking, ToggleButton tracking, ToggleButton reminders) {
-        StackPane navBar = new StackPane();
-        navBar.setPadding(new Insets(10));
+        HBox tabs = new HBox(8, booking, tracking, reminders);
+        tabs.setAlignment(Pos.CENTER);
+        for (ToggleButton b : new ToggleButton[]{booking, tracking, reminders}) {
+            b.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(b, Priority.ALWAYS);
+        }
 
-        StackPane.setAlignment(booking, Pos.CENTER_LEFT);
-        StackPane.setAlignment(tracking, Pos.CENTER);
-        StackPane.setAlignment(reminders, Pos.CENTER_RIGHT);
-
-        navBar.getChildren().addAll(booking, tracking, reminders);
+        StackPane navBar = new StackPane(tabs);
+        navBar.setPadding(new Insets(8, 10, 10, 10));
         navBar.getStyleClass().add(UI.MAIN_NAV);
         return navBar;
     }

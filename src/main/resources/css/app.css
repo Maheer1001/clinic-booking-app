@@ -1186,3 +1186,149 @@
     -fx-border-color: #6A39A0;
     -fx-border-width: 2px;
 }
+
+/* ==========================================================================
+   Palette, states and shell polish
+   Looked-up colours for new and shared rules; prefer these over hex values.
+   ========================================================================== */
+
+.root {
+    -c-primary: #5B2A86;
+    -c-primary-hover: #4A216E;
+    -c-primary-pressed: #3B1A58;
+    -c-accent: #6A39A0;
+    -c-ink: #1E1030;
+    -c-ink-muted: #6B6478;
+    -c-surface: #ffffff;
+    -c-tint: #F4EEFA;
+    -c-tint-strong: #EBDFF8;
+    -c-line: #DDD3EA;
+    -c-line-soft: #ECE5F4;
+    -c-danger-line: #e57373;
+    -c-danger-tint: #FBE0E0;
+    /* Default focus colours used by the built-in controls. */
+    -fx-focus-color: -c-accent;
+    -fx-faint-focus-color: rgba(106, 57, 160, 0.22);
+    -fx-accent: -c-accent;
+}
+
+/* ---- Keyboard focus: visible ring on button-like controls (they had none) ---- */
+.app-btn:focused, .primaryBtn:focused, .app-menu-btn:focused, .app-shortcut-btn:focused,
+.app-btn-back:focused, .app-btn-danger:focused, .app-btn-positive:focused, .app-list-btn:focused,
+.app-nav-btn:focused, .app-reminder-tab:focused, .tracking-clear-btn:focused, .appointment-card:focused,
+.alert-agree:focused, .alert-ignore:focused, .secondaryBtn:focused, .secondaryWideBtn:focused {
+    -fx-border-color: -c-accent;
+    -fx-border-width: 2px;
+    -fx-border-radius: 12px;
+    -fx-border-insets: -3px;
+}
+.check-box:focused .box, .radio-button:focused .radio {
+    -fx-border-color: -c-accent;
+    -fx-border-width: 2px;
+    -fx-border-radius: 4px;
+    -fx-border-insets: -2px;
+}
+
+/* ---- Pressed and disabled states ---- */
+.app-shortcut-btn:pressed, .secondaryWideBtn:pressed { -fx-background-color: -c-primary-pressed; }
+.app-btn-back:pressed, .app-nav-btn:pressed { -fx-background-color: -c-tint-strong; }
+.app-btn-danger:pressed { -fx-background-color: -c-danger-line, -c-danger-tint; }
+.app-btn-positive:hover { -fx-background-color: #E3F4E8; -fx-cursor: hand; }
+.app-btn-positive:pressed { -fx-background-color: #D2ECDA; }
+.app-list-btn:pressed { -fx-background-color: #3A1F4D, -c-primary-hover; }
+.button:disabled, .toggle-button:disabled {
+    -fx-opacity: 0.45;
+    -fx-effect: null;
+}
+
+/* ---- Header icon buttons (Back / Close, Settings) ---- */
+.app-header-btn {
+    -fx-pref-width: 40px;
+    -fx-pref-height: 40px;
+    -fx-min-width: 40px;
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-radius: 20px;
+    -fx-border-radius: 20px;
+}
+.app-header-btn:hover, .app-header-btn:active {
+    -fx-background-color: -c-tint;
+    -fx-border-color: transparent;
+    -fx-background-radius: 20px;
+}
+.app-header-btn:pressed { -fx-background-color: -c-tint-strong; }
+.app-header-btn:focused {
+    -fx-border-color: -c-accent;
+    -fx-border-width: 2px;
+    -fx-border-insets: 0;
+    -fx-border-radius: 20px;
+}
+
+/* ---- Scroll bars: slim and on-palette instead of the grey default ---- */
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+.scroll-bar .thumb {
+    -fx-background-color: rgba(91, 42, 134, 0.28);
+    -fx-background-insets: 2;
+    -fx-background-radius: 6px;
+}
+.scroll-bar .thumb:hover, .scroll-bar .thumb:pressed {
+    -fx-background-color: rgba(91, 42, 134, 0.5);
+}
+.scroll-bar .increment-button, .scroll-bar .decrement-button {
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+.scroll-bar .increment-arrow, .scroll-bar .decrement-arrow {
+    -fx-padding: 0;
+    -fx-shape: null;
+}
+.scroll-pane, .scroll-pane:focused {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+/* ---- Tooltips ---- */
+.tooltip {
+    -fx-background-color: -c-ink;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 12px;
+    -fx-background-radius: 6px;
+    -fx-padding: 4 8 4 8;
+}
+
+/* ---- Clinic map ---- */
+.clinic-map {
+    -fx-background-color: #efeaf5;
+    -fx-background-radius: 12px;
+}
+.clinic-map-offline {
+    -fx-background-color: -c-tint;
+    -fx-padding: 16px;
+}
+.clinic-map-offline-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+.clinic-map-offline-body {
+    -fx-font-size: 13px;
+    -fx-text-fill: -c-ink-muted;
+    -fx-text-alignment: center;
+}
+.clinic-map-retry {
+    -fx-background-color: -c-surface;
+    -fx-border-color: -c-line;
+    -fx-background-radius: 10px;
+    -fx-border-radius: 10px;
+    -fx-text-fill: -c-primary;
+    -fx-font-weight: 700;
+    -fx-padding: 6 14 6 14;
+}
+.clinic-map-retry:hover { -fx-background-color: -c-tint-strong; -fx-cursor: hand; }
+
+/* ---- Consistency: muted text and inner cards matched to the refreshed palette ---- */
+.app-muted { -fx-text-fill: -c-ink-muted; }
+.app-card-inner { -fx-border-color: -c-line-soft; -fx-background-color: #FAF7FD; }

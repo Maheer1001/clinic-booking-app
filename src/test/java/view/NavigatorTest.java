@@ -77,5 +77,57 @@ public class NavigatorTest {
         // Stack should be cleared; going back returns to the tab's home page.
         assertNotEquals(vbox, nav.getRoot().getCenter());
     }
+
+    @Test
+    void firstPageDoesNotPushAnEmptyEntry() {
+        VBox a = new VBox();
+        nav.goToPage(a, "A", false);
+        assertEquals(0, nav.backStackSize(), "nothing was on screen before the first page");
+
+        VBox b = new VBox();
+        nav.goToPage(b, "B", false);
+        assertEquals(1, nav.backStackSize());
+        nav.goBack();
+        assertSame(a, nav.getRoot().getCenter());
+        assertNotNull(nav.getRoot().getCenter());
+    }
+
+    @Test
+    void crossTabLinkHighlightsTabAndKeepsOtherTabsHistory() {
+        VBox bookingPage = new VBox();
+        nav.goToPage(bookingPage, "Booking page", false);
+
+        VBox remindersPage = new VBox();
+        nav.goToPageNewTab("reminders", remindersPage, "Reminders", true);
+        assertEquals("reminders", nav.getCurrentTab());
+        assertTrue(view.getRemindersButton().isSelected());
+        assertSame(remindersPage, nav.getRoot().getCenter());
+
+        // Switching back to Booking restores the page that was open there.
+        nav.handleTabClick("booking");
+        assertTrue(view.getBookingButton().isSelected());
+        assertSame(bookingPage, nav.getRoot().getCenter());
+
+        // ...and Reminders restores its page too.
+        nav.handleTabClick("reminders");
+        assertSame(remindersPage, nav.getRoot().getCenter());
+    }
+
+    @Test
+    void unknownTabIsRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> nav.goToPageNewTab("nope", new VBox(), "x", false));
+    }
+
+    @Test
+    void headerButtonsHaveAccessibleNames() {
+        nav.goToPage(new VBox(), "Somewhere", false);
+        var buttons = nav.getRoot().getTop().lookupAll(".app-header-btn");
+        assertEquals(2, buttons.size());
+        for (var b : buttons) {
+            assertNotNull(((javafx.scene.control.Button) b).getAccessibleText());
+            assertNotNull(((javafx.scene.control.Button) b).getTooltip());
+        }
+    }
 }
 

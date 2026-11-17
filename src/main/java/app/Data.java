@@ -20,6 +20,8 @@ public class Data {
     private static int lastSeenTestCount = -1;
 
     private static AccessibilitySettings settings;
+    /** User id that {@link #settings} belongs to (-1 if none). */
+    private static int settingsOwnerId = -1;
 
     private static Scene scene;
 
@@ -88,9 +90,16 @@ public class Data {
         currentSession = new Session(Session.generateSessionId(), user);
     }
 
+    /**
+     * Forgets everything tied to the signed-in user (called on log out / account deletion), so the
+     * next user does not inherit a half-filled booking that may contain their personal details.
+     */
     public static void clearCurrentUser() {
         currentSession = null;
         lastSeenTestCount = -1;
+        booking = new Book();
+        // Settings are kept until the next user signs in (see getSettings): a pending debounced
+        // save from the user who just logged out still needs to read their own values.
     }
 
     public static int getLastSeenTestCount() {
@@ -101,12 +110,24 @@ public class Data {
         lastSeenTestCount = count;
     }
 
+    /**
+     * The signed-in user's accessibility settings, or defaults if they could not be loaded. Never null.
+     * If a different user has signed in since the settings were set (e.g. loading theirs failed),
+     * defaults are returned instead of leaking the previous user's settings.
+     */
     public static AccessibilitySettings getSettings() {
+        int current = getCurrentUserId();
+        boolean otherUsersSettings = current >= 0 && settingsOwnerId != current;
+        if (settings == null || otherUsersSettings) {
+            settings = new AccessibilitySettings();
+            settingsOwnerId = current;
+        }
         return settings;
     }
 
     public static void setSettings(AccessibilitySettings settings) {
         Data.settings = settings;
+        Data.settingsOwnerId = getCurrentUserId();
     }
 
     public static Scene getScene() {

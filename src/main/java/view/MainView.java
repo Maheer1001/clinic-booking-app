@@ -38,6 +38,23 @@ public class MainView {
     public Button getDeleteUser() {return deleteUser;}
     public Button getLogOutButton() { return logOutButton; }
 
+    /**
+     * A node can only be in one place in the scene graph, but home and Settings pages are rebuilt and
+     * can be kept in more than one tab's back stack at once. Reusing the same button instance moved it
+     * out of the older page, which then came back without its Log Out / Delete / Book button.
+     * Each page therefore gets its own button that shares the action of the long-lived one
+     * (whose handler is set by MainController).
+     */
+    static Button copyOf(Button template, String... extraStyleClasses) {
+        Button b = new Button();
+        b.textProperty().bind(template.textProperty());
+        b.getStyleClass().setAll(template.getStyleClass());
+        b.getStyleClass().addAll(extraStyleClasses);
+        b.onActionProperty().bind(template.onActionProperty());
+        b.disableProperty().bind(template.disableProperty());
+        return b;
+    }
+
     public Node getPage(Navigator nav) {
 
         int userId = Data.getCurrentUserId();
@@ -99,8 +116,9 @@ public class MainView {
 
         Label heading = new Label("Upcoming appointments");
         heading.getStyleClass().add("section-heading");
-        quickBookButton.setMaxWidth(Double.MAX_VALUE);
-        VBox bordered = UI.card(12, heading, scroll, quickBookButton);
+        Button bookButton = copyOf(quickBookButton);
+        bookButton.setMaxWidth(Double.MAX_VALUE);
+        VBox bordered = UI.card(12, heading, scroll, bookButton);
         VBox.setVgrow(bordered, Priority.ALWAYS);
 
         VBox root = new VBox(bordered);
@@ -150,9 +168,13 @@ public class MainView {
                 )
         );
 
-        Button cancel = UI.primaryButton("Cancel appointment");
+        reschedule.setMaxWidth(Double.MAX_VALUE);
+        // Destructive, so styled as such and confirmed: one stray click used to cancel the appointment.
+        Button cancel = UI.dangerButton("Cancel appointment");
+        cancel.setMaxWidth(Double.MAX_VALUE);
 
         cancel.setOnAction(e -> {
+            if (!confirmCancel(apt)) return;
             controller.cancelAppointment(appId);
 
             String recipientEmail = Data.getCurrentUserEmail();
@@ -209,12 +231,32 @@ public class MainView {
     }
 
 
+    private static boolean confirmCancel(UpcomingAppointmentDetails apt) {
+        ButtonType cancelIt = new ButtonType("Cancel appointment", ButtonBar.ButtonData.OK_DONE);
+        ButtonType keep = new ButtonType("Keep it", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "", cancelIt, keep);
+        alert.setTitle("Cancel appointment");
+        alert.setHeaderText("Cancel " + apt.serviceName() + "?");
+        alert.setContentText(apt.date() + " at " + apt.startTime() + ", " + apt.clinicName());
+        alert.setGraphic(null);
+        DialogPane pane = alert.getDialogPane();
+        if (Data.getScene() != null) {
+            pane.getStylesheets().addAll(Data.getScene().getStylesheets());
+        }
+        pane.lookupButton(cancelIt).getStyleClass().add(UI.BTN_DANGER);
+        pane.lookupButton(keep).getStyleClass().add(UI.ALERT_IGNORE);
+        // Default to the safe choice so Enter does not cancel.
+        ((Button) pane.lookupButton(cancelIt)).setDefaultButton(false);
+        ((Button) pane.lookupButton(keep)).setDefaultButton(true);
+        return alert.showAndWait().filter(b -> b == cancelIt).isPresent();
+    }
+
     public Button getQuickBookButton() { return quickBookButton; }
 
     public Node getSettingsScene() {
         Label accountLabel = UI.heading("Account Settings");
         Node accountSettings = AccountView.getPage(Data.getCurrentUserId());
-        VBox account = UI.card(5, accountLabel, accountSettings, UI.page(deleteUser));
+        VBox account = UI.card(5, accountLabel, accountSettings, UI.page(copyOf(deleteUser)));
 
         Label accessibilityLabel = UI.heading("Accessibility Settings");
         Node accessibilitySettings = AccessibilitySettingsView.getPage();
@@ -229,10 +271,12 @@ public class MainView {
         ScrollPane sp = new ScrollPane(root);
         sp.setFitToWidth(true);
 
-        VBox logout = new VBox(logOutButton);
+        VBox logout = new VBox(copyOf(logOutButton));
         logout.setAlignment(Pos.CENTER);
         logout.setPadding(new Insets(10, 0, 10, 0));
 
+        // Let the settings list take the spare height so Log Out stays pinned at the bottom.
+        VBox.setVgrow(sp, Priority.ALWAYS);
         return new VBox(10, sp, logout);
     }
 
