@@ -58,6 +58,11 @@ public class TrackingController {
 
     // Package-private for testing.
     void notifyForNewTestResults(TrackingService model) {
+        notifyForNewTestResults(model, new NotificationDispatcher());
+    }
+
+    // Package-private for testing.
+    void notifyForNewTestResults(TrackingService model, NotificationDispatcher dispatcher) {
         List<Test> tests = model.getTestResults();
         int currentCount = tests.size();
         int lastCount = Data.getLastSeenTestCount();
@@ -90,7 +95,6 @@ public class TrackingController {
             recipientName = recipientEmail != null ? recipientEmail : "";
         }
 
-        NotificationDispatcher dispatcher = new NotificationDispatcher();
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yy");
 
         // Tests are ordered newest-first; treat the first `newCount` as new entries.
@@ -107,7 +111,8 @@ public class TrackingController {
 
             TestResultEmail email = null;
             if (recipientEmail != null && !recipientEmail.isBlank() && date != null) {
-                email = new TestResultEmail(recipientEmail, recipientName, testType, date, status);
+                // Discreet: the test type (e.g. the infection tested for) is not put in the inbox.
+                email = new TestResultEmail(recipientEmail, recipientName, testType, date, status, true);
             }
 
             TestResultNotification notification = null;
@@ -115,7 +120,8 @@ public class TrackingController {
                 notification = new TestResultNotification(recipientName, testType, date, status);
             }
 
-            dispatcher.notifyUser(userId, email, notification);
+            // Email goes out in the background so opening Tracking is not held up by SMTP.
+            dispatcher.notifyUserAsync(userId, email, notification, null);
         }
 
         Data.setLastSeenTestCount(currentCount);

@@ -77,6 +77,14 @@ public class TreatmentRemindersView {
         nav.goToPage(scrollPane, "Treatment Reminders", false);
     }
 
+    /**
+     * Date of the next dose reminder, as the scheduler will send it. (The end date used before was
+     * null for ongoing prescriptions, which crashed the preview, and was not the next due date anyway.)
+     */
+    private static LocalDate nextDoseDate(int intervalHours) {
+        return java.time.LocalDateTime.now().plusHours(intervalHours).toLocalDate();
+    }
+
     private static VBox createPrescriptionCard(Prescription rx, PrescriptionReminder existing, ReminderController controller,
                                               Optional<AppointmentReminderDefaults> defaults) {
         DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy");
@@ -187,7 +195,7 @@ public class TreatmentRemindersView {
             notifPreviewField.setText(defOv.getNotificationPreview());
             notifBodyField.setText(defOv.getNotificationBody());
             intervalSpinner.getValueFactory().setValue(interval);
-            UI.showResetToDefaultsConfirmation(saveConfirm);
+            ReminderFeedback.reset(saveConfirm);
         });
 
         saveBtn.setOnAction(e -> {
@@ -207,10 +215,10 @@ public class TreatmentRemindersView {
             );
             String customJson = toSave.toJson();
 
-            controller.savePrescriptionReminder(rx.getPrescriptionId(), notify, interval, customJson);
-            UI.showSaveConfirmation(saveConfirm);
+            boolean saved = controller.savePrescriptionReminder(rx.getPrescriptionId(), notify, interval, customJson);
+            ReminderFeedback.saveResult(saveConfirm, saved);
 
-            if (notify) {
+            if (saved && notify) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
@@ -248,16 +256,22 @@ public class TreatmentRemindersView {
                     discreetOverride
             );
 
-            new NotificationDispatcher().notifyUser(
+            ReminderFeedback.sending(saveConfirm);
+            testEmailBtn.setDisable(true);
+            new NotificationDispatcher().notifyUserAsync(
                     Data.getCurrentUserId(),
                     new TreatmentReminderEmail(
                             recipientEmail, recipientName,
-                            rx.getMedicineName(), rx.getDosage(), rx.getEndDate(),
-                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName()
+                            rx.getMedicineName(), rx.getDosage(), nextDoseDate(intervalSpinner.getValue()),
+                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
+                            DiscreetReminderChoice.isDiscreet(current)
                     ),
-                    null
+                    null,
+                    sent -> {
+                        testEmailBtn.setDisable(false);
+                        ReminderFeedback.testEmailResult(saveConfirm, sent);
+                    }
             );
-            UI.showTestEmailConfirmation(saveConfirm);
         });
 
         testNotifBtn.setOnAction(e -> {
@@ -277,7 +291,7 @@ public class TreatmentRemindersView {
                     Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "",
                     rx.getMedicineName(),
                     rx.getDosage(),
-                    rx.getEndDate(),
+                    nextDoseDate(intervalSpinner.getValue()),
                     current.getNotificationTitle(),
                     current.getNotificationPreview(),
                     current.getNotificationBody(),

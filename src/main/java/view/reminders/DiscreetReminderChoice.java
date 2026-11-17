@@ -36,6 +36,11 @@ public final class DiscreetReminderChoice {
         return Boolean.TRUE;
     }
 
+    /** Discreet unless full details were explicitly chosen (same default as {@link #applyFromOverride}). */
+    public static boolean isDiscreet(model.ReminderTemplateOverrides overrides) {
+        return overrides == null || !Boolean.FALSE.equals(overrides.getDiscreetOverride());
+    }
+
     public static boolean isDiscreetSelected(ChoiceBox<String> cb) {
         return DISCREET_MODE.equals(cb.getValue());
     }

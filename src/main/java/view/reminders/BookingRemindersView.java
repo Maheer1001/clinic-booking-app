@@ -239,10 +239,10 @@ public class BookingRemindersView {
             );
             String customJson = toSave.toJson();
 
-            controller.saveBookingReminder(notify, days, customJson, Data.getCurrentUserEmail());
-            UI.showSaveConfirmation(saveConfirmReminder);
+            boolean saved = controller.saveBookingReminder(notify, days, customJson, Data.getCurrentUserEmail());
+            ReminderFeedback.saveResult(saveConfirmReminder, saved);
 
-            if (notify) {
+            if (saved && notify) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
@@ -276,17 +276,15 @@ public class BookingRemindersView {
                     discreetOverride
             );
 
-            new NotificationDispatcher().notifyUser(
-                    Data.getCurrentUserId(),
+            sendTestEmailAsync(
                     new MakeAppointmentReminderEmail(
                             recipientEmail, recipientName,
                             "It has been " + days + " days since your last visit",
                             "Routine Sexual Health Check-up",
-                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName()
+                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
+                            DiscreetReminderChoice.isDiscreet(current)
                     ),
-                    null
-            );
-            UI.showTestEmailConfirmation(saveConfirmReminder);
+                    testEmailBtn, saveConfirmReminder);
         });
 
         previewNotifBtn.setOnAction(e -> {
@@ -356,8 +354,15 @@ public class BookingRemindersView {
         Button previewBtn = UI.backButton("Preview notification");
 
         saveBtn.setOnAction(e -> {
-            saveAction.run();
-            UI.showSaveConfirmation(saveConfirm);
+            boolean saved;
+            try {
+                saveAction.run();
+                saved = true;
+            } catch (RuntimeException ex) {
+                System.err.println("Could not save communication preferences: " + ex.getMessage());
+                saved = false;
+            }
+            ReminderFeedback.saveResult(saveConfirm, saved);
         });
         testEmailBtn.setOnAction(e -> testEmailAction.accept(saveConfirm));
         previewBtn.setOnAction(e -> previewNotificationAction.run());
@@ -394,16 +399,13 @@ public class BookingRemindersView {
         }
         boolean disc = commChoiceIsDiscreet(discreetChoice);
         ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
-        new NotificationDispatcher().notifyUser(
-                Data.getCurrentUserId(),
+        sendTestEmailAsync(
                 new BookingConfirmationEmail(
                         recipientEmail, recipientName,
                         "APP-999", "Example service",
                         LocalDateTime.now(), "Example clinic", "Clinician",
                         disc, ov),
-                null
-        );
-        UI.showTestEmailConfirmation(testEmailFeedback);
+                null, testEmailFeedback);
     }
 
     private static void showConfirmationTestNotif(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice) {
@@ -430,16 +432,13 @@ public class BookingRemindersView {
         }
         boolean disc = commChoiceIsDiscreet(discreetChoice);
         ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
-        new NotificationDispatcher().notifyUser(
-                Data.getCurrentUserId(),
+        sendTestEmailAsync(
                 new RescheduleConfirmationEmail(
                         recipientEmail, recipientName,
                         "APP-999", "Example service", "Example clinic",
                         "Previous date/time example", "New date/time example",
                         disc, ov),
-                null
-        );
-        UI.showTestEmailConfirmation(testEmailFeedback);
+                null, testEmailFeedback);
     }
 
     private static void showRescheduleTestNotif(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice) {
@@ -466,16 +465,27 @@ public class BookingRemindersView {
         }
         boolean disc = commChoiceIsDiscreet(discreetChoice);
         ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
-        new NotificationDispatcher().notifyUser(
-                Data.getCurrentUserId(),
+        sendTestEmailAsync(
                 new CancellationEmail(
                         recipientEmail, recipientName,
                         "APP-999", "Example service", "Example clinic",
                         "Example date/time",
                         disc, ov),
-                null
-        );
-        UI.showTestEmailConfirmation(testEmailFeedback);
+                null, testEmailFeedback);
+    }
+
+    /** Sends off the FX thread and reports the real outcome in the card's status label. */
+    private static void sendTestEmailAsync(service.email.Email email, Button button, Label feedback) {
+        ReminderFeedback.sending(feedback);
+        if (button != null) {
+            button.setDisable(true);
+        }
+        new NotificationDispatcher().notifyUserAsync(Data.getCurrentUserId(), email, null, sent -> {
+            if (button != null) {
+                button.setDisable(false);
+            }
+            ReminderFeedback.testEmailResult(feedback, sent);
+        });
     }
 
     private static void showCancellationTestNotif(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice) {

@@ -56,6 +56,12 @@ class TrackingControllerNotificationTest {
         public void notifyUser(int targetUserId, Email email, Notification notification) {
             calls.add(new Call(targetUserId, email, notification));
         }
+
+        @Override
+        public void notifyUserAsync(int targetUserId, Email email, Notification notification,
+                                    java.util.function.Consumer<Boolean> onEmailResult) {
+            calls.add(new Call(targetUserId, email, notification));
+        }
     }
 
     TrackingController controller;
@@ -105,11 +111,15 @@ class TrackingControllerNotificationTest {
         );
         FakeTrackingService model = new FakeTrackingService(1, tests);
 
-        // We can't easily intercept the internal NotificationDispatcher without refactoring,
-        // but we can still assert that the "new tests" logic updates the lastSeen counter.
-        controller.notifyForNewTestResults(model);
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        controller.notifyForNewTestResults(model, dispatcher);
 
         assertEquals(2, Data.getLastSeenTestCount());
+        assertEquals(1, dispatcher.calls.size(), "Only the one new test should be notified");
+        Email email = dispatcher.calls.getFirst().email();
+        assertNotNull(email);
+        assertTrue(email.isDiscreet(), "Test result emails must not name the test");
+        assertFalse(email.getTemplateContext().containsKey("testType"));
     }
 }
 

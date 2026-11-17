@@ -106,15 +106,15 @@ public class AppointmentRemindersView {
                     d.customDays().isBlank() ? null : d.customDays(),
                     d.customMessage().isBlank() ? null : d.customMessage(),
                     d.notificationsEnabled());
-            UI.showResetToDefaultsConfirmation(saveConfirm);
+            ReminderFeedback.reset(saveConfirm);
         });
 
         saveBtn.setOnAction(e -> {
             ReminderTemplateForm.Payload p = form.collectPayload();
-            controller.saveAppointmentReminder(appt.getAppId(), p.notificationsEnabled(), p.scheduleJson(), p.templateOverridesJson());
-            UI.showSaveConfirmation(saveConfirm);
+            boolean saved = controller.saveAppointmentReminder(appt.getAppId(), p.notificationsEnabled(), p.scheduleJson(), p.templateOverridesJson());
+            ReminderFeedback.saveResult(saveConfirm, saved);
 
-            if (p.notificationsEnabled()) {
+            if (saved && p.notificationsEnabled()) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
@@ -142,17 +142,23 @@ public class AppointmentRemindersView {
 
             ReminderTemplateOverrides current = form.collectOverridesForPreview();
 
-            new NotificationDispatcher().notifyUser(
+            ReminderFeedback.sending(saveConfirm);
+            testEmailBtn.setDisable(true);
+            new NotificationDispatcher().notifyUserAsync(
                     Data.getCurrentUserId(),
                     new AppointmentReminderEmail(
                             recipientEmail, recipientName,
                             appt.getServiceName(), appt.getAppointmentDateTime(),
                             appt.getClinicName(), appt.getDoctorName(),
-                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName()
+                            current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
+                            DiscreetReminderChoice.isDiscreet(current)
                     ),
-                    null
+                    null,
+                    sent -> {
+                        testEmailBtn.setDisable(false);
+                        ReminderFeedback.testEmailResult(saveConfirm, sent);
+                    }
             );
-            UI.showTestEmailConfirmation(saveConfirm);
         });
 
         testNotifBtn.setOnAction(e -> {
