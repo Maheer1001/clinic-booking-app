@@ -25,7 +25,7 @@ Java 21, JavaFX (FXML, MaterialFX, ControlsFX, WebView + Leaflet), PostgreSQL, a
 
 ```bash
 mvn clean javafx:run
-mvn test                 # 189 unit tests, no database needed
+mvn test                 # 289 unit tests, no database needed
 mvn test -Pdb-tests      # also runs the 9 integration tests against the Postgres in .env
 ```
 
