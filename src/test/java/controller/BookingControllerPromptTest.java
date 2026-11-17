@@ -37,12 +37,19 @@ class BookingControllerPromptTest {
     private static class CapturingBookingService extends BookingService {
         int lastUserId = -1;
         Book lastBook;
+        boolean slotTaken;
 
         @Override
-        public List<Integer> confirmBooking(Book book, int userId) {
+        public BookingResult placeBooking(Book book, int userId) {
             this.lastBook = book;
             this.lastUserId = userId;
-            return List.of();
+            if (slotTaken) {
+                return new BookingResult(List.of(), List.of("Service A"));
+            }
+            Item item = book.getItems().get(0);
+            return new BookingResult(
+                    List.of(new BookedAppointment(55, item.getService(), item.getDate(), item.getTime())),
+                    List.of());
         }
     }
 
@@ -83,6 +90,31 @@ class BookingControllerPromptTest {
     void resetData() {
         Data.clearCurrentUser();
         Data.reset();
+    }
+
+    @Test
+    void confirmBooking_whenNothingCouldBeBooked_staysOnPageAndKeepsTheBooking() {
+        Data.setCurrentUser(1, "patient@example.com", "Test User");
+        Book b = Data.getBooking();
+        Service s1 = new Service(1, "Service A", "desc", 30);
+        Item item = new Item(s1);
+        item.setTimeslotId(10);
+        item.setDate(LocalDate.now().plusDays(1));
+        item.setTime(LocalTime.of(10, 30));
+        b.setItems(List.of(item));
+
+        CapturingNavigator nav = new CapturingNavigator(new MainView());
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.slotTaken = true;
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+        BookingController controller = new BookingController(nav, bookingService, dispatcher, uid -> Optional.empty(), new UserDAO());
+
+        BookingService.BookingResult result = controller.confirmBooking();
+
+        assertFalse(result.anyBooked());
+        assertNull(nav.lastPage, "should not show the confirmation page");
+        assertSame(b, Data.getBooking(), "booking should be kept so another time can be chosen");
+        assertEquals(0, dispatcher.callCount, "no confirmation should be sent");
     }
 
     @Test

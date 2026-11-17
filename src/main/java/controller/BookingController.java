@@ -16,6 +16,7 @@ import javafx.stage.Stage;
 import javafx.scene.layout.VBox;
 import model.*;
 import service.BookingCommunicationPrefs;
+import service.AsyncNotifier;
 import service.BookingService;
 import service.NotificationDispatcher;
 import service.email.BookingConfirmationEmail;
@@ -345,67 +346,56 @@ public class BookingController {
         nav.goToPage(PersonalInfo.getPage(this), "Enter Details", false);
     }
 
-    public void confirmBooking() {
+    /**
+     * Books the current {@link Data#getBooking()} and, if at least one appointment was saved, shows the
+     * "Booking confirmed" page and sends confirmations for the saved appointments only.
+     *
+     * @return the outcome; when nothing was booked the booking is kept so the user can pick another time
+     */
+    public BookingService.BookingResult confirmBooking() {
         Book b = Data.getBooking();
         int userId = Data.getCurrentUserId();
-        List<Integer> newAppIds = new ArrayList<>();
-        if (userId >= 0) {
-            newAppIds.addAll(bookingService.confirmBooking(b, userId));
-            // Send booking confirmation email + in-app notification for each booked timeslot.
-            BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
-            boolean confirmationDiscreet = commPrefs.confirmationDiscreet();
-            ReminderTemplateOverrides confirmationTpl = commPrefs.confirmationTemplate();
-            String recipientEmail = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : b.getEmail();
-            String recipientName = Data.getCurrentUserName() != null ? Data.getCurrentUserName()
-                    : (b.getFirstName() + " " + b.getLastName()).trim();
-            if (recipientName.isBlank()) {
-                recipientName = "Patient";
-            }
-            Clinic clinic = b.getClinic();
-            String clinicName = clinic != null ? clinic.getName() : "";
+        if (userId < 0) {
+            return new BookingService.BookingResult(List.of(), List.of());
+        }
+        BookingService.BookingResult outcome = bookingService.placeBooking(b, userId);
+        if (!outcome.anyBooked()) {
+            return outcome;
+        }
+        List<Integer> newAppIds = outcome.booked().stream().map(BookingService.BookedAppointment::appId).toList();
 
-            if (recipientEmail != null && !recipientEmail.isBlank()) {
-                // Multi-service: notify for each item that has a selected timeslot.
-                if (b.getItems() != null && !b.getItems().isEmpty()) {
-                    for (Item item : b.getItems()) {
-                        if (item.getTimeslotId() < 0 || item.getDate() == null || item.getTime() == null) {
-                            continue;
-                        }
-                            String bookingRef = "APP-" + item.getTimeslotId();
-                            LocalDateTime appointmentDateTime = LocalDateTime.of(item.getDate(), item.getTime());
-                            String serviceName = item.getService() != null ? item.getService().getName() : "";
-                            notificationDispatcher.notifyUser(
-                                    userId,
-                                    new BookingConfirmationEmail(
-                                            recipientEmail, recipientName, bookingRef, serviceName,
-                                            appointmentDateTime, clinicName, "Clinician", confirmationDiscreet,
-                                            confirmationTpl),
-                                    new BookingConfirmationNotification(
-                                            recipientName, bookingRef, serviceName, appointmentDateTime, clinicName, "Clinician",
-                                            confirmationDiscreet,
-                                            confirmationTpl
-                                    )
-                            );
-                    }
-                } else if (b.getTimeslotId() >= 0 && b.getDate() != null && b.getTime() != null) {
-                    // Legacy single-service path.
-                    String bookingRef = "APP-" + b.getTimeslotId();
-                    LocalDateTime appointmentDateTime = LocalDateTime.of(b.getDate(), b.getTime());
-                    String serviceName = b.getService() != null ? b.getService().getName() : "";
-                    notificationDispatcher.notifyUser(
-                            userId,
-                            new BookingConfirmationEmail(
-                                    recipientEmail, recipientName, bookingRef, serviceName,
-                                    appointmentDateTime, clinicName, "Clinician", confirmationDiscreet,
-                                    confirmationTpl),
-                            new BookingConfirmationNotification(
-                                    recipientName, bookingRef, serviceName, appointmentDateTime, clinicName, "Clinician",
-                                    confirmationDiscreet,
-                                    confirmationTpl
-                            )
-                    );
-                }
-            }
+        // Send a booking confirmation email + in-app notification for each saved appointment.
+        BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
+        boolean confirmationDiscreet = commPrefs.confirmationDiscreet();
+        ReminderTemplateOverrides confirmationTpl = commPrefs.confirmationTemplate();
+        String recipientEmail = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : b.getEmail();
+        String recipientName = Data.getCurrentUserName() != null ? Data.getCurrentUserName()
+                : (b.getFirstName() + " " + b.getLastName()).trim();
+        if (recipientName.isBlank()) {
+            recipientName = "Patient";
+        }
+        Clinic clinic = b.getClinic();
+        String clinicName = clinic != null ? clinic.getName() : "";
+        boolean hasEmail = recipientEmail != null && !recipientEmail.isBlank();
+
+        for (BookingService.BookedAppointment appt : outcome.booked()) {
+            if (appt.date() == null || appt.time() == null) continue;
+            String bookingRef = "APP-" + appt.appId(); // same reference the cancel and reschedule emails use
+            LocalDateTime appointmentDateTime = LocalDateTime.of(appt.date(), appt.time());
+            String serviceName = appt.service() != null ? appt.service().getName() : "";
+            AsyncNotifier.notifyUser(
+                    notificationDispatcher,
+                    userId,
+                    hasEmail ? new BookingConfirmationEmail(
+                            recipientEmail, recipientName, bookingRef, serviceName,
+                            appointmentDateTime, clinicName, "Clinician", confirmationDiscreet,
+                            confirmationTpl) : null,
+                    new BookingConfirmationNotification(
+                            recipientName, bookingRef, serviceName, appointmentDateTime, clinicName, "Clinician",
+                            confirmationDiscreet,
+                            confirmationTpl
+                    )
+            );
         }
         Data.reset();
 
@@ -430,7 +420,7 @@ public class BookingController {
                 ReminderController reminders = new ReminderController(userId);
                 String email = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : "";
                 String rawName = Data.getCurrentUserName();
-                final String recipientName = (rawName == null || rawName.isBlank()) ? email : rawName;
+                final String reminderName = (rawName == null || rawName.isBlank()) ? email : rawName;
                 for (int appId : savedIds) {
                     reminders.saveAppointmentReminder(appId, def.notificationsEnabled(), def.customDays(), def.customMessage());
                     if (def.notificationsEnabled()) {
@@ -438,7 +428,7 @@ public class BookingController {
                                 .filter(a -> a.getAppId() == appId)
                                 .findFirst()
                                 .ifPresent(appt -> reminders.scheduleAppointmentReminderWithSchedule(
-                                        appt, email, recipientName, def.customDays(), def.customMessage()));
+                                        appt, email, reminderName, def.customDays(), def.customMessage()));
                     }
                 }
             });
@@ -458,14 +448,38 @@ public class BookingController {
         }
         buttonRow.getChildren().add(skipBtn);
 
+        VBox summary = UI.card(8);
+        for (BookingService.BookedAppointment appt : outcome.booked()) {
+            String service = appt.service() != null ? appt.service().getName() : "Appointment";
+            String when = appt.date() != null && appt.time() != null
+                    ? appt.date().format(CONFIRMED_DATE_FMT) + " at " + appt.time().format(CONFIRMED_TIME_FMT)
+                    : "";
+            VBox row = new VBox(2, UI.heading(service));
+            if (!when.isEmpty()) row.getChildren().add(UI.body(when));
+            if (!clinicName.isBlank()) row.getChildren().add(UI.muted(clinicName));
+            summary.getChildren().add(row);
+        }
+
         javafx.scene.layout.VBox prompt = UI.page(
                 UI.titleSm("Booking confirmed"),
-                UI.body(blurb),
-                buttonRow
+                summary
         );
+        if (!outcome.unavailable().isEmpty()) {
+            Label notBooked = UI.error("Not booked, the time was no longer available: "
+                    + String.join(", ", outcome.unavailable()) + ". You can book it again from Booking.");
+            notBooked.setWrapText(true);
+            prompt.getChildren().add(notBooked);
+        }
+        prompt.getChildren().addAll(UI.body(blurb), buttonRow);
 
         nav.goToPage(prompt, "Booking confirmed", true);
+        return outcome;
     }
+
+    private static final java.time.format.DateTimeFormatter CONFIRMED_DATE_FMT =
+            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy");
+    private static final java.time.format.DateTimeFormatter CONFIRMED_TIME_FMT =
+            java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
     public void goToReview() {
         nav.goToPage(Review.getPage(this), "Review", false);
