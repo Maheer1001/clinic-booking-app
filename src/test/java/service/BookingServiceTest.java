@@ -44,9 +44,10 @@ class BookingServiceTest {
         }
 
         // Unused methods in these tests; provide no-op or empty implementations.
-        @Override public void cancelAppointment(int appointmentId) {}
+        @Override public boolean cancelAppointment(int appointmentId) { return false; }
         @Override public void rescheduleAppointment(int appointmentId, LocalDate newDate) {}
-        @Override public void rescheduleToNewTimeslot(int appointmentId, int newTimeslotId) {}
+        @Override public boolean rescheduleToNewTimeslot(int appointmentId, int newTimeslotId) { return false; }
+        @Override public Optional<Integer> getTimeslotIdByAppointmentId(int appointmentId) { return Optional.empty(); }
         @Override public boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot) { return false; }
         @Override public Optional<int[]> getClinicAndServiceIdsForAppointment(int appointmentId) { return Optional.empty(); }
         @Override public boolean isUpcomingAppointmentForUser(int appointmentId, int userId) { return false; }
