@@ -82,4 +82,9 @@ public class BookingConfirmationEmail extends BaseEmail {
         }
         return null;
     }
+
+    @Override
+    public boolean isDiscreet() {
+        return discreet;
+    }
 }

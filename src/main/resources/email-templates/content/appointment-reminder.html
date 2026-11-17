@@ -8,12 +8,14 @@
     <p th:if="${customIntro} == null">This is a friendly reminder that you have an upcoming appointment.</p>
 
     <div class="detail-box">
-        <p><span class="detail-label">Type:</span> <span th:text="${appointmentType}">Check-up</span></p>
+        <p th:unless="${discreet}"><span class="detail-label">Type:</span> <span th:text="${appointmentType}">Check-up</span></p>
         <p><span class="detail-label">Date:</span> <span th:text="${appointmentDate}">Sunday, 15 February 2026</span></p>
         <p><span class="detail-label">Time:</span> <span th:text="${appointmentTime}">10:30</span></p>
-        <p><span class="detail-label">Location:</span> <span th:text="${clinicLocation}">Clinic</span></p>
-        <p><span class="detail-label">Clinician:</span> <span th:text="${doctorName}">Dr. Smith</span></p>
+        <p th:unless="${discreet}"><span class="detail-label">Location:</span> <span th:text="${clinicLocation}">Clinic</span></p>
+        <p th:unless="${discreet}"><span class="detail-label">Clinician:</span> <span th:text="${doctorName}">Dr. Smith</span></p>
     </div>
+
+    <p th:if="${discreet}">For privacy, other details are not included in this email. Please sign in to your account to view them.</p>
 
     <p>Please arrive 10 minutes early. If you need to reschedule, log in to your account or contact us.</p>
 

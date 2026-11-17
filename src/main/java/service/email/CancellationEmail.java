@@ -75,4 +75,9 @@ public class CancellationEmail extends BaseEmail {
         }
         return null;
     }
+
+    @Override
+    public boolean isDiscreet() {
+        return discreet;
+    }
 }

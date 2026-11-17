@@ -7,7 +7,7 @@
     <p>The results for your recent test are now available.</p>
 
     <div class="detail-box">
-        <p><span class="detail-label">Test:</span> <span th:text="${testType}">STI Screening</span></p>
+        <p th:unless="${discreet}"><span class="detail-label">Test:</span> <span th:text="${testType}">STI Screening</span></p>
         <p><span class="detail-label">Test Date:</span> <span th:text="${testDate}">05 February 2026</span></p>
         <p><span class="detail-label">Status:</span> <span th:text="${resultStatus}">Available</span></p>
     </div>

@@ -82,13 +82,13 @@
 <div class="email-wrapper">
     <div class="email-container">
         <div class="email-header">
-            <h1>Sexual Health Clinic</h1>
+            <h1 th:text="${discreet} ? 'Your Appointments' : 'Sexual Health Clinic'">Sexual Health Clinic</h1>
         </div>
         <div class="email-body" th:insert="~{::content}">
             <!-- Content templates inject here -->
         </div>
         <div class="email-footer">
-            <p>This is a confidential communication from your Sexual Health Clinic.</p>
+            <p th:text="${discreet} ? 'This is a confidential message about your account.' : 'This is a confidential communication from your Sexual Health Clinic.'">This is a confidential communication from your Sexual Health Clinic.</p>
             <p>If you did not expect this email, please disregard it.</p>
         </div>
     </div>
