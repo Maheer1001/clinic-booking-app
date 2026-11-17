@@ -54,18 +54,29 @@ public class MainView {
         VBox list = new VBox(10);
 
         if (appointments == null || appointments.isEmpty()) {
-            list.getChildren().add(UI.body("No upcoming appointments"));
+            Label emptyTitle = new Label("Nothing booked yet");
+            emptyTitle.getStyleClass().add("empty-state-title");
+            Label emptyBody = UI.muted("Book a test, consultation or treatment at a clinic near you.");
+            emptyBody.setWrapText(true);
+            VBox empty = new VBox(6, emptyTitle, emptyBody);
+            empty.getStyleClass().add("empty-state");
+            list.getChildren().add(empty);
         } else {
             for (UpcomingAppointmentDetails apt : appointments) {
 
-                Button btn = UI.primaryButton(
-                        apt.serviceName() + " — " +
-                                apt.startTime() + " " +
-                                apt.date()
-                );
+                Label service = new Label(apt.serviceName());
+                service.getStyleClass().add("appointment-title");
+                Label when = new Label(apt.date() + "  ·  " + apt.startTime() + " – " + apt.endTime());
+                when.getStyleClass().add("appointment-meta");
+                Label where = new Label(apt.clinicName());
+                where.getStyleClass().add("appointment-place");
+                VBox details = new VBox(3, service, when, where);
 
-                btn.setWrapText(true);
+                Button btn = new Button();
+                btn.setGraphic(details);
+                btn.getStyleClass().add("appointment-card");
                 btn.setMaxWidth(Double.MAX_VALUE);
+                btn.setAlignment(Pos.CENTER_LEFT);
 
                 int appId = apt.appId();
 
@@ -86,7 +97,10 @@ public class MainView {
         scroll.setPannable(true);
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        VBox bordered = UI.card(10, scroll, quickBookButton);
+        Label heading = new Label("Upcoming appointments");
+        heading.getStyleClass().add("section-heading");
+        quickBookButton.setMaxWidth(Double.MAX_VALUE);
+        VBox bordered = UI.card(12, heading, scroll, quickBookButton);
         VBox.setVgrow(bordered, Priority.ALWAYS);
 
         VBox root = new VBox(bordered);

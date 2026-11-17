@@ -10,8 +10,10 @@ import model.Clinic;
 import model.Service;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Business logic for the booking flow.
@@ -65,13 +67,29 @@ public class BookingService {
         List<Integer> appIds = new ArrayList<>();
         if (book.getItems() != null && !book.getItems().isEmpty()) {
             for (model.Item item : book.getItems()) {
-                if (item.getTimeslotId() >= 0) {
-                    appointmentDAO.save(book, userId, item.getTimeslotId()).ifPresent(appIds::add);
-                }
+                boolean picked = item.getTimeslotId() > 0
+                        || (item.getTimeslotId() == 0 && item.getDate() != null && item.getTime() != null);
+                if (!picked) continue;
+                LocalTime end = item.getTime() == null ? null
+                        : item.getTime().plusMinutes(item.getService().getDurationMinutes());
+                int clinicId = book.getClinic() == null ? 0 : book.getClinic().getId();
+                book(book, userId, timeslotDAO.reserve(item.getTimeslotId(), clinicId,
+                        item.getService().getId(), item.getDate(), item.getTime(), end), appIds);
             }
-        } else if (book.getTimeslotId() >= 0) {
-            appointmentDAO.save(book, userId, book.getTimeslotId()).ifPresent(appIds::add);
+        } else if (book.getTimeslotId() > 0) {
+            book(book, userId, timeslotDAO.reserve(book.getTimeslotId(), 0, 0, null, null, null), appIds);
         }
         return appIds;
+    }
+
+    /** Saves an appointment in a reserved slot, releasing the place if the save fails. */
+    private void book(Book book, int userId, int timeslotId, List<Integer> appIds) {
+        if (timeslotId < 0) return; // slot became full before confirmation
+        Optional<Integer> appId = appointmentDAO.save(book, userId, timeslotId);
+        if (appId.isPresent()) {
+            appIds.add(appId.get());
+        } else {
+            timeslotDAO.decrementBookedCount(timeslotId);
+        }
     }
 }

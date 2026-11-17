@@ -118,12 +118,13 @@ public class PersonalInfo {
 
         ColumnConstraints labelCol = new ColumnConstraints();
         labelCol.setHgrow(Priority.NEVER);
+        labelCol.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE); // never truncate labels
         ColumnConstraints inputCol = new ColumnConstraints();
         inputCol.setHgrow(Priority.ALWAYS);
         inputCol.setFillWidth(true);
         g.getColumnConstraints().addAll(labelCol, inputCol);
 
-        Label l = new Label("All optional fields are given if you would like to receive accommodations in advance of your appointment.");
+        Label l = UI.muted("Optional details help the clinic arrange any support you need before your appointment.");
         l.setWrapText(true);
 
         reason.setPrefWidth(first.getWidth());

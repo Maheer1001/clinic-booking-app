@@ -29,6 +29,10 @@ public class LoginController {
 
     @FXML
     private void initialize() {
+        // Error label takes no space until there is a message to show.
+        messageLabel.managedProperty().bind(messageLabel.textProperty().isNotEmpty());
+        messageLabel.visibleProperty().bind(messageLabel.textProperty().isNotEmpty());
+
         continueBtn.disableProperty().bind(
                 emailField.textProperty().isEmpty()
                         .or(passwordField.textProperty().isEmpty())

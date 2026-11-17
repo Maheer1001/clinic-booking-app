@@ -219,6 +219,7 @@ public class Navigator {
     public StackPane getHeader(Button back, Label title, Button home) {
         StackPane header = new StackPane();
         header.setPadding(new Insets(10));
+        header.getStyleClass().add("app-header");
 
         StackPane.setAlignment(title, Pos.CENTER);
         StackPane.setAlignment(back, Pos.CENTER_LEFT);

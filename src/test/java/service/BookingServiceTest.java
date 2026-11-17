@@ -16,11 +16,15 @@ import model.UpcomingAppointmentDetails;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for BookingService.confirmBooking, focusing on multi-service behaviour.
@@ -43,6 +47,7 @@ class BookingServiceTest {
         @Override public void cancelAppointment(int appointmentId) {}
         @Override public void rescheduleAppointment(int appointmentId, LocalDate newDate) {}
         @Override public void rescheduleToNewTimeslot(int appointmentId, int newTimeslotId) {}
+        @Override public boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot) { return false; }
         @Override public Optional<int[]> getClinicAndServiceIdsForAppointment(int appointmentId) { return Optional.empty(); }
         @Override public boolean isUpcomingAppointmentForUser(int appointmentId, int userId) { return false; }
         @Override public List<AppointmentDetails> getPastAppointmentDetailsByUserId(int userId) { return List.of(); }
@@ -66,10 +71,28 @@ class BookingServiceTest {
         @Override public List<Service> findByClinicId(int clinicId) { return List.of(); }
     }
 
-    private static class NoopTimeslotRepo implements TimeslotRepository {
+    /**
+     * In-memory slots: id 0 creates a row with capacity 1; unknown positive ids behave like
+     * legacy rows with no capacity limit.
+     */
+    private static class FakeTimeslotRepo implements TimeslotRepository {
+        final Map<Integer, int[]> rows = new HashMap<>(); // id -> {booked, capacity}
+        private int nextId = 1000;
+
         @Override public List<AvailableTimeslot> findAvailable(int clinicId, int serviceId, LocalDate date) { return List.of(); }
+        @Override public List<LocalDate> findAvailableDates(int clinicId, int serviceId) { return List.of(); }
+
+        @Override
+        public int reserve(int timeslotId, int clinicId, int serviceId, LocalDate date, LocalTime start, LocalTime end) {
+            int id = timeslotId > 0 ? timeslotId : nextId++;
+            int[] row = rows.computeIfAbsent(id, k -> new int[] {0, timeslotId > 0 ? Integer.MAX_VALUE : 1});
+            if (row[0] >= row[1]) return -1;
+            row[0]++;
+            return id;
+        }
+
         @Override public void incrementBookedCount(int timeslotId) {}
-        @Override public void decrementBookedCount(int timeslotId) {}
+        @Override public void decrementBookedCount(int timeslotId) { rows.computeIfPresent(timeslotId, (k, r) -> new int[] {r[0] - 1, r[1]}); }
         @Override public void updateDate(int timeslotId, LocalDate newDate) {}
     }
 
@@ -79,7 +102,7 @@ class BookingServiceTest {
         BookingService service = new BookingService(
                 new NoopClinicRepo(),
                 new NoopServiceRepo(),
-                new NoopTimeslotRepo(),
+                new FakeTimeslotRepo(),
                 repo
         );
 
@@ -110,7 +133,7 @@ class BookingServiceTest {
         BookingService service = new BookingService(
                 new NoopClinicRepo(),
                 new NoopServiceRepo(),
-                new NoopTimeslotRepo(),
+                new FakeTimeslotRepo(),
                 repo
         );
 
@@ -123,5 +146,62 @@ class BookingServiceTest {
         assertEquals(1, repo.saves.size());
         assertEquals(7, repo.saves.get(0).timeslotId());
     }
-}
 
+    private static Book bookAtClinic(Item... items) {
+        Book book = new Book();
+        book.setClinic(new Clinic(3, "Clinic 3", "Addr", "SO18 2RD", "0123", new ArrayList<>(), null, new ArrayList<>()));
+        book.setItems(new ArrayList<>(List.of(items)));
+        return book;
+    }
+
+    private static Item newSlotItem(LocalTime time) {
+        Item item = new Item(new Service(3, "STI Test", "desc", 30));
+        item.setTimeslotId(0); // no row yet: the slot only exists in the clinic's schedule
+        item.setDate(LocalDate.now().plusDays(3));
+        item.setTime(time);
+        return item;
+    }
+
+    @Test
+    void confirmBooking_newSlot_createsItsRowAndBooksIt() {
+        CapturingAppointmentRepo repo = new CapturingAppointmentRepo();
+        FakeTimeslotRepo slots = new FakeTimeslotRepo();
+        BookingService service = new BookingService(new NoopClinicRepo(), new NoopServiceRepo(), slots, repo);
+
+        List<Integer> ids = service.confirmBooking(bookAtClinic(newSlotItem(LocalTime.of(10, 0))), 42);
+
+        assertEquals(1, ids.size());
+        int slotId = repo.saves.get(0).timeslotId();
+        assertTrue(slotId > 0, "appointment should point at the newly created slot row");
+        assertEquals(1, slots.rows.get(slotId)[0]);
+    }
+
+    @Test
+    void confirmBooking_fullSlot_isNotBooked() {
+        CapturingAppointmentRepo repo = new CapturingAppointmentRepo();
+        FakeTimeslotRepo slots = new FakeTimeslotRepo();
+        BookingService service = new BookingService(new NoopClinicRepo(), new NoopServiceRepo(), slots, repo);
+
+        service.confirmBooking(bookAtClinic(newSlotItem(LocalTime.of(10, 0))), 1);
+        int fullSlot = repo.saves.get(0).timeslotId();
+
+        Item second = newSlotItem(LocalTime.of(10, 0));
+        second.setTimeslotId(fullSlot); // capacity 1, already taken
+        List<Integer> ids = service.confirmBooking(bookAtClinic(second), 2);
+
+        assertTrue(ids.isEmpty());
+        assertEquals(1, repo.saves.size());
+        assertEquals(1, slots.rows.get(fullSlot)[0]);
+    }
+
+    @Test
+    void confirmBooking_itemWithoutAPickedSlot_isIgnored() {
+        CapturingAppointmentRepo repo = new CapturingAppointmentRepo();
+        BookingService service = new BookingService(new NoopClinicRepo(), new NoopServiceRepo(), new FakeTimeslotRepo(), repo);
+
+        Item notPicked = new Item(new Service(3, "STI Test", "desc", 30)); // id 0, but no date or time chosen
+
+        assertTrue(service.confirmBooking(bookAtClinic(notPicked), 42).isEmpty());
+        assertTrue(repo.saves.isEmpty());
+    }
+}

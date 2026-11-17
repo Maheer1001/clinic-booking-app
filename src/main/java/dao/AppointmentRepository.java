@@ -19,6 +19,8 @@ public interface AppointmentRepository {
     void cancelAppointment(int appointmentId);
     void rescheduleAppointment(int appointmentId, LocalDate newDate);
     void rescheduleToNewTimeslot(int appointmentId, int newTimeslotId);
+    /** Reserves {@code slot} (creating its row if needed) and moves the appointment there. */
+    boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot);
     Optional<int[]> getClinicAndServiceIdsForAppointment(int appointmentId);
     /** True if the appointment exists, is CONFIRMED, belongs to the user, and is in the future. */
     boolean isUpcomingAppointmentForUser(int appointmentId, int userId);

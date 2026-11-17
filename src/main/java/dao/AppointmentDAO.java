@@ -50,9 +50,7 @@ public class AppointmentDAO implements AppointmentRepository {
                 ps.executeUpdate();
                 try (ResultSet keys = ps.getGeneratedKeys()) {
                     if (keys.next()) {
-                        int appId = keys.getInt(1);
-                        timeslotDAO.incrementBookedCount(timeslotId);
-                        return Optional.of(appId);
+                        return Optional.of(keys.getInt(1));
                     }
                 }
             }
@@ -92,24 +90,7 @@ public class AppointmentDAO implements AppointmentRepository {
     }
     @Override
     public List<LocalDate> getAvailableDates(int clinicId, int serviceId) {
-
-        List<LocalDate> dates = new ArrayList<>();
-
-        LocalDate today = LocalDate.now();
-
-        // scan a reasonable range (e.g. next 30 days)
-        for (int i = 0; i < 30; i++) {
-            LocalDate date = today.plusDays(i);
-
-            List<AvailableTimeslot> slots =
-                    timeslotDAO.findAvailable(clinicId, serviceId, date);
-
-            if (!slots.isEmpty()) {
-                dates.add(date);
-            }
-        }
-
-        return dates;
+        return timeslotDAO.findAvailableDates(clinicId, serviceId);
     }
 
     @Override
@@ -128,7 +109,17 @@ public class AppointmentDAO implements AppointmentRepository {
         if (oldTimeslotId != null) {
             timeslotDAO.decrementBookedCount(oldTimeslotId);
         }
-        timeslotDAO.incrementBookedCount(newTimeslotId);
+    }
+
+    @Override
+    public boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot) {
+        Optional<int[]> ids = getClinicAndServiceIdsForAppointment(appointmentId);
+        if (ids.isEmpty() || slot == null) return false;
+        int newId = timeslotDAO.reserve(slot.timeslotId(), ids.get()[0], ids.get()[1],
+                slot.date(), slot.startTime(), slot.endTime());
+        if (newId < 0) return false; // slot filled up in the meantime
+        rescheduleToNewTimeslot(appointmentId, newId);
+        return true;
     }
 
     @Override

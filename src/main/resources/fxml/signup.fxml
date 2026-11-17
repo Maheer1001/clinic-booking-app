@@ -9,15 +9,15 @@
       styleClass="auth-page">
 
     <VBox styleClass="auth-heading">
-        <Label text="Health Tracking and&#10;Appointments" styleClass="title"/>
-        <Label text="Create an account" styleClass="subtitle"/>
-        <Label text="Enter your email to sign up for this app" styleClass="muted"/>
+        <Label text="HEALTH TRACKING &amp; APPOINTMENTS" styleClass="auth-brand"/>
+        <Label text="Create your account" styleClass="title"/>
+        <Label text="Book appointments and keep track of tests and treatment." styleClass="subtitle" wrapText="true"/>
     </VBox>
 
     <VBox styleClass="auth-card">
-        <TextField fx:id="emailField" promptText="email@domain.com" styleClass="input"/>
-        <PasswordField fx:id="passwordField" promptText="Enter Password" styleClass="input"/>
-        <PasswordField fx:id="confirmPasswordField" promptText="Re-enter Password" styleClass="input"/>
+        <TextField fx:id="emailField" promptText="Email" styleClass="input"/>
+        <PasswordField fx:id="passwordField" promptText="Password" styleClass="input"/>
+        <PasswordField fx:id="confirmPasswordField" promptText="Confirm password" styleClass="input"/>
 
         <VBox styleClass="auth-check-group">
             <HBox spacing="4" alignment="BASELINE_LEFT">
@@ -30,10 +30,14 @@
             </HBox>
         </VBox>
 
-        <Button text="Continue" onAction="#onSignUp" styleClass="primaryBtn"/>
-        <Button text="Back to Login" onAction="#goToLogin" styleClass="secondaryWideBtn"/>
+        <Button text="Create account" onAction="#onSignUp" maxWidth="Infinity" styleClass="primaryBtn"/>
 
         <Label fx:id="messageLabel" text="" styleClass="error"/>
+
+        <HBox styleClass="auth-footer">
+            <Label text="Already have an account?" styleClass="muted"/>
+            <Button text="Log in" onAction="#goToLogin" styleClass="secondaryBtn"/>
+        </HBox>
     </VBox>
 
 </VBox>

@@ -1,14 +1,15 @@
 package controller;
 
+import view.ClinicMap;
 import app.Data;
 import dao.UserRepository;
-import io.github.cdimascio.dotenv.Dotenv;
+
 import javafx.collections.FXCollections;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
+
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.stage.Stage;
@@ -54,8 +55,7 @@ public class BookingController {
     private final UserRepository userRepository;
     private static Label messageLabel;
     private Map<Clinic, Double> postcodeMap = new HashMap<>();
-    private Image defaultMap;
-    private ImageView mapView;
+    private ClinicMap clinicMap;
 
     public BookingController(Navigator nav) {
         this(nav, new BookingService(), new NotificationDispatcher(), ReminderDefaultsReader.production(), new UserDAO());
@@ -69,7 +69,9 @@ public class BookingController {
         this.reminderDefaultsReader = reminderDefaultsReader;
         this.userRepository = userRepository;
         messageLabel = UI.error("");
-
+        // Only takes up space when there is a message.
+        messageLabel.managedProperty().bind(messageLabel.textProperty().isNotEmpty());
+        messageLabel.visibleProperty().bind(messageLabel.textProperty().isNotEmpty());
     }
 
     public void checkForDefaultClinic() throws SQLException {
@@ -124,16 +126,16 @@ public class BookingController {
             clinics.sort(
                     Comparator.comparingDouble(dict::get)
             );
-            mapView.setImage(loadMapImg(clinics, userCoord));
+            clinicMap.show(clinics, userCoord);
         } catch (IllegalArgumentException e) {
             messageLabel.setText("Invalid postcode");
-            mapView.setImage(defaultMap);
+            clinicMap.show(clinics, null);
         } catch (Exception e) {
             clinics.sort(
                     Comparator.comparingInt((Clinic c) -> Postcode.score(postcode, c.getPostcode()))
                             .reversed()
             );
-            mapView.setImage(defaultMap);
+            clinicMap.show(clinics, null);
         }
         return dict;
     }
@@ -160,8 +162,7 @@ public class BookingController {
                 pane.setExpanded(false);
                 pane.setOnMouseClicked(e -> {
                     Clinic c = getItem();
-                    if (c != null && !pane.isExpanded()) {
-                        // first click expands, second click selects — or just always select:
+                    if (c != null) {
                         list.getSelectionModel().select(c);
                     }
                 });
@@ -218,6 +219,7 @@ public class BookingController {
         Button search = UI.primaryButton("Search");
         Button next = UI.primaryButton("Select Clinic");
 
+        postcode.setOnAction(e -> search.fire()); // Enter searches
         search.setOnAction(e -> {
             postcodeMap = sortClinicsByPostcode(list.getItems(), postcode.getText());
             list.refresh();
@@ -235,18 +237,13 @@ public class BookingController {
         hbox.setAlignment(Pos.CENTER);
         HBox.setHgrow(postcode, Priority.ALWAYS);
 
-        defaultMap = loadMapImg(clinics, null);
-
-        mapView = new ImageView(defaultMap);
-        mapView.setFitHeight(275);
-        mapView.setFitWidth(325);
-        mapView.setPreserveRatio(true);
-        mapView.setSmooth(true);
+        clinicMap = new ClinicMap(380, 240);
+        clinicMap.show(clinics, null);
 
         if (clinics.isEmpty()) {
-            return UI.pageTop(hbox, messageLabel, mapView, list, emptyMessage, next);
+            return UI.pageTop(hbox, messageLabel, clinicMap.node(), list, emptyMessage, next);
         } else {
-            return UI.pageTop(hbox, messageLabel, mapView, list, next);
+            return UI.pageTop(hbox, messageLabel, clinicMap.node(), list, next);
         }
     }
     public void selectClinic(Clinic clinic) throws SQLException {
@@ -258,7 +255,7 @@ public class BookingController {
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.setTitle(clinic.getName());
             alert.setHeaderText("Save default clinic");
-            alert.setContentText("Would you like to save" + clinic.getName() + " as your default clinic?");
+            alert.setContentText("Would you like to save " + clinic.getName() + " as your default clinic?");
 
             DialogPane dialogPane = alert.getDialogPane();
             dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
@@ -285,7 +282,9 @@ public class BookingController {
                 Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
                 alert.setTitle(clinic.getName());
                 alert.setHeaderText("Update default clinic");
-                alert.setContentText("Would you like to save" + clinic.getName() + " as your default clinic?\nYour current default clinic: "+ userRepository.getDefaultClinic(userID));
+                Clinic current = bookingService.findClinicById(userRepository.getDefaultClinic(userID));
+                alert.setContentText("Would you like to save " + clinic.getName() + " as your default clinic?"
+                        + (current != null ? "\nYour current default clinic: " + current.getName() : ""));
 
                 DialogPane dialogPane = alert.getDialogPane();
                 dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
@@ -476,69 +475,4 @@ public class BookingController {
         return bookingService;
     }
 
-    /**
-     * Uses the Google Maps API to generate a static image of clinic/user locations
-     */
-    public Image loadMapImg(List<Clinic> clinics, Coordinate user) {
-        int width = 600;
-        int height = 500;
-        String defaultCentre = "0,0";
-        Dotenv dotenv = Dotenv.load();
-        String apiKey = dotenv.get("MAPS_KEY");
-        String mapURL = "https://maps.googleapis.com/maps/api/staticmap?";
-        Coordinate centre = findCentre(clinics, user);
-        mapURL += centre == null ? defaultCentre : "center=" + centre.lat() + "," + centre.lon();
-        mapURL += findZoom();
-        mapURL += "&size=" + width + "x" + height;
-        mapURL += createMarkers(clinics, user);
-        mapURL += "&key=" + apiKey;
-        return new Image(mapURL, true);
-    }
-
-    /**
-     * Calculates the centre parameter for map API call
-     */
-    public Coordinate findCentre(List<Clinic> clinics, Coordinate user) {
-        double sumLat = 0, sumLon = 0;
-        for (Clinic clinic : clinics) {
-            sumLat += clinic.getCoords().lat();
-            sumLon += clinic.getCoords().lon();
-        }
-        int size = clinics.size();
-        if (size == 0) {
-            return user;
-        }
-        else {
-            if (user == null) {
-                return new Coordinate(sumLat / size, sumLon / size);
-            } else {
-                sumLat += user.lat();
-                sumLon += user.lon();
-                return new Coordinate(sumLat / (size+1), sumLon / (size+1));
-            }
-        }
-    }
-
-    /**
-     * NOT WRITTEN - finds the appropriate zoom level for map (may not be needed)
-     */
-    public int findZoom() {
-        return 15;
-    }
-
-    /**
-     * Creates a marker for each clinic and user based on name and location
-     */
-    public String createMarkers(List<Clinic> clinics, Coordinate user) {
-        StringBuilder markers = new StringBuilder();
-        for (Clinic clinic : clinics) {
-            markers.append("&markers=color:red|label:").append(clinic.getName().replaceAll("\\s+", "")).append("|").append(clinic.getCoords().lat()).append(",").append(clinic.getCoords().lon());
-        }
-        if (user == null) {
-            return markers.toString();
-        } else {
-            markers.append("&markers=color:yellow|label:You|").append(user.lat()).append(",").append(user.lon());
-            return markers.toString();
-        }
-    }
 }

@@ -9,13 +9,14 @@
       styleClass="auth-page">
 
     <VBox styleClass="auth-heading">
-        <Label text="Health Tracking and&#10;Appointments" styleClass="title"/>
-        <Label text="Log In" styleClass="subtitle"/>
+        <Label text="HEALTH TRACKING &amp; APPOINTMENTS" styleClass="auth-brand"/>
+        <Label text="Welcome back" styleClass="title"/>
+        <Label text="Log in to book and track your appointments." styleClass="subtitle"/>
     </VBox>
 
     <VBox styleClass="auth-card">
         <TextField fx:id="emailField"
-                   promptText="email@domain.com"
+                   promptText="Email"
                    styleClass="input"/>
 
         <PasswordField fx:id="passwordField"
@@ -23,28 +24,28 @@
                        styleClass="input"/>
 
         <Button fx:id="continueBtn"
-                text="Continue"
+                text="Log in"
                 onAction="#onLogin"
                 defaultButton="true"
+                maxWidth="Infinity"
                 styleClass="primaryBtn"/>
-
-        <HBox styleClass="auth-inline-actions">
-            <Label text="New User?" styleClass="muted"/>
-            <Button text="Create Account"
-                    onAction="#goToSignUp"
-                    styleClass="secondaryBtn"/>
-        </HBox>
-
-        <HBox styleClass="auth-inline-actions">
-            <Label text="Forgot password?" styleClass="muted"/>
-            <Button text="Reset"
-                    onAction="#goToPasswordReset"
-                    styleClass="secondaryBtn"/>
-        </HBox>
 
         <Label fx:id="messageLabel"
                text=""
                styleClass="error"/>
+
+        <HBox styleClass="auth-footer">
+            <Label text="New here?" styleClass="muted"/>
+            <Button text="Create an account"
+                    onAction="#goToSignUp"
+                    styleClass="secondaryBtn"/>
+        </HBox>
+
+        <HBox styleClass="auth-footer">
+            <Button text="Forgot your password?"
+                    onAction="#goToPasswordReset"
+                    styleClass="secondaryBtn"/>
+        </HBox>
     </VBox>
 
 </VBox>

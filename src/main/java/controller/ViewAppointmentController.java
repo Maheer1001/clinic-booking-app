@@ -63,12 +63,11 @@ public class ViewAppointmentController {
         return appointmentDAO.getAvailableTimeslots(clinicService[0], clinicService[1], date);
     }
 
-    public boolean rescheduleToNewTimeslot(int appointmentId, int newTimeslotId) {
+    public boolean rescheduleToSlot(int appointmentId, AvailableTimeslot slot) {
         if (!appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId)) {
             return false;
         }
-        appointmentDAO.rescheduleToNewTimeslot(appointmentId, newTimeslotId);
-        return true;
+        return appointmentDAO.rescheduleToSlot(appointmentId, slot);
     }
 
     public boolean isUpcomingAppointmentForUser(int appointmentId) {

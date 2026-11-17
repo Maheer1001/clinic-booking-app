@@ -178,7 +178,7 @@ public class Reschedule {
                         + currentApt[0].endTime();
 
                 boolean success =
-                        controller.rescheduleToNewTimeslot(id, slot.timeslotId());
+                        controller.rescheduleToSlot(id, slot);
 
                 if (!success) {
                     result.setText("Reschedule failed.");

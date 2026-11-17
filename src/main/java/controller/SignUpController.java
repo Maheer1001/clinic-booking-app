@@ -25,6 +25,10 @@ public class SignUpController {
 
     @FXML
     private void initialize() {
+        // Error label takes no space until there is a message to show.
+        messageLabel.managedProperty().bind(messageLabel.textProperty().isNotEmpty());
+        messageLabel.visibleProperty().bind(messageLabel.textProperty().isNotEmpty());
+
         var draft = Data.getSignUpDraft();
         if (draft.email != null) emailField.setText(draft.email);
         if (draft.password != null) passwordField.setText(draft.password);
