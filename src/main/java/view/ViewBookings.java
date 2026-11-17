@@ -11,6 +11,7 @@ import javafx.scene.layout.VBox;
 import model.BookingCommunicationPreferences;
 import model.ReminderTemplateOverrides;
 import model.UpcomingAppointmentDetails;
+import service.AsyncNotifier;
 import service.BookingCommunicationPrefs;
 import service.NotificationDispatcher;
 import service.email.CancellationEmail;
@@ -72,8 +73,9 @@ public class ViewBookings {
 
         Button reschedule = UI.primaryButton("Reschedule");
         reschedule.setOnAction(e -> nav.goToPage(Reschedule.getPageWithAppId(nav, appId), "Reschedule", false));
-        Button cancel = UI.primaryButton("Cancel appointment");
+        Button cancel = UI.dangerButton("Cancel appointment");
         cancel.setOnAction(e -> {
+            if (!MainView.confirmCancel(apt)) return;
             cancel.setDisable(true);
             if (!controller.cancelAppointment(appId)) {
                 // Already cancelled or no longer upcoming: don't send a cancellation email.
@@ -88,7 +90,8 @@ public class ViewBookings {
                 BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(Data.getCurrentUserId());
                 boolean cancellationDiscreet = commPrefs.cancellationDiscreet();
                 ReminderTemplateOverrides cancellationTpl = commPrefs.cancellationTemplate();
-                dispatcher.notifyUser(
+                AsyncNotifier.notifyUser(
+                        dispatcher,
                         Data.getCurrentUserId(),
                         new CancellationEmail(
                                 recipientEmail, recipientName, appointmentRef,

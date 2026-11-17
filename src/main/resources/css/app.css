@@ -471,7 +471,7 @@
 }
 
 .app-inline-save-confirm {
-    -fx-text-fill: #d00000;
+    -fx-text-fill: #1b5e20;
     -fx-font-size: 14px;
     -fx-text-alignment: center;
 }

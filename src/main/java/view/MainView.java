@@ -14,6 +14,7 @@ import model.ReminderTemplateOverrides;
 import model.UpcomingAppointmentDetails;
 import service.BookingCommunicationPrefs;
 import service.NotificationDispatcher;
+import service.AsyncNotifier;
 import service.email.CancellationEmail;
 import view.notification.CancellationNotification;
 import view.reminders.ReminderDefaultsView;
@@ -175,7 +176,13 @@ public class MainView {
 
         cancel.setOnAction(e -> {
             if (!confirmCancel(apt)) return;
-            controller.cancelAppointment(appId);
+            cancel.setDisable(true);
+            if (!controller.cancelAppointment(appId)) {
+                // Already cancelled or no longer upcoming: don't send a cancellation email.
+                nav.clearTabStack("booking");
+                nav.goToHome();
+                return;
+            }
 
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName() != null
@@ -193,7 +200,9 @@ public class MainView {
                 boolean cancellationDiscreet = commPrefs.cancellationDiscreet();
                 ReminderTemplateOverrides cancellationTpl = commPrefs.cancellationTemplate();
 
-                dispatcher.notifyUser(
+                // Sent in the background so SMTP retries don't freeze the window.
+                AsyncNotifier.notifyUser(
+                        dispatcher,
                         Data.getCurrentUserId(),
                         new CancellationEmail(
                                 recipientEmail,
@@ -231,7 +240,7 @@ public class MainView {
     }
 
 
-    private static boolean confirmCancel(UpcomingAppointmentDetails apt) {
+    static boolean confirmCancel(UpcomingAppointmentDetails apt) {
         ButtonType cancelIt = new ButtonType("Cancel appointment", ButtonBar.ButtonData.OK_DONE);
         ButtonType keep = new ButtonType("Keep it", ButtonBar.ButtonData.CANCEL_CLOSE);
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "", cancelIt, keep);
