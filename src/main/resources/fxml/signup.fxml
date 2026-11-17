@@ -6,7 +6,8 @@
 <VBox xmlns="http://javafx.com/javafx"
       xmlns:fx="http://javafx.com/fxml"
       fx:controller="controller.SignUpController"
-      styleClass="auth-page">
+      styleClass="auth-page"
+      stylesheets="@../css/auth.css">
 
     <VBox styleClass="auth-heading">
         <Label text="HEALTH TRACKING &amp; APPOINTMENTS" styleClass="auth-brand"/>
@@ -15,9 +16,15 @@
     </VBox>
 
     <VBox styleClass="auth-card">
-        <TextField fx:id="emailField" promptText="Email" styleClass="input"/>
-        <PasswordField fx:id="passwordField" promptText="Password" styleClass="input"/>
-        <PasswordField fx:id="confirmPasswordField" promptText="Confirm password" styleClass="input"/>
+        <TextField fx:id="emailField" promptText="Email" accessibleText="Email" styleClass="input"/>
+        <Label fx:id="emailErrorLabel" styleClass="auth-field-error"/>
+
+        <PasswordField fx:id="passwordField" promptText="Password" accessibleText="Password" styleClass="input"/>
+        <Label fx:id="passwordRulesLabel" styleClass="auth-hint"/>
+
+        <PasswordField fx:id="confirmPasswordField" promptText="Confirm password"
+                       accessibleText="Confirm password" styleClass="input"/>
+        <Label fx:id="confirmErrorLabel" styleClass="auth-field-error"/>
 
         <VBox styleClass="auth-check-group">
             <HBox spacing="4" alignment="BASELINE_LEFT">
@@ -28,11 +35,15 @@
                 <CheckBox fx:id="privacyCheck" text="I agree to the" styleClass="auth-check"/>
                 <Hyperlink text="Privacy Policy" onAction="#goToPrivacy" styleClass="auth-link"/>
             </HBox>
+            <Label fx:id="termsHintLabel"
+                   text="Open each document and scroll to the end to enable its checkbox."
+                   styleClass="auth-hint"/>
         </VBox>
 
-        <Button text="Create account" onAction="#onSignUp" maxWidth="Infinity" styleClass="primaryBtn"/>
+        <Button fx:id="createBtn" text="Create account" onAction="#onSignUp" defaultButton="true"
+                maxWidth="Infinity" styleClass="primaryBtn"/>
 
-        <Label fx:id="messageLabel" text="" styleClass="error"/>
+        <Label fx:id="messageLabel" text="" wrapText="true" styleClass="error"/>
 
         <HBox styleClass="auth-footer">
             <Label text="Already have an account?" styleClass="muted"/>

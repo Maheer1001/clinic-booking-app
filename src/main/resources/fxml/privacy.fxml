@@ -7,15 +7,19 @@
       xmlns:fx="http://javafx.com/fxml"
       fx:controller="controller.PrivacyController"
       styleClass="auth-page"
+      stylesheets="@../css/auth.css"
       spacing="12">
 
     <VBox styleClass="auth-heading">
         <Label text="Privacy Policy" styleClass="subtitle"/>
-        <Label text="Scroll to the bottom to return." styleClass="muted"/>
+        <Label fx:id="statusLabel"
+               text="Read to the end to be able to accept this on the sign-up screen."
+               wrapText="true"
+               styleClass="muted"/>
     </VBox>
 
     <VBox styleClass="auth-card" spacing="10">
-        <ScrollPane fx:id="scrollPane" fitToWidth="true">
+        <ScrollPane fx:id="scrollPane" fitToWidth="true" VBox.vgrow="ALWAYS">
             <VBox spacing="10">
                 <Label fx:id="contentLabel" wrapText="true"/>
             </VBox>
@@ -24,7 +28,8 @@
         <Button fx:id="returnBtn"
                 text="Return to create account"
                 onAction="#returnToSignup"
-                disable="true"
+                defaultButton="true"
+                maxWidth="Infinity"
                 styleClass="secondaryWideBtn"/>
     </VBox>
 

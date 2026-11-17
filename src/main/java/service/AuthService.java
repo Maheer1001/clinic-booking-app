@@ -103,11 +103,11 @@ public class AuthService {
         }
     }
 
-    static boolean isValidEmail(String email) {
+    public static boolean isValidEmail(String email) {
         return !isBlank(email) && EMAIL_PATTERN.matcher(email).matches();
     }
 
-    static boolean isStrongEnoughPassword(String password) {
+    public static boolean isStrongEnoughPassword(String password) {
         if (isBlank(password)) return false;
         if (password.length() < MIN_PASSWORD_LENGTH) return false;
 
