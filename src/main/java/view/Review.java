@@ -22,7 +22,7 @@ import java.util.List;
 public class Review {
 
     private static final DateTimeFormatter DOB_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     public static Node getPage(BookingController controller) {

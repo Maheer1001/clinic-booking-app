@@ -477,7 +477,7 @@ public class BookingController {
     }
 
     private static final java.time.format.DateTimeFormatter CONFIRMED_DATE_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy");
+            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
     private static final java.time.format.DateTimeFormatter CONFIRMED_TIME_FMT =
             java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
