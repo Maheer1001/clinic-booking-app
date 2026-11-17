@@ -1,6 +1,7 @@
 package database;
 
 import app.DB;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -12,6 +13,7 @@ import java.util.*;
  * Prints the live DB schema (tables/columns/PKs/FKs) to test output.
  * This is intentionally a test so it can be run via Maven easily.
  */
+@Tag("db")
 public class SchemaIntrospectTest {
 
     @Test

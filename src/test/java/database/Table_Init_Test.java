@@ -1,5 +1,6 @@
 package database;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -10,6 +11,7 @@ import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Tag("db")
 public class Table_Init_Test {
 
     @Test

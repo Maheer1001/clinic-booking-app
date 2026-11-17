@@ -2,6 +2,7 @@ package service;
 
 import app.DB;
 import dao.UserDAO;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
@@ -52,6 +53,7 @@ public class AccountServiceTest {
     }
 
     @Test
+    @Tag("db")
     void saveAccount_emailAlreadyUsed_shouldReturnEmailAlreadyUsed() throws Exception {
         // 需要真实 DB：插入一个用户占用 email，然后用另一个 userId 保存同一个 email
         UserDAO dao = new UserDAO();
@@ -85,6 +87,7 @@ public class AccountServiceTest {
     }
 
     @Test
+    @Tag("db")
     void saveAccount_validInputs_shouldSucceed() throws Exception {
         UserDAO dao = new UserDAO();
 

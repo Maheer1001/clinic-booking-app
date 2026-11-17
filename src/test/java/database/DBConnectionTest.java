@@ -1,10 +1,12 @@
 package database;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import java.sql.Connection;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Tag("db")
 public class DBConnectionTest {
 
     @Test

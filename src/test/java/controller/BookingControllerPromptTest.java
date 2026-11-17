@@ -96,7 +96,7 @@ class BookingControllerPromptTest {
         item.setDate(LocalDate.of(2026, 2, 25));
         item.setTime(LocalTime.of(10, 30));
         b.setItems(List.of(item));
-        b.setClinic(new Clinic("Clinic 1", "Addr", "PC", "123", List.of(s1), new Coordinate(0, 0)));
+        b.setClinic(new Clinic("Clinic 1", "Addr", "PC", "123", List.of(s1), new Coordinate(0, 0), List.of()));
 
         MainView mainView = new MainView();
         CapturingNavigator nav = new CapturingNavigator(mainView);

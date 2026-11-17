@@ -84,11 +84,10 @@ public class MainController {
         //create debounce - prevents db from updating everytime a change occurs
         PauseTransition debounce = new PauseTransition(Duration.seconds(2.5));
         debounce.setOnFinished(e -> new Thread(() -> {
-            System.out.println("Should try to save settings");
             try {
                 UserDAO.setAccessibilitySettingsByUserId(userId, Data.getSettings());
             } catch (SQLException ex) {
-                System.out.println("Error setting accessibility settings");
+                System.err.println("Could not save accessibility settings: " + ex.getMessage());
             }
         }).start());
 

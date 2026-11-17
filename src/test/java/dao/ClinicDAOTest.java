@@ -33,7 +33,8 @@ class ClinicDAOTest {
                     postcode VARCHAR(20),
                     phone VARCHAR(20),
                     latitude DOUBLE PRECISION,
-                    longitude DOUBLE PRECISION
+                    longitude DOUBLE PRECISION,
+                    disability_accessibility VARCHAR(500)
                 )
             """);
 

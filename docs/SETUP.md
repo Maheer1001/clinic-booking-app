@@ -1,6 +1,6 @@
-# Sexual Health App
+# Setup
 
-A JavaFX-based desktop application for sexual health management.
+How to get the clinic booking app running from a fresh clone.
 
 ## Setup Instructions
 
@@ -11,46 +11,15 @@ A JavaFX-based desktop application for sexual health management.
 
 ### Getting Started
 
-1. **Create a project directory**
-    - Create a folder where you want to store the project (e.g., `Documents/IntelliJ/`)
-
-2. **Open the directory in IntelliJ**
-    - Launch IntelliJ IDEA
-    - File → Open
-    - Select the folder you just created
-
-3. **Set up SSH keys (first time only)**
-    - Open the terminal in IntelliJ (`Alt+F12` or View → Tool Windows → Terminal)
-    - Generate an SSH key:
+1. **Clone the repository**
 ```bash
-   ssh-keygen -t ed25519
-```
-- Press Enter 3 times (default location, no passphrase)
-- Copy your public key:
-```bash
-   cat ~/.ssh/id_ed25519.pub
-```
-- Go to https://git.soton.ac.uk
-- Click your profile icon → Preferences → SSH Keys
-- Paste the key and click "Add key"
-
-4. **Clone the repository via terminal**
-    - In the IntelliJ terminal, run:
-```bash
-   git clone git@git.soton.ac.uk:comp2300-group11/sexual-health.git
+   git clone https://github.com/Maheer1001/clinic-booking-app.git
+   cd clinic-booking-app
 ```
 
-5. **Open the cloned project**
-    - File → Open
-    - Navigate to the `sexual-health` folder (created by the clone)
-    - Click OK
+2. **Open it in IntelliJ** (File → Open → the cloned folder). IntelliJ detects `pom.xml` and downloads the Maven dependencies; if it doesn't, right-click `pom.xml` → "Add as Maven Project".
 
-6. **Load Maven dependencies**
-    - IntelliJ should automatically detect `pom.xml` and load the project
-    - If not: right-click on `pom.xml` → "Add as Maven Project"
-    - Wait for all dependencies to download (this may take a few minutes)
-
-7. **Configure environment variables (.env file)**
+3. **Configure environment variables (.env file)**
     - The application requires a `.env` file in the project root directory for database and email configuration
     - **Copy the example file:** Copy `.env.example` to `.env` in the project root:
     ```bash
@@ -73,16 +42,15 @@ A JavaFX-based desktop application for sexual health management.
     - **Important:** 
       - For Gmail, you need to use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
       - The `.env` file should **NOT** be committed to Git (it should be in `.gitignore`)
-      - Each team member needs their own `.env` file with valid credentials
     - **Note:** If email configuration is missing or incorrect, you'll see warnings in the console and emails will not be sent
 
-8. **Run the application**
+4. **Run the application**
     - Run from Maven: `mvn javafx:run` (uses `app.Main` as entry point from `pom.xml`)
     - Or in IntelliJ: open `src/main/java/app/Main.java` and run the `main` method (▶), or press `Shift+F10`
 
 ### Project Structure
 ```
-sexual-health/
+clinic-booking-app/
 ├── src/main/java/
 │   ├── app/              # Entry point (Main), DB, Data, SceneManager
 │   ├── controller/       # Login, SignUp, Main, Home, Tracking
@@ -92,7 +60,7 @@ sexual-health/
 │   ├── view/             # UI (Navigator, booking, reminders, notification, ui)
 │   └── database/         # Legacy DB helper (primary: app.DB)
 ├── src/main/resources/   # FXML, CSS, email templates
-├── docs/                 # SETUP, ARCHITECTURE, BASICS
+├── docs/                 # SETUP, ARCHITECTURE
 ├── pom.xml               # Maven build; mainClass: app.Main
 └── .env.example          # Template for per-machine .env (DB + SMTP)
 ```
@@ -110,18 +78,6 @@ sexual-health/
 - `docs/` - Documentation, design documents, and project reports
 - `pom.xml` - Dependency management and build configuration (lives at project root)
 
-### Configure Git Identity
-
-Before making your first commit, configure your Git identity:
-```bash
-    git config --global user.email "your.email@soton.ac.uk"
-    git config --global user.name "Your Name"
-```
-
-Replace with your actual Southampton email and name. This is required for Git to track who made each commit.
-
-**Note:** This is a one-time setup per computer - you only need to do this once.
-
 ### Technologies Used
 - Java 21
 - JavaFX 21.0.5
@@ -133,7 +89,6 @@ Replace with your actual Southampton email and name. This is required for Git to
 #### Build and Runtime Issues
 - If the project doesn't recognize JavaFX, reload Maven: right-click `pom.xml` → "Reload Maven Project"
 - Make sure you have Java 21 installed: File → Project Structure → Project SDK
-- If SSH clone fails, you may need to verify your SSH key is properly added to GitLab
 
 #### Database Connection Issues
 - If you see `[DB] WARNING` messages about missing configuration, check that your `.env` file exists and contains `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`

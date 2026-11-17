@@ -1,6 +1,5 @@
 # Codebase structure and data flow
 
-This document describes how the sexual-health app is structured and how data and control flow between packages and key files. Use it with `SETUP.md` (fresh install and common errors) and `BASICS.md` (Git workflow for the team).
 
 ---
 
@@ -12,7 +11,6 @@ This document describes how the sexual-health app is structured and how data and
 - `docs/` – Project documentation:
   - `SETUP.md` – how a fresh user clones, configures `.env`, runs the app, and what to do when things go wrong (DB, TLS/email, build issues).
   - `ARCHITECTURE.md` – this file: how packages, classes, and flows connect.
-  - `BASICS.md` – Git commands and collaboration conventions for the team.
 - `.env.example` – template for the `.env` configuration file used on each machine (database URL + credentials, SMTP host/credentials). Developers copy this to `.env` and fill in real values; `.env` is ignored by Git.
 
 Key resource folders:
@@ -211,4 +209,3 @@ Reminders
 All DAOs → app.DB.connect()
 ```
 
-For run/setup and project layout on disk, see `SETUP.md`. For Git workflow, see `BASICS.md`.

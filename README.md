@@ -24,7 +24,8 @@ Java 21, JavaFX (FXML, MaterialFX, ControlsFX), PostgreSQL, a DAO/repository dat
 
 ```bash
 mvn clean javafx:run
-mvn test
+mvn test                 # 180 unit tests, no database needed
+mvn test -Pdb-tests      # also runs the 9 integration tests against the Postgres in .env
 ```
 
 Detailed setup and troubleshooting: [`docs/SETUP.md`](docs/SETUP.md).
@@ -33,5 +34,4 @@ Detailed setup and troubleshooting: [`docs/SETUP.md`](docs/SETUP.md).
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): packages, data flow and key classes
 - [`docs/SETUP.md`](docs/SETUP.md): fresh install and common errors
-- [`docs/BASICS.md`](docs/BASICS.md): the team's Git workflow
 - `src/*.puml`: class diagram, ERD and sequence diagrams (auth, booking, cancel/reschedule, reminders, tracking)

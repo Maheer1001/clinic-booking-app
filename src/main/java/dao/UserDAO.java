@@ -194,7 +194,6 @@ public class UserDAO implements UserRepository {
             PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, userId);
             ps.executeUpdate();
-            System.out.println(ps.toString());
         } catch (SQLException e) {
             e.printStackTrace();
         }

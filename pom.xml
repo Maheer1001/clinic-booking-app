@@ -12,6 +12,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <test.excludedGroups>db</test.excludedGroups>
     </properties>
 
     <dependencies>
@@ -105,6 +106,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.3</version>
                 <configuration>
+                    <!-- Tests tagged "db" need a live Postgres (.env); run them with -Pdb-tests -->
+                    <excludedGroups>${test.excludedGroups}</excludedGroups>
                     <systemPropertyVariables>
                         <!-- Prevent any real SMTP/network sends during mvn test -->
                         <email.disabled>true</email.disabled>
@@ -113,5 +116,14 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>db-tests</id>
+            <properties>
+                <test.excludedGroups>none</test.excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>

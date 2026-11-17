@@ -129,7 +129,6 @@ public class BookingController {
             messageLabel.setText("Invalid postcode");
             mapView.setImage(defaultMap);
         } catch (Exception e) {
-            System.out.println("Resort to basic sort");
             clinics.sort(
                     Comparator.comparingInt((Clinic c) -> Postcode.score(postcode, c.getPostcode()))
                             .reversed()

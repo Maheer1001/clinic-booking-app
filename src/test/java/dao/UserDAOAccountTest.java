@@ -1,6 +1,7 @@
 package dao;
 
 import app.DB;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import service.AccountService;
 
@@ -10,6 +11,7 @@ import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Tag("db")
 public class UserDAOAccountTest {
 
     @Test
