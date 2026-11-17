@@ -31,7 +31,7 @@ app.Main (main class in pom.xml)
 ```
 
 - **app.Main** is the JavaFX Application entry point. It ensures the database has tables, then shows the login screen (FXML).
-- **app.DB** is the single place that provides database connections. All DAOs use `app.DB.connect()` (not `database.DB`).
+- **app.DB** is the single place that provides database connections. All DAOs use `app.DB.connect()`.
 - **SceneManager** holds the Stage; login and signup controllers use it when switching scenes.
 
 ---
@@ -43,7 +43,7 @@ app.Main (main class in pom.xml)
 | **app** | Entry point, DB access, global state | `Main`, `DB`, `Data`, `SceneManager` |
 | **controller** | FXML controllers and MVC controllers | `LoginController`, `SignUpController`, `MainController`, `BookingController`, `ViewAppointmentController`, `TrackingController`, `ReminderController` |
 | **dao** | Data access (one class per table/area) | `*DAO`, `*Repository` (interfaces), `SessionDAO`, `TimeslotDAO` |
-| **database** | Legacy DB helper | `DB` (duplicate of app.DB; DAOs use **app.DB**) |
+| **database** | DB integration tests only (tagged `db`) | — |
 | **model** | Domain data (records/POJOs) | `User`, `Session`, `Book`, `Clinic`, `AppointmentDetails`, `Test`, etc. |
 | **service** | Business logic, auth, email, scheduling | `AuthService`, `BookingService`, `TrackingService`, `NotificationScheduler`, `service.email.*` |
 | **view** | All in-app UI (no FXML) | `Navigator`, `MainView`, `Home`, booking views, `view.reminders.*`, `view.notification.*`, `view.ui.UI` |
@@ -153,7 +153,6 @@ Reminder settings are stored via **ReminderDAO**; emails are sent later by **ser
 ## 9. Database and DAOs
 
 - **app.DB** is the only connection source used by the application code. It provides `DB.connect()` and `DB.initTables(Connection)`.
-- **database.DB** exists but is legacy; DAOs import **app.DB**.
 - Every DAO uses **app.DB.connect()** inside try-with-resources. There are no connection holders in controllers or views.
 
 | DAO | Used by | Purpose |
