@@ -1,5 +1,6 @@
 package view;
 
+import app.Data;
 import javafx.scene.layout.*;
 import service.AccountService;
 import javafx.geometry.Pos;
@@ -24,10 +25,31 @@ public class AccountView {
         TextField last = UI.textField("");
         TextField phone = UI.textField("");
         Label phoneCount = UI.muted("");
+        first.setTextFormatter(maxLength(AccountService.MAX_NAME_LENGTH));
+        last.setTextFormatter(maxLength(AccountService.MAX_NAME_LENGTH));
+        first.setAccessibleText("First name");
+        last.setAccessibleText("Last name");
+        phone.setAccessibleText("Phone number");
+        phone.setPromptText("Optional, 11 digits");
+
         DatePicker dob = new DatePicker();
         dob.setShowWeekNumbers(false);
+        dob.setAccessibleText("Date of birth");
+        dob.setPromptText("Choose a date");
         // Force DOB to be a real date (picker only) to avoid typed junk.
         dob.setEditable(false);
+        // Grey out days that can't be a date of birth.
+        dob.setDayCellFactory(p -> new DateCell() {
+            @Override
+            public void updateItem(LocalDate item, boolean empty) {
+                super.updateItem(item, empty);
+                setDisable(empty || item == null || !AccountService.isValidDob(item));
+            }
+        });
+        Label formHint = UI.muted("");
+        formHint.setWrapText(true);
+        formHint.managedProperty().bind(formHint.textProperty().isNotEmpty());
+        formHint.visibleProperty().bind(formHint.textProperty().isNotEmpty());
         Label emailValue = UI.body("");
         emailValue.setMaxWidth(Double.MAX_VALUE);
 
@@ -65,12 +87,18 @@ public class AccountView {
             phoneCount.setText(len == 0 ? "" : (len + "/11"));
 
             boolean phoneOk = p.isEmpty() || p.matches("\\d{11}");
-            boolean dobOk = dob.getValue() != null && !dob.getValue().isAfter(LocalDate.now());
+            boolean dobOk = AccountService.isValidDob(dob.getValue());
 
             phone.getStyleClass().remove("input-invalid");
             dob.getStyleClass().remove("input-invalid");
             if (!phoneOk) phone.getStyleClass().add("input-invalid");
             if (!dobOk) dob.getStyleClass().add("input-invalid");
+
+            // Say why Save is disabled instead of leaving the user guessing.
+            if (!dobOk && !phoneOk) formHint.setText("Add your date of birth and an 11-digit phone number (or leave phone empty) to save.");
+            else if (!dobOk) formHint.setText("Add your date of birth to save changes.");
+            else if (!phoneOk) formHint.setText("Phone number must be 11 digits, or leave it empty.");
+            else formHint.setText("");
 
             save.setDisable(!(phoneOk && dobOk));
         };
@@ -78,6 +106,12 @@ public class AccountView {
         phone.textProperty().addListener((obs, o, n) -> updateValidity.run());
         dob.valueProperty().addListener((obs, o, n) -> updateValidity.run());
         updateValidity.run();
+
+        // A stale "saved" or error message shouldn't linger once the user edits again.
+        first.textProperty().addListener((obs, o, n) -> msg.setText(""));
+        last.textProperty().addListener((obs, o, n) -> msg.setText(""));
+        phone.textProperty().addListener((obs, o, n) -> msg.setText(""));
+        dob.valueProperty().addListener((obs, o, n) -> msg.setText(""));
 
         save.setOnAction(e -> {
             String f = trimToNull(first.getText());
@@ -90,6 +124,15 @@ public class AccountView {
                 case SUCCESS -> {
                     msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
                     UI.showSaveConfirmation(msg);
+                    // keep the logged-in user's display name (used in emails) in step with the edit
+                    if (Data.getCurrentUserId() == userId) {
+                        String name = ((f != null ? f : "") + " " + (l != null ? l : "")).trim();
+                        Data.setCurrentUser(userId, immutableEmail, name);
+                    }
+                }
+                case INVALID_NAME -> {
+                    msg.getStyleClass().setAll(UI.ERROR);
+                    msg.setText("Names can be at most " + AccountService.MAX_NAME_LENGTH + " characters.");
                 }
                 case INVALID_EMAIL -> {
                     msg.getStyleClass().setAll(UI.ERROR);
@@ -105,7 +148,7 @@ public class AccountView {
                 }
                 case INVALID_DOB -> {
                     msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Please enter a valid DOB (not in the future).");
+                    msg.setText("Please choose a valid date of birth (not in the future).");
                 }
                 case DB_ERROR -> {
                     msg.getStyleClass().setAll(UI.ERROR);
@@ -139,7 +182,11 @@ public class AccountView {
 
         g.getColumnConstraints().addAll(col1, col2);
 
-        return new VBox(10, g, saveBox, msg);
+        return new VBox(10, g, formHint, saveBox, msg);
+    }
+
+    private static TextFormatter<String> maxLength(int max) {
+        return new TextFormatter<>(change -> change.getControlNewText().length() <= max ? change : null);
     }
 
     private static String nullToEmpty(String s) {
