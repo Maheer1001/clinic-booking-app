@@ -2,6 +2,7 @@ package view;
 
 import app.Data;
 import controller.ViewAppointmentController;
+import javafx.beans.binding.Bindings;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
@@ -9,13 +10,13 @@ import model.AvailableTimeslot;
 import model.BookingCommunicationPreferences;
 import model.ReminderTemplateOverrides;
 import model.UpcomingAppointmentDetails;
+import service.AsyncNotifier;
 import service.BookingCommunicationPrefs;
 import service.NotificationDispatcher;
 import service.email.RescheduleConfirmationEmail;
-import view.DateTimeSelector;
-import view.TimeslotProvider;
 import view.notification.RescheduleConfirmationNotification;
 import view.ui.UI;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
@@ -44,205 +45,141 @@ public class Reschedule {
         }
 
         ViewAppointmentController controller = new ViewAppointmentController(userId);
+        NotificationDispatcher dispatcher = new NotificationDispatcher();
+        boolean prefilled = !initialAppId.isBlank();
 
         TextField appointmentId = new TextField(initialAppId);
         appointmentId.setPromptText("Appointment ID");
+        Label idLabel = new Label("Appointment ID");
+        idLabel.setLabelFor(appointmentId);
 
-        Label result = new Label();
+        Label result = UI.error("");
+        result.setWrapText(true);
+        result.managedProperty().bind(result.textProperty().isNotEmpty());
+        result.visibleProperty().bind(result.textProperty().isNotEmpty());
 
         Button rescheduleBtn = UI.primaryButton("Reschedule");
         rescheduleBtn.setDisable(true);
 
-        final UpcomingAppointmentDetails[] currentApt = new UpcomingAppointmentDetails[1];
-        final DateTimeSelector[] selectorRef = new DateTimeSelector[1];
+        VBox currentBox = new VBox(5);
         VBox selectorBox = new VBox();
 
-        TimeslotProvider provider = new TimeslotProvider() {
+        final UpcomingAppointmentDetails[] currentApt = new UpcomingAppointmentDetails[1];
+        final DateTimeSelector[] selectorRef = new DateTimeSelector[1];
 
-            @Override
-            public Set<LocalDate> getAvailableDates() {
-                try {
-                    int id = Integer.parseInt(appointmentId.getText().trim());
-                    return new HashSet<>(controller.getAvailableDatesForReschedule(id));
-                } catch (Exception e) {
-                    return Set.of();
-                }
-            }
-
-            @Override
-            public List<AvailableTimeslot> getTimeslots(LocalDate date) {
-                try {
-                    int id = Integer.parseInt(appointmentId.getText().trim());
-                    return controller.getAvailableTimeslotsForReschedule(id, date);
-                } catch (Exception e) {
-                    return List.of();
-                }
-            }
-        };
-
-        Runnable rebuildSelector = () -> {
-            DateTimeSelector sel = new DateTimeSelector(provider, slot -> {
-                var booking = Data.getBooking();
-                if (booking != null) {
-                    booking.setTimeslotId(slot.timeslotId());
-                    booking.setDate(slot.date());
-                    booking.setTime(slot.startTime());
-                }
-                rescheduleBtn.setDisable(false);
-            });
-            selectorRef[0] = sel;
-            selectorBox.getChildren().setAll(sel);
-        };
-
-        rebuildSelector.run();
-
-        Runnable loadAppointmentAndRefresh = () -> {
+        Runnable loadAppointment = () -> {
             result.setText("");
             rescheduleBtn.setDisable(true);
             currentApt[0] = null;
+            selectorRef[0] = null;
+            currentBox.getChildren().clear();
+            selectorBox.getChildren().clear();
 
             String raw = appointmentId.getText() != null ? appointmentId.getText().trim() : "";
-            if (raw.isEmpty()) {
-                rebuildSelector.run();
+            if (raw.isEmpty()) return;
+
+            int id;
+            try {
+                id = Integer.parseInt(raw);
+            } catch (NumberFormatException ex) {
+                result.setText("Please enter a valid appointment ID.");
                 return;
             }
 
-            try {
-                int id = Integer.parseInt(raw);
-                Optional<UpcomingAppointmentDetails> aptOpt = controller.getAppointmentDetails(id);
-                if (aptOpt.isEmpty()) {
-                    rebuildSelector.run();
-                    return;
+            Optional<UpcomingAppointmentDetails> aptOpt = controller.getAppointmentDetails(id);
+            if (aptOpt.isEmpty()) {
+                result.setText("No upcoming appointment with that ID was found.");
+                return;
+            }
+            UpcomingAppointmentDetails apt = aptOpt.get();
+            currentApt[0] = apt;
+            currentBox.getChildren().setAll(
+                    UI.heading(apt.serviceName()),
+                    UI.body("Currently: " + apt.date() + " " + apt.startTime() + " - " + apt.endTime()),
+                    UI.muted(apt.clinicName()));
+
+            TimeslotProvider provider = new TimeslotProvider() {
+                @Override
+                public Set<LocalDate> getAvailableDates() {
+                    return new HashSet<>(controller.getAvailableDatesForReschedule(id));
                 }
 
-                currentApt[0] = aptOpt.get();
-                rebuildSelector.run();
-            } catch (Exception ignored) {
-                rebuildSelector.run();
-            }
+                @Override
+                public List<AvailableTimeslot> getTimeslots(LocalDate date) {
+                    return controller.getAvailableTimeslotsForReschedule(id, date);
+                }
+            };
+            DateTimeSelector sel = new DateTimeSelector(provider, slot -> rescheduleBtn.setDisable(false));
+            sel.getTimeCombo().valueProperty().addListener((obs, o, n) -> rescheduleBtn.setDisable(n == null));
+            selectorRef[0] = sel;
+            selectorBox.getChildren().setAll(new Label("Choose a new time"), sel);
         };
 
-        appointmentId.textProperty().addListener((obs, oldVal, newVal) -> loadAppointmentAndRefresh.run());
-
-        // Important: if the appointment ID is prefilled, the listener won't fire — load once here.
-        loadAppointmentAndRefresh.run();
-
-        DateTimeSelector selector = selectorRef[0];
-        // Keep a stable node reference for the UI tree.
-        // (selectorRef[0] holds the current selector instance.)
-        // selectorBox will be swapped as the appointment ID changes.
-        //
-        // NOTE: do not use `selector` after this point; use selectorRef[0].
-        @SuppressWarnings("unused")
-        DateTimeSelector ignore = selector;
-
-        // legacy block (kept for minimal diff) removed by rebuildSelector/loadAppointmentAndRefresh
-        /*
-        DateTimeSelector selector = new DateTimeSelector(provider, slot -> {
-
-            var booking = Data.getBooking();
-            if (booking != null) {
-                booking.setTimeslotId(slot.timeslotId());
-                booking.setDate(slot.date());
-                booking.setTime(slot.startTime());
-            }
-
-            rescheduleBtn.setDisable(false);
-        });
-        */
-
-        NotificationDispatcher dispatcher = new NotificationDispatcher();
+        appointmentId.textProperty().addListener((obs, oldVal, newVal) -> loadAppointment.run());
+        // If the appointment ID is prefilled, the listener won't fire, so load once here.
+        loadAppointment.run();
 
         rescheduleBtn.setOnAction(e -> {
-
             result.setText("");
-
-            try {
-                int id = Integer.parseInt(appointmentId.getText().trim());
-
-                if (currentApt[0] == null) {
-                    result.setText("Appointment not found.");
-                    return;
-                }
-
-                AvailableTimeslot slot = selectorRef[0] != null ? selectorRef[0].getSelectedSlot() : null;
-                LocalDate date = selectorRef[0] != null ? selectorRef[0].getSelectedDate() : null;
-
-                if (slot == null || date == null) {
-                    result.setText("Please select a valid date and time.");
-                    return;
-                }
-
-                String oldDate = currentApt[0].date() + " "
-                        + currentApt[0].startTime() + " - "
-                        + currentApt[0].endTime();
-
-                boolean success =
-                        controller.rescheduleToSlot(id, slot);
-
-                if (!success) {
-                    result.setText("Reschedule failed.");
-                    return;
-                }
-
-                result.setText("Rescheduled successfully.");
-
-                String email = Data.getCurrentUserEmail();
-                String name = Data.getCurrentUserName() != null
-                        ? Data.getCurrentUserName()
-                        : "Patient";
-
-                if (email != null && !email.isBlank()) {
-
-                    String newDateStr =
-                            slot.date().format(DATE_FMT) + " "
-                                    + slot.startTime().format(TIME_FMT)
-                                    + " - "
-                                    + slot.endTime().format(TIME_FMT);
-
-                    BookingCommunicationPreferences commPrefs =
-                            BookingCommunicationPrefs.load(Data.getCurrentUserId());
-                    boolean rescheduleDiscreet = commPrefs.rescheduleDiscreet();
-                    ReminderTemplateOverrides rescheduleTpl = commPrefs.rescheduleTemplate();
-
-                    dispatcher.notifyUser(
-                            Data.getCurrentUserId(),
-                            new RescheduleConfirmationEmail(
-                                    email,
-                                    name,
-                                    "APP-" + id,
-                                    currentApt[0].serviceName(),
-                                    currentApt[0].clinicName(),
-                                    oldDate,
-                                    newDateStr,
-                                    rescheduleDiscreet,
-                                    rescheduleTpl
-                            ),
-                            new RescheduleConfirmationNotification(
-                                    name,
-                                    "APP-" + id,
-                                    currentApt[0].serviceName(),
-                                    currentApt[0].clinicName(),
-                                    oldDate,
-                                    newDateStr,
-                                    rescheduleDiscreet,
-                                    rescheduleTpl
-                            )
-                    );
-                nav.clearTabStack("booking");
-                nav.goToHome();
-                }
-
-            } catch (Exception ex) {
-                result.setText("Invalid appointment ID.");
+            UpcomingAppointmentDetails apt = currentApt[0];
+            if (apt == null) {
+                result.setText("No upcoming appointment with that ID was found.");
+                return;
             }
+            AvailableTimeslot slot = selectorRef[0] != null ? selectorRef[0].getSelectedSlot() : null;
+            if (slot == null) {
+                result.setText("Please choose a new date and time.");
+                return;
+            }
+
+            rescheduleBtn.setDisable(true); // stop a double click from moving the appointment twice
+            int id = apt.appId();
+            String oldDate = apt.date() + " " + apt.startTime() + " - " + apt.endTime();
+
+            if (!controller.rescheduleToSlot(id, slot)) {
+                result.setText("Sorry, that time is no longer available. Please choose another.");
+                loadAppointment.run(); // refresh the available times
+                return;
+            }
+
+            String email = Data.getCurrentUserEmail();
+            String name = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "Patient";
+            String newDateStr = slot.date().format(DATE_FMT) + " "
+                    + slot.startTime().format(TIME_FMT) + " - "
+                    + slot.endTime().format(TIME_FMT);
+
+            BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
+            boolean rescheduleDiscreet = commPrefs.rescheduleDiscreet();
+            ReminderTemplateOverrides rescheduleTpl = commPrefs.rescheduleTemplate();
+            boolean hasEmail = email != null && !email.isBlank();
+
+            AsyncNotifier.notifyUser(
+                    dispatcher,
+                    userId,
+                    hasEmail ? new RescheduleConfirmationEmail(
+                            email, name, "APP-" + id, apt.serviceName(), apt.clinicName(),
+                            oldDate, newDateStr, rescheduleDiscreet, rescheduleTpl) : null,
+                    new RescheduleConfirmationNotification(
+                            name, "APP-" + id, apt.serviceName(), apt.clinicName(),
+                            oldDate, newDateStr, rescheduleDiscreet, rescheduleTpl)
+            );
+            // Leave the page whether or not the user has an email address.
+            nav.clearTabStack("booking");
+            nav.goToHome();
         });
 
-        return UI.page(
-                new Label("Appointment ID"), appointmentId,
-                selectorBox,
-                rescheduleBtn,
-                result
-        );
+        VBox page = UI.page();
+        if (!prefilled) {
+            page.getChildren().addAll(idLabel, appointmentId);
+        }
+        VBox currentCard = UI.card(10, currentBox);
+        // No empty card before an appointment is loaded.
+        currentCard.visibleProperty().bind(Bindings.isNotEmpty(currentBox.getChildren()));
+        currentCard.managedProperty().bind(currentCard.visibleProperty());
+        page.getChildren().addAll(currentCard, selectorBox, result, rescheduleBtn);
+        if (currentApt[0] == null && prefilled && result.getText().isEmpty()) {
+            result.setText("No upcoming appointment with that ID was found.");
+        }
+        return page;
     }
 }
