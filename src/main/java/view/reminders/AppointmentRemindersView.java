@@ -54,9 +54,8 @@ public class AppointmentRemindersView {
                 .filter(AppointmentReminderDefaults::hasSavedTemplate);
 
         if (appointments.isEmpty()) {
-            Label empty = UI.muted("No current appointments.");
-            empty.setWrapText(true);
-            listBox.getChildren().add(empty);
+            listBox.getChildren().add(UI.emptyState(UI.ICON_BELL, "No upcoming appointments",
+                    "Book an appointment and you can choose when we remind you about it here."));
         } else {
             for (Appointment appt : appointments) {
                 AppointmentReminder existing = existingReminders.stream()
@@ -78,12 +77,15 @@ public class AppointmentRemindersView {
 
     private static VBox createAppointmentCard(Appointment appt, AppointmentReminder existing, ReminderController controller,
                                              Optional<AppointmentReminderDefaults> defaults) {
-        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm");
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("EEE d MMM, HH:mm", java.util.Locale.UK);
         String dateStr = appt.getAppointmentDateTime().format(dateFmt);
 
         HBox headerRow = UI.reminderCardHeader(appt.getServiceName(), dateStr);
 
-        Label detailLabel = UI.body("At " + appt.getClinicName() + " with " + appt.getDoctorName());
+        // The doctor is not recorded yet ("Clinician" is a placeholder), so only name a real one.
+        String doctor = appt.getDoctorName();
+        boolean namedDoctor = doctor != null && !doctor.isBlank() && !doctor.equalsIgnoreCase("Clinician");
+        Label detailLabel = UI.body(appt.getClinicName() + (namedDoctor ? " with " + doctor : ""));
         detailLabel.setWrapText(true);
         detailLabel.setMaxWidth(Double.MAX_VALUE);
 
@@ -92,7 +94,7 @@ public class AppointmentRemindersView {
                 existing != null ? existing.getCustomMessage() : null,
                 existing != null && existing.isNotify());
 
-        Button saveBtn = UI.backButton("Save Reminder");
+        Button saveBtn = UI.primaryButton("Save reminder");
         Button testEmailBtn = UI.backButton("Send test email");
         Button testNotifBtn = UI.backButton("Preview notification");
         Button resetBtn = UI.backButton("Reset to default");

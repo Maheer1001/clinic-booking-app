@@ -62,7 +62,8 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         sortedHistory.setComparator(getComparator(null));
 
         if (prescriptionsCurrent.isEmpty() && prescriptionsHistory.isEmpty()) {
-            return UI.page(UI.muted("You have no prescriptions."));
+            return UI.page(UI.emptyState(UI.ICON_PILL, "No prescriptions",
+                    "Medicine prescribed by the clinic will be listed here with its dose and course."));
         }
 
         VBox listCurrent = new VBox(10);
@@ -82,18 +83,18 @@ public class TrackingPrescriptionController extends TrackingSectionController {
 
         for (PrescriptionSummary prescription : sortedCurrent) {
             String left = prescription.name();
-            String right = prescription.startDate();
+            String right = TrackingDates.display(prescription.startDate());
             Button button = view.getEntryButton(left, right);
-            button.setOnAction(e -> nav.goToPage(getDetailsPage(prescription), "View Prescription Details", false));
+            button.setOnAction(e -> nav.goToPage(getDetailsPage(prescription), "Prescription", false));
             buttonCurrent.put(prescription, button);
             listCurrent.getChildren().add(button);
         }
 
         for (PrescriptionSummary prescription : sortedHistory) {
             String left = prescription.name();
-            String right = prescription.startDate();
+            String right = TrackingDates.display(prescription.startDate());
             Button button = view.getEntryButton(left, right);
-            button.setOnAction(e -> nav.goToPage(getDetailsPage(prescription), "View Prescription Details", false));
+            button.setOnAction(e -> nav.goToPage(getDetailsPage(prescription), "Prescription", false));
             buttonHistory.put(prescription, button);
             listHistory.getChildren().add(button);
         }
@@ -110,8 +111,8 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         sortedHistory.addListener((ListChangeListener<PrescriptionSummary>) c ->
                 listHistory.getChildren().setAll(sortedHistory.stream().map(buttonHistory::get).toList()));
 
-        HBox current = UI.separator("  Current  ");
-        HBox history = UI.separator("  History  ");
+        HBox current = sectionLabel("CURRENT");
+        HBox history = sectionLabel("PAST");
 
         current.visibleProperty().bind(Bindings.isNotEmpty(filteredCurrent));
         current.managedProperty().bind(current.visibleProperty());
@@ -123,6 +124,7 @@ public class TrackingPrescriptionController extends TrackingSectionController {
 
         TextField search = new TextField();
         search.setPromptText("Search");
+        search.setAccessibleText("Search");
         UI.searchField(search);
 
         ObservableList<String> items = FXCollections.observableArrayList("Date (Newest)", "Date (Oldest)", "Name (A-Z)");
@@ -196,7 +198,7 @@ public class TrackingPrescriptionController extends TrackingSectionController {
                 return getPredicate(searchText, dateFrom, dateTo).test(pres);
             }
         }
-        Button clearButton = UI.clearButton("Clear All");
+        Button clearButton = UI.clearButton("Clear filters");
         clearButton.setOnAction(e -> {from.setValue(null); to.setValue(null); search.clear(); sort.getSelectionModel().clearSelection();});
 
         from.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateFilteredPrescriptions());
@@ -204,14 +206,22 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         search.textProperty().addListener((obs, oldVal, newVal) -> new Update().updateFilteredPrescriptions());
         sort.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateSortedPrescriptions());
 
-        Label noMatches = UI.muted("Nothing matches your search or dates. Try clearing the filters.");
-        noMatches.setWrapText(true);
+        VBox noMatches = UI.emptyState(UI.ICON_SEARCH, "No matches", "Nothing matches your search or dates. Try clearing the filters.");
         noMatches.visibleProperty().bind(Bindings.isEmpty(filteredCurrent).and(Bindings.isEmpty(filteredHistory)));
         noMatches.managedProperty().bind(noMatches.visibleProperty());
 
         ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, current, listCurrent, history, listHistory, noMatches));
         sp.setFitToWidth(true);
         return sp;
+    }
+
+    private static HBox sectionLabel(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("section-label");
+        HBox row = new HBox(l);
+        row.setMaxWidth(Double.MAX_VALUE);
+        row.setPadding(new javafx.geometry.Insets(6, 2, 0, 2));
+        return row;
     }
 
     public Predicate<PrescriptionSummary> getPredicate(String searchText, LocalDate dateFrom, LocalDate dateTo) {
@@ -245,22 +255,26 @@ public class TrackingPrescriptionController extends TrackingSectionController {
     public Node getDetailsPage(TrackingData td) {
         PrescriptionSummary prescription = (PrescriptionSummary) td;
 
-        HBox graphic = (HBox) view.getEntryButton(prescription.name(), prescription.startDate()).getGraphic();
+        HBox graphic = view.getEntryHeader(prescription.name(), prescription.active() ? "Current" : "Finished");
 
-        VBox info = new VBox(10,
-                new VBox(UI.heading("Dosage:"),
-                UI.body(prescription.dosage())),
-                new VBox(UI.heading("Course:"),
-                UI.body(prescription.getCourse())),
-                new VBox(UI.heading("Start Date:"),
-                UI.body(prescription.startDate())),
-                new VBox(UI.heading("End Date:"),
-                UI.body(prescription.endDate() == null || prescription.endDate().isEmpty() ? "Indefinite" : prescription.endDate()))
-        );
+        HBox doseRow = new HBox(16, UI.detail("DOSE", prescription.dosage()), UI.detail("HOW OFTEN", prescription.getCourse()));
+        HBox dateRow = new HBox(16, UI.detail("STARTED", TrackingDates.display(prescription.startDate())),
+                UI.detail("ENDS", prescription.endDate() == null || prescription.endDate().isEmpty()
+                        ? "Ongoing" : TrackingDates.display(prescription.endDate())));
+        for (HBox row : List.of(doseRow, dateRow)) {
+            for (Node n : row.getChildren()) {
+                HBox.setHgrow(n, Priority.ALWAYS);
+                ((VBox) n).setMaxWidth(Double.MAX_VALUE);
+                ((VBox) n).setPrefWidth(1);
+            }
+        }
+        VBox info = new VBox(12, doseRow, dateRow);
 
         List<String> lines = prescription.getInstructionLines();
         if (!lines.isEmpty()) {
-            VBox instructions = new VBox(UI.heading("Instructions:"));
+            Label instructionsLabel = new Label("INSTRUCTIONS");
+            instructionsLabel.getStyleClass().add("detail-label");
+            VBox instructions = new VBox(2, instructionsLabel);
             if (lines.size() != 1) {
                 for (String line : lines) {
                     HBox hbox = bullet(line);
@@ -273,18 +287,13 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         }
 
         if (prescription.active()) {
-            Label bookingReminderLabel = UI.body("Remember to take your prescription on-time.");
-            bookingReminderLabel.setWrapText(true);
-
-            Button bookingReminderButton = UI.shortcutButton("Manage treatment reminders");
+            Button bookingReminderButton = UI.shortcutButton("Dose reminders");
             bookingReminderButton.setOnAction(e -> nav.goToPageNewTab("reminders", new RemindersView(Data.getCurrentUserId()).getRemindersScene("prescriptions"), "Reminders", true));
+            HBox reminder = UI.callout("A reminder makes it easier to take every dose on time.", bookingReminderButton);
 
-            HBox reminder = UI.equalSpacing(new HBox(10, bookingReminderLabel, bookingReminderButton));
-            reminder.getStyleClass().add(UI.PAGE);
-
-            return UI.page(UI.card(10, graphic, info), reminder);
+            return UI.page(UI.card(12, graphic, info), reminder);
         } else {
-            return UI.page(UI.card(10, graphic, info));
+            return UI.page(UI.card(12, graphic, info));
         }
     }
 }

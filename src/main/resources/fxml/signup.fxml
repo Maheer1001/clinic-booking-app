@@ -12,7 +12,7 @@
     <VBox styleClass="auth-heading">
         <Label text="HEALTH TRACKING &amp; APPOINTMENTS" styleClass="auth-brand"/>
         <Label text="Create your account" styleClass="title"/>
-        <Label text="Book appointments and keep track of tests and treatment." styleClass="subtitle" wrapText="true"/>
+        <Label text="Book appointments and keep track of tests and treatment." styleClass="subtitle" wrapText="true" minHeight="-Infinity"/>
     </VBox>
 
     <VBox styleClass="auth-card">

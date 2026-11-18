@@ -29,16 +29,14 @@ public class ServiceSelection {
 
         List<Service> services = clinic.getServices() != null ? clinic.getServices() : List.of();
 
-        Label clinicName = UI.heading("Available services for " + clinic.getName());
-        clinicName.setWrapText(true);
+        Label clinicName = UI.pageHeading("What would you like to book?");
+        Label hint = UI.intro("At " + clinic.getName() + ". Tick one or more services; open one to see what it involves.");
 
         if (services.isEmpty()) {
-            return UI.pageTop(clinicName,
-                    UI.muted("This clinic has no services available to book online. Please choose another clinic."));
+            return UI.pageTop(UI.steps(2, 5, "Service"),
+                    UI.emptyState(UI.ICON_FLASK, "Nothing to book here online",
+                            "This clinic has no services available to book online. Please choose another clinic."));
         }
-
-        Label hint = UI.muted("Tick each service you want to book. Expand a service to see what it involves.");
-        hint.setWrapText(true);
 
         ListView<Service> list = new ListView<>();
         list.setItems(FXCollections.observableArrayList(services));
@@ -54,7 +52,7 @@ public class ServiceSelection {
                 pane.setContent(content);
                 pane.setExpanded(false);
                 checkBox.setWrapText(true);
-                checkBox.setMaxWidth(250);
+                checkBox.setMaxWidth(300);
                 checkBox.setPrefHeight(Region.USE_COMPUTED_SIZE);
                 pane.prefWidthProperty().bind(list.widthProperty().subtract(30));
             }
@@ -75,7 +73,7 @@ public class ServiceSelection {
                     checkBox.setText(service.getName());
                     checkBox.selectedProperty().bindBidirectional(service.selectedProperty());
                     Label description = UI.body(service.getDescription() != null ? service.getDescription() : "");
-                    Label duration = UI.muted("Duration: " + service.getDurationMinutes() + " minutes");
+                    Label duration = UI.muted("About " + service.getDurationMinutes() + " minutes");
                     // setAll, not addAll: cells are reused, so adding would pile up old labels.
                     content.getChildren().setAll(description, duration);
                     setGraphic(pane);
@@ -84,9 +82,11 @@ public class ServiceSelection {
         });
 
         list.setSelectionModel(null);
+        list.setPrefHeight(services.size() * 56 + 16);
+        list.setMinHeight(Region.USE_PREF_SIZE);
         list.setFocusTraversable(false);
 
-        Button next = UI.primaryButton("Confirm Services");
+        Button next = UI.primaryButton("Continue");
 
         // Derived from every service's ticked state, so it is right on arrival too
         // (ticks are kept when the user comes back to this page).
@@ -108,6 +108,10 @@ public class ServiceSelection {
             controller.goToTimeslotsForItems();
         });
 
-        return UI.pageTop(clinicName, hint, list, next);
+        VBox page = UI.pageTop(UI.steps(2, 5, "Service"), new VBox(4, clinicName, hint), list, next);
+        ScrollPane sp = new ScrollPane(page);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        return sp;
     }
 }

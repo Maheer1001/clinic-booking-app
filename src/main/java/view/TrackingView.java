@@ -50,8 +50,12 @@ public class TrackingView {
     public Button getEntryButton(String left, String right) {
         Label leftLabel = new Label(left);
         leftLabel.setAlignment(Pos.CENTER_LEFT);
+        leftLabel.getStyleClass().add("entry-title");
+        leftLabel.setMinWidth(0);
         Label rightLabel = new Label(right);
         rightLabel.setAlignment(Pos.CENTER_RIGHT);
+        rightLabel.getStyleClass().add("entry-meta");
+        rightLabel.setMinWidth(Region.USE_PREF_SIZE);
 
         Region space = new Region();
         HBox.setHgrow(space, Priority.ALWAYS);
@@ -61,7 +65,20 @@ public class TrackingView {
 
         Button button = UI.listButton();
         button.setGraphic(hbox);
+        button.setMaxWidth(Double.MAX_VALUE);
+        button.setAlignment(Pos.CENTER_LEFT);
+        hbox.prefWidthProperty().bind(button.widthProperty().subtract(34));
+        button.setAccessibleText(left + ", " + right);
         return button;
+    }
+
+    /** The header row of a detail card: the entry's name and date, styled larger than in the list. */
+    public HBox getEntryHeader(String left, String right) {
+        HBox header = (HBox) getEntryButton(left, right).getGraphic();
+        header.prefWidthProperty().unbind();
+        header.getStyleClass().add("entry-header");
+        ((Label) header.getChildren().getFirst()).setWrapText(true);
+        return header;
     }
 
     /** Returns a page-style VBox with the entry header and detail content. */

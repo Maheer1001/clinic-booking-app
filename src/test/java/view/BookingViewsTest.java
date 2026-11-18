@@ -48,7 +48,7 @@ class BookingViewsTest {
 
         item.setDate(DAY);
         item.setTime(LocalTime.of(9, 30));
-        assertEquals("Wed 6 Mar 2030, 09:30 - 10:00", Review.describeTime(item));
+        assertEquals("Wed 6 Mar 2030, 09:30 – 10:00", Review.describeTime(item));
     }
 
     @Test

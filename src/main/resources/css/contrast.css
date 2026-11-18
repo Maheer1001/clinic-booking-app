@@ -465,3 +465,20 @@
 .icon {
     -fx-background-color: #000000;
 }
+/* Finishing pass: list cards, detail text and steps in high contrast. */
+.appointment-card, .app-list-btn {
+    -fx-background-color: #000000, #000000, #ffffff;
+    -fx-background-insets: 0, 1, 2 2 2 6;
+}
+.appointment-card:hover, .app-list-btn:hover, .appointment-card:focus-visible, .app-list-btn:focus-visible {
+    -fx-background-color: #000000, #000000, #EDE3F7;
+    -fx-background-insets: 0, 1, 3 3 3 7;
+}
+.app-list-btn .label { -fx-text-fill: #000000; }
+.entry-meta, .appointment-meta, .clinic-cell-meta, .detail-value-strong, .booking-step-label { -fx-text-fill: #3B1A58; }
+.detail-label, .page-intro, .home-summary, .empty-state-body, .booking-step-name, .section-label,
+.appointment-place, .form-label { -fx-text-fill: #000000; }
+.booking-step-bar { -fx-background-color: #BBBBBB; }
+.booking-step-bar.done { -fx-background-color: #000000; }
+.callout, .empty-state-icon { -fx-border-color: #000000; -fx-border-radius: 14px; }
+.chip { -fx-text-fill: #000000; -fx-border-color: #000000; -fx-border-radius: 10px; }

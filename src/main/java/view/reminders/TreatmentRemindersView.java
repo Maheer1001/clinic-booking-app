@@ -55,9 +55,8 @@ public class TreatmentRemindersView {
                 .filter(AppointmentReminderDefaults::hasSavedTemplate);
 
         if (prescriptions.isEmpty()) {
-            Label empty = UI.muted("No current prescriptions.");
-            empty.setWrapText(true);
-            listBox.getChildren().add(empty);
+            listBox.getChildren().add(UI.emptyState(UI.ICON_PILL, "No current prescriptions",
+                    "When the clinic prescribes medicine you can set dose reminders here."));
         } else {
             for (Prescription rx : prescriptions) {
                 PrescriptionReminder existing = existingReminders.stream()
@@ -165,7 +164,7 @@ public class TreatmentRemindersView {
             p.setExpanded(false);
         }
 
-        Button saveBtn = UI.backButton("Save Reminder");
+        Button saveBtn = UI.primaryButton("Save reminder");
         Button testEmailBtn = UI.backButton("Send test email");
         Button testNotifBtn = UI.backButton("Preview notification");
         Button resetBtn = UI.backButton("Reset to default");

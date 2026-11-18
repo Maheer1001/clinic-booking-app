@@ -46,4 +46,16 @@ class MainViewTest {
         assertEquals(1, pageA.getChildren().size(), "building page B must not steal page A's button");
         assertEquals(1, pageB.getChildren().size());
     }
+
+    @Test
+    void summary_describesNextAppointment() {
+        java.time.LocalDate today = java.time.LocalDate.of(2026, 11, 18);
+        var sti = new model.UpcomingAppointmentDetails(1, "19/11/26", "10:00", "10:30", "STI test", "Clinic A", null);
+        var hiv = new model.UpcomingAppointmentDetails(2, "27/11/26", "14:00", "14:15", "HIV test", "Clinic B", null);
+
+        assertEquals("You have no upcoming appointments.", MainView.summary(java.util.List.of(), today));
+        assertEquals("Your STI test is tomorrow at 10:00.", MainView.summary(java.util.List.of(sti), today));
+        assertEquals("Your STI test is tomorrow at 10:00. 2 appointments booked.",
+                MainView.summary(java.util.List.of(sti, hiv), today));
+    }
 }

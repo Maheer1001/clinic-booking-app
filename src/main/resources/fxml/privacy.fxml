@@ -11,7 +11,7 @@
       spacing="12">
 
     <VBox styleClass="auth-heading">
-        <Label text="Privacy Policy" styleClass="subtitle"/>
+        <Label text="Privacy Policy" styleClass="title"/>
         <Label fx:id="statusLabel"
                text="Read to the end to be able to accept this on the sign-up screen."
                wrapText="true"

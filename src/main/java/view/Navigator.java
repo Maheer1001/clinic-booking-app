@@ -72,14 +72,16 @@ public class Navigator {
         Label title = new Label();
         title.getStyleClass().add(UI.TITLE);
         title.setTextOverrun(OverrunStyle.ELLIPSIS);
+        title.setAlignment(Pos.CENTER);
         Button settingsButton = UI.backButton("");
         Button backButton = UI.backButton("");
         settingsButton.getStyleClass().add(HEADER_BTN);
         backButton.getStyleClass().add(HEADER_BTN);
 
-        Region backRegion = icon(BACK_ICON, 30);
-        Region settingsRegion = icon(SETTINGS_ICON, 26);
-        Region exitRegion = icon(EXIT_ICON, 25);
+        // Sized to each glyph's proportions so the three icons look the same weight.
+        Region backRegion = icon(BACK_ICON, 20, 17);
+        Region settingsRegion = icon(SETTINGS_ICON, 20, 20);
+        Region exitRegion = icon(EXIT_ICON, 15, 15);
 
         settingsButton.setGraphic(settingsRegion);
         settingsButton.setAccessibleText("Settings");
@@ -124,13 +126,14 @@ public class Navigator {
         });
     }
 
-    private static Region icon(String svg, double width) {
+    private static Region icon(String svg, double width, double height) {
         SVGPath path = new SVGPath();
         path.setContent(svg);
         Region region = new Region();
         region.setShape(path);
-        region.setPrefSize(width, 20);
-        region.setMaxSize(width, 20);
+        region.setMinSize(width, height);
+        region.setPrefSize(width, height);
+        region.setMaxSize(width, height);
         region.getStyleClass().add("app-btn-icon");
         return region;
     }

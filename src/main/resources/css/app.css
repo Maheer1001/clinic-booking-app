@@ -1213,16 +1213,16 @@
 }
 
 /* ---- Keyboard focus: visible ring on button-like controls (they had none) ---- */
-.app-btn:focused, .primaryBtn:focused, .app-menu-btn:focused, .app-shortcut-btn:focused,
-.app-btn-back:focused, .app-btn-danger:focused, .app-btn-positive:focused, .app-list-btn:focused,
-.app-nav-btn:focused, .app-reminder-tab:focused, .tracking-clear-btn:focused, .appointment-card:focused,
-.alert-agree:focused, .alert-ignore:focused, .secondaryBtn:focused, .secondaryWideBtn:focused {
+.app-btn:focus-visible, .primaryBtn:focus-visible, .app-menu-btn:focus-visible, .app-shortcut-btn:focus-visible,
+.app-btn-back:focus-visible, .app-btn-danger:focus-visible, .app-btn-positive:focus-visible, .app-list-btn:focus-visible,
+.app-nav-btn:focus-visible, .app-reminder-tab:focus-visible, .tracking-clear-btn:focus-visible, .appointment-card:focus-visible,
+.alert-agree:focus-visible, .alert-ignore:focus-visible, .secondaryBtn:focus-visible, .secondaryWideBtn:focus-visible {
     -fx-border-color: -c-accent;
     -fx-border-width: 2px;
     -fx-border-radius: 12px;
     -fx-border-insets: -3px;
 }
-.check-box:focused .box, .radio-button:focused .radio {
+.check-box:focus-visible .box, .radio-button:focus-visible .radio {
     -fx-border-color: -c-accent;
     -fx-border-width: 2px;
     -fx-border-radius: 4px;
@@ -1258,7 +1258,7 @@
     -fx-background-radius: 20px;
 }
 .app-header-btn:pressed { -fx-background-color: -c-tint-strong; }
-.app-header-btn:focused {
+.app-header-btn:focus-visible {
     -fx-border-color: -c-accent;
     -fx-border-width: 2px;
     -fx-border-insets: 0;
@@ -1332,3 +1332,370 @@
 /* ---- Consistency: muted text and inner cards matched to the refreshed palette ---- */
 .app-muted { -fx-text-fill: -c-ink-muted; }
 .app-card-inner { -fx-border-color: -c-line-soft; -fx-background-color: #FAF7FD; }
+
+/* ==========================================================================
+   Finishing pass: dialogs, lists, detail pages, empty states, booking steps
+   ========================================================================== */
+
+/* Page content starts at the top; vertically centred pages left a gap above short content. */
+.app-page { -fx-alignment: top-center; }
+
+/* In-page primary actions span the column, like the login and booking buttons. */
+.app-btn { -fx-max-width: infinity; -fx-pref-height: 44px; -fx-padding: 0 16 0 16; }
+.app-btn-back {
+    -fx-font-size: 14px;
+    -fx-pref-height: 40px;
+    -fx-padding: 0 14 0 14;
+}
+.app-btn-danger {
+    -fx-background-color: #ffffff;
+    -fx-background-insets: 0;
+    -fx-background-radius: 10px;
+    -fx-border-color: #E8A9A9;
+    -fx-border-radius: 10px;
+    -fx-text-fill: #A3201F;
+    -fx-pref-height: 40px;
+    -fx-padding: 0 14 0 14;
+}
+.app-btn-danger:hover {
+    -fx-background-color: #FDF1F1;
+    -fx-background-insets: 0;
+    -fx-background-radius: 10px;
+    -fx-border-color: #D77C7C;
+}
+.app-btn-danger:pressed { -fx-background-color: -c-danger-tint; }
+.app-btn-positive { -fx-background-radius: 10px; -fx-border-radius: 10px; -fx-pref-height: 40px; }
+
+/* ---- Header: centred title ---- */
+.app-header { -fx-padding: 10 12 10 12; }
+.app-title { -fx-alignment: center; -fx-text-alignment: center; }
+
+/* ---- Dialogs (confirmations, default clinic, warnings) ---- */
+.dialog-pane {
+    -fx-background-color: #ffffff;
+    -fx-padding: 0;
+}
+.dialog-pane > .header-panel {
+    -fx-background-color: #ffffff;
+    -fx-padding: 22 24 2 24;
+    -fx-border-width: 0;
+}
+.dialog-pane > .header-panel .label {
+    -fx-font-size: 18px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+.dialog-pane > .content {
+    -fx-padding: 8 24 8 24;
+}
+.dialog-pane:no-header > .content {
+    -fx-padding: 24 24 8 24;
+}
+.dialog-pane > .content.label, .dialog-pane > .content .label {
+    -fx-font-size: 14px;
+    -fx-text-fill: #4A4256;
+    -fx-line-spacing: 2px;
+}
+.dialog-pane > .button-bar > .container {
+    -fx-padding: 14 24 22 24;
+}
+.dialog-pane .button {
+    -fx-pref-height: 40px;
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+    -fx-padding: 0 16 0 16;
+    -fx-background-radius: 10px;
+    -fx-border-radius: 10px;
+}
+.dialog-pane .button.alert-agree {
+    -fx-background-color: -c-primary;
+    -fx-background-insets: 0;
+    -fx-text-fill: #ffffff;
+}
+.dialog-pane .button.alert-agree:hover { -fx-background-color: -c-primary-hover; }
+.dialog-pane .button.alert-ignore {
+    -fx-background-color: #ffffff;
+    -fx-background-insets: 0;
+    -fx-border-color: -c-line;
+    -fx-text-fill: -c-primary;
+}
+.dialog-pane .button.alert-ignore:hover { -fx-background-color: -c-tint; }
+.dialog-pane .button.app-btn-danger {
+    -fx-background-color: #B3261E;
+    -fx-border-color: transparent;
+    -fx-text-fill: #ffffff;
+}
+.dialog-pane .button.app-btn-danger:hover { -fx-background-color: #8C1D18; }
+
+/* ---- In-app notification popups ---- */
+.app-notification {
+    -fx-background-color: #ffffff;
+    -fx-border-color: -c-accent transparent transparent transparent;
+    -fx-border-width: 4 0 0 0;
+    -fx-padding: 18 20 18 20;
+}
+.app-notification .app-card {
+    -fx-effect: null;
+    -fx-background-color: #FAF7FD;
+    -fx-border-color: -c-line-soft;
+    -fx-background-radius: 12px;
+    -fx-border-radius: 12px;
+}
+.app-notification .app-btn { -fx-max-width: -1; -fx-pref-height: 38px; -fx-font-size: 14px; }
+
+/* ---- Pickers and dropdowns ---- */
+.choice-box {
+    -fx-background-color: #ffffff;
+    -fx-background-insets: 0;
+    -fx-background-radius: 10px;
+    -fx-border-color: -c-line;
+    -fx-border-radius: 10px;
+    -fx-padding: 4 6 4 10;
+}
+.choice-box:hover {
+    -fx-background-color: -c-tint;
+    -fx-background-insets: 0;
+    -fx-background-radius: 10px;
+}
+.choice-box > .label { -fx-text-fill: -c-ink; -fx-font-weight: 600; }
+.choice-box > .open-button > .arrow { -fx-background-color: -c-primary; }
+.date-picker-popup {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(30, 16, 48, 0.18), 16, 0, 0, 4);
+}
+.date-picker-popup > .month-year-pane { -fx-background-color: #ffffff; -fx-background-radius: 12 12 0 0; }
+.date-picker-popup .day-cell { -fx-background-color: transparent; -fx-text-fill: -c-ink; -fx-font-weight: 700; }
+.date-picker-popup .day-cell:hover { -fx-background-color: -c-tint-strong; }
+.date-picker-popup .day-cell:disabled { -fx-opacity: 0.3; -fx-font-weight: 400; }
+.date-picker-popup .today { -fx-border-color: -c-accent; -fx-border-radius: 6px; }
+.date-picker-popup .selected { -fx-background-color: -c-primary; -fx-background-radius: 6px; -fx-text-fill: #ffffff; }
+.date-picker-popup .day-name-cell { -fx-text-fill: -c-ink-muted; -fx-font-size: 12px; }
+
+/* ---- Home: greeting and appointment cards ---- */
+.home-greeting {
+    -fx-font-size: 22px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+.home-summary {
+    -fx-font-size: 14px;
+    -fx-text-fill: -c-ink-muted;
+}
+/* Accent strip drawn as a background layer so it follows the rounded corners. */
+.appointment-card, .app-list-btn {
+    -fx-background-color: -c-line-soft, -c-accent, #ffffff;
+    -fx-background-insets: 0, 1, 1 1 1 5;
+    -fx-background-radius: 12px, 11px, 0 11px 11px 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 12 14 12 18;
+    -fx-effect: null;
+}
+.appointment-card:hover, .app-list-btn:hover {
+    -fx-background-color: #D9C8EE, -c-accent, #F8F3FD;
+    -fx-background-insets: 0, 1, 1 1 1 5;
+    -fx-background-radius: 12px, 11px, 0 11px 11px 0;
+    -fx-cursor: hand;
+}
+.appointment-card:pressed, .app-list-btn:pressed {
+    -fx-background-color: #D9C8EE, -c-primary, -c-tint-strong;
+}
+.appointment-card:focus-visible, .app-list-btn:focus-visible {
+    -fx-border-color: -c-accent;
+    -fx-border-width: 2px;
+    -fx-border-radius: 14px;
+    -fx-border-insets: -3px;
+}
+.app-list-btn { -fx-pref-width: -1; -fx-pref-height: -1; -fx-min-height: 52px; }
+.app-list-btn .label { -fx-text-fill: -c-ink; -fx-font-size: 14px; }
+.entry-title { -fx-font-weight: 800; -fx-text-fill: -c-ink; -fx-font-size: 15px; }
+.entry-meta { -fx-font-weight: 700; -fx-text-fill: -c-primary; -fx-font-size: 13px; }
+.app-list-btn .entry-meta { -fx-text-fill: -c-primary; -fx-font-size: 13px; }
+.app-list-btn .entry-title { -fx-font-size: 15px; }
+.entry-header {
+    -fx-padding: 0 0 10 0;
+    -fx-border-color: transparent transparent -c-line-soft transparent;
+}
+.entry-header .entry-title { -fx-font-size: 18px; }
+
+/* ---- Detail pages: small label above each value ---- */
+.detail-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+.detail-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -c-ink-muted;
+}
+.detail-value {
+    -fx-font-size: 15px;
+    -fx-text-fill: -c-ink;
+}
+.detail-value-strong {
+    -fx-font-size: 15px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -c-primary;
+}
+
+/* Callout row: a short tip beside a shortcut button (tracking details). */
+.callout {
+    -fx-background-color: #FAF7FD;
+    -fx-background-radius: 14px;
+    -fx-border-color: -c-line-soft;
+    -fx-border-radius: 14px;
+    -fx-padding: 14px;
+    -fx-alignment: center-left;
+}
+.callout .app-body { -fx-text-fill: #4A4256; }
+.app-shortcut-btn { -fx-font-weight: 700; -fx-padding: 10 12 10 12; -fx-effect: null; }
+
+/* ---- Tracking filters ---- */
+.tracking-search { -fx-text-fill: -c-ink; -fx-pref-height: 40px; }
+.tracking-sort, .tracking-date { -fx-pref-height: 40px; }
+.tracking-clear-btn {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-text-fill: -c-primary;
+    -fx-font-weight: 700;
+    -fx-font-size: 13px;
+    -fx-padding: 4 8 4 8;
+    -fx-pref-width: -1;
+}
+.tracking-clear-btn:hover {
+    -fx-background-color: -c-tint;
+    -fx-background-insets: 0;
+    -fx-background-radius: 8px;
+}
+.section-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink-muted;
+}
+
+/* ---- Empty states (no bookings, results, reminders, matches) ---- */
+.empty-state {
+    -fx-alignment: center;
+    -fx-padding: 36 20 36 20;
+    -fx-spacing: 6px;
+}
+.empty-state-icon {
+    -fx-background-color: -c-tint-strong;
+    -fx-background-radius: 28px;
+    -fx-min-width: 56px;
+    -fx-min-height: 56px;
+    -fx-max-width: 56px;
+    -fx-max-height: 56px;
+}
+.empty-state-glyph { -fx-background-color: -c-primary; }
+.empty-state-body {
+    -fx-font-size: 14px;
+    -fx-text-fill: -c-ink-muted;
+    -fx-text-alignment: center;
+}
+
+/* ---- Booking: step indicator ---- */
+.booking-steps { -fx-spacing: 6px; -fx-padding: 0 0 2 0; }
+.booking-step-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-accent;
+}
+.booking-step-name {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -c-ink-muted;
+}
+.booking-step-bar {
+    -fx-background-color: -c-tint-strong;
+    -fx-background-radius: 3px;
+    -fx-pref-height: 6px;
+    -fx-min-height: 6px;
+    -fx-max-height: 6px;
+}
+.booking-step-bar.done { -fx-background-color: -c-accent; }
+.page-intro {
+    -fx-font-size: 14px;
+    -fx-text-fill: -c-ink-muted;
+}
+.page-heading {
+    -fx-font-size: 17px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+
+/* ---- Clinic search ---- */
+.clinic-cell-name { -fx-font-size: 15px; -fx-font-weight: 800; -fx-text-fill: -c-ink; }
+.clinic-cell-meta { -fx-font-size: 13px; -fx-font-weight: 700; -fx-text-fill: -c-primary; }
+.clinic-cell-detail { -fx-font-size: 13px; -fx-text-fill: #4A4256; }
+.clinic-list .list-cell { -fx-padding: 3 2 3 2; }
+.clinic-list .titled-pane > .title { -fx-padding: 10 12 10 12; }
+.clinic-list .list-cell:selected .titled-pane > .title {
+    -fx-background-color: -c-accent, #F1E7FB;
+    -fx-background-insets: 0, 0 0 0 4;
+}
+.chip {
+    -fx-background-color: #EEF6F0;
+    -fx-background-radius: 10px;
+    -fx-padding: 2 8 2 8;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #1B5E20;
+}
+
+/* ---- Booking confirmed ---- */
+.success-badge {
+    -fx-background-color: #E6F4EA;
+    -fx-background-radius: 32px;
+    -fx-min-width: 64px;
+    -fx-min-height: 64px;
+    -fx-max-width: 64px;
+    -fx-max-height: 64px;
+}
+.success-glyph { -fx-background-color: #1B7A3A; }
+.success-title {
+    -fx-font-size: 22px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+
+/* ---- Settings ---- */
+.settings-section-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -c-ink;
+}
+.form-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #4A4256;
+}
+
+/* ---- Reminder hub ---- */
+.app-reminder-tab { -fx-font-weight: 700; }
+
+.app-btn-icon { -fx-background-insets: 0; }
+
+/* Keyboard focus on cards: an inner outline (an outer ring was clipped by the scroll area). */
+.appointment-card:focus-visible, .app-list-btn:focus-visible {
+    -fx-background-color: -c-accent, -c-accent, #F8F3FD;
+    -fx-background-insets: 0, 0, 2 2 2 6;
+    -fx-background-radius: 12px, 12px, 0 10px 10px 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-insets: 0;
+}
+.dialog-pane .button:default {
+    -fx-background-color: -c-primary;
+    -fx-background-insets: 0;
+    -fx-text-fill: #ffffff;
+}
+.dialog-pane .button:default:hover { -fx-background-color: -c-primary-hover; }
+.dialog-pane .button:focus-visible {
+    -fx-border-color: -c-accent;
+    -fx-border-width: 2px;
+    -fx-border-insets: -3px;
+    -fx-border-radius: 12px;
+}

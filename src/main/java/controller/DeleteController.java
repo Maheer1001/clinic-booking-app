@@ -67,12 +67,6 @@ public class DeleteController {
     }
 
     private void styleDialog(Alert alert) {
-        DialogPane dialogPane = alert.getDialogPane();
-        if (Data.getScene() != null) {
-            dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-        }
-        Stage stage = (Stage) dialogPane.getScene().getWindow();
-        stage.getIcons().add(new Image(getClass().getResource("/icons/safe.png").toExternalForm()));
-        dialogPane.setGraphic(null);
+        UI.styleDialog(alert, Data.getScene());
     }
 }

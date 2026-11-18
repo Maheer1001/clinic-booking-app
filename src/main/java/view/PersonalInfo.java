@@ -6,7 +6,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -101,43 +101,49 @@ public class PersonalInfo {
             controller.goToReview();
         });
 
-        GridPane g = new GridPane();
-        g.setVgap(10);
-        g.setHgap(10);
-
-        g.addRow(0, new Label("First Name:"), first);
-        g.addRow(1, new Label("Last Name:"), last);
-        g.addRow(2, new Label("DOB:"), dob);
-        g.addRow(3, new Label("Phone:"), phone);
-        //g.addRow(4, new Label("Email:"), email);
-        g.addRow(5, new Label("Gender:"), gender);
-        g.addRow(6, new Label("Sexuality:"), sexuality);
-        g.addRow(7, new Label("Disabilities:"), disabilities);
-        g.addRow(8, new Label("Your Notes:"), reason);
-        g.setAlignment(Pos.CENTER);
-
-        ColumnConstraints labelCol = new ColumnConstraints();
-        labelCol.setHgrow(Priority.NEVER);
-        labelCol.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE); // never truncate labels
-        ColumnConstraints inputCol = new ColumnConstraints();
-        inputCol.setHgrow(Priority.ALWAYS);
-        inputCol.setFillWidth(true);
-        g.getColumnConstraints().addAll(labelCol, inputCol);
-
-        Label l = UI.muted("Optional details help the clinic arrange any support you need before your appointment.");
-        l.setWrapText(true);
-
-        reason.setPrefWidth(first.getWidth());
-        GridPane.setHgrow(dob, Priority.ALWAYS);
+        first.setAccessibleText("First name");
+        last.setAccessibleText("Last name");
+        dob.setAccessibleText("Date of birth");
+        phone.setAccessibleText("Phone");
+        gender.setAccessibleText("Gender, optional");
+        sexuality.setAccessibleText("Sexuality, optional");
+        disabilities.setAccessibleText("Accessibility needs, optional");
+        reason.setAccessibleText("Notes for your clinician, optional");
         dob.setMaxWidth(Double.MAX_VALUE);
+        dob.setPromptText("DD/MM/YYYY");
+        disabilities.setPromptText("Optional, e.g. step-free access");
 
-        VBox box = new VBox(UI.pageTop(g, l, next));
-        box.setPadding(new Insets(0, 25, 0, 25));
+        HBox names = new HBox(10, field("First name", first), field("Last name", last));
+        for (Node n : names.getChildren()) HBox.setHgrow(n, Priority.ALWAYS);
+        HBox about = new HBox(10, field("Date of birth", dob), field("Phone", phone));
+        for (Node n : about.getChildren()) HBox.setHgrow(n, Priority.ALWAYS);
+        HBox identity = new HBox(10, field("Gender", gender), field("Sexuality", sexuality));
+        for (Node n : identity.getChildren()) HBox.setHgrow(n, Priority.ALWAYS);
 
-        ScrollPane sp = new ScrollPane(box);
+        VBox form = UI.card(12, names, about, identity,
+                field("Accessibility needs", disabilities),
+                field("Anything your clinician should know?", reason));
+
+        Label l = UI.intro("Optional details help the clinic arrange any support you need. Only the clinic sees them.");
+        next.setText("Review booking");
+
+        VBox page = UI.pageTop(UI.steps(4, 5, "Your details"), form, l, next);
+        ScrollPane sp = new ScrollPane(page);
         sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         return sp;
+    }
+
+    /** A form field with its label above it. */
+    private static VBox field(String label, Control input) {
+        Label l = new Label(label);
+        l.getStyleClass().add("form-label");
+        l.setLabelFor(input);
+        input.setMaxWidth(Double.MAX_VALUE);
+        VBox box = new VBox(4, l, input);
+        box.setMaxWidth(Double.MAX_VALUE);
+        return box;
     }
 }
 

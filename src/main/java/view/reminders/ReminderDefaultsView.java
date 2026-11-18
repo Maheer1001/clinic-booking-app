@@ -118,14 +118,19 @@ public class ReminderDefaultsView {
             notification.show();
         });
 
-        HBox bottomButtons = new HBox(8, testEmailBtn, testNotifBtn);
+        testEmailBtn.setMaxWidth(Double.MAX_VALUE);
+        testNotifBtn.setMaxWidth(Double.MAX_VALUE);
+        VBox bottomButtons = new VBox(8, testEmailBtn, testNotifBtn);
         bottomButtons.setAlignment(Pos.CENTER);
 
         VBox bottom = new VBox(10, bottomButtons, saveBtn, saveConfirm);
         bottom.setAlignment(Pos.CENTER);
         bottom.setMaxWidth(Double.MAX_VALUE);
 
-        return UI.page(
+        // Already inside a settings card, so no extra page padding (it squeezed the dropdowns).
+        VBox content = new VBox(15);
+        content.setPadding(new javafx.geometry.Insets(4, 0, 0, 0));
+        content.getChildren().addAll(
                 blurb,
                 form.getNotifyAndDiscreetRow(),
                 form.getTimePane(),
@@ -133,5 +138,6 @@ public class ReminderDefaultsView {
                 form.getNotifPane(),
                 bottom
         );
+        return content;
     }
 }

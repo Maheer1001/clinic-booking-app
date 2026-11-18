@@ -59,7 +59,8 @@ public class TrackingTestController extends TrackingSectionController {
         sortedTests.setComparator(getComparator(null));
 
         if (tests.isEmpty()) {
-            return UI.page(UI.muted("You have no test results yet. Results added by the clinic will appear here."));
+            return UI.page(UI.emptyState(UI.ICON_FLASK, "No test results yet",
+                    "When the clinic adds a result it appears here, and we'll let you know."));
         }
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
@@ -70,7 +71,7 @@ public class TrackingTestController extends TrackingSectionController {
             String left = test.testType();
             String right = TrackingDates.display(test.testDate());
             Button button = view.getEntryButton(left, right);
-            button.setOnAction(e -> nav.goToPage(getDetailsPage(test), "View Test Details", false));
+            button.setOnAction(e -> nav.goToPage(getDetailsPage(test), "Test result", false));
             buttonMap.put(test, button);
             list.getChildren().add(button);
         }
@@ -83,6 +84,7 @@ public class TrackingTestController extends TrackingSectionController {
 
         TextField search = new TextField();
         search.setPromptText("Search");
+        search.setAccessibleText("Search");
         UI.searchField(search);
 
         ObservableList<String> items = FXCollections.observableArrayList("Date (Newest)", "Date (Oldest)", "Name (A-Z)");
@@ -149,7 +151,7 @@ public class TrackingTestController extends TrackingSectionController {
             }
         }
 
-        Button clearButton = UI.clearButton("Clear All");
+        Button clearButton = UI.clearButton("Clear filters");
         clearButton.setOnAction(e -> {from.setValue(null); to.setValue(null); search.clear(); sort.getSelectionModel().clearSelection();});
 
         from.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateFilteredTestEntries());
@@ -186,9 +188,9 @@ public class TrackingTestController extends TrackingSectionController {
     public Node getDetailsPage(TrackingData td) {
         Test test = (Test) td;
 
-        HBox graphic = (HBox) view.getEntryButton(test.testType(), TrackingDates.display(test.testDate())).getGraphic();
+        HBox graphic = view.getEntryHeader(test.testType(), TrackingDates.display(test.testDate()));
 
-        Label title = UI.heading("Results:");
+        Label title = UI.heading("Results");
         VBox resultsInfo = new VBox(6, title);
 
         boolean isPositive = false;
@@ -207,38 +209,28 @@ public class TrackingTestController extends TrackingSectionController {
         VBox info = new VBox(10, resultsInfo);
 
         if (test.isTreatment()) {
-            VBox treatmentInfo = new VBox(UI.heading("Treatment:"), UI.body(test.treatment()));
+            VBox treatmentInfo = UI.detail("TREATMENT", test.treatment());
             info.getChildren().add(treatmentInfo);
         }
         if (test.isClinicianNotes()) {
-            VBox notesInfo = new VBox(UI.heading("Clinician Notes:"), UI.body(test.clinicianNotes()));
+            VBox notesInfo = UI.detail("CLINICIAN NOTES", test.clinicianNotes());
             info.getChildren().add(notesInfo);
         }
 
-        Label bookingReminderLabel = UI.body("Keep on top of your sexual health by booking regular appointments.");
-        bookingReminderLabel.setWrapText(true);
-
-        Button bookingReminderButton = UI.shortcutButton("Manage booking reminders");
+        Button bookingReminderButton = UI.shortcutButton("Check-up reminders");
         bookingReminderButton.setOnAction(e -> nav.goToPageNewTab("reminders", new RemindersView(Data.getCurrentUserId()).getRemindersScene("booking"), "Reminders", true));
-
-        HBox reminder = UI.equalSpacing(new HBox(10, bookingReminderLabel, bookingReminderButton));
-        reminder.getStyleClass().add(UI.PAGE);
+        HBox reminder = UI.callout("Regular check-ups keep you on top of your sexual health.", bookingReminderButton);
 
         if (isPositive) {
             BookingController bc = new BookingController(nav);
 
-            Label newBookingLabel = UI.body("Remember to book a follow up appointment to retest yourself.");
-            newBookingLabel.setWrapText(true);
+            Button newBookingButton = UI.shortcutButton("Book a retest");
+            newBookingButton.setOnAction(e -> {nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Find a clinic", false); nav.clearTabStack("booking");});
+            HBox booking = UI.callout("A positive result usually needs a retest. Book a follow-up when you are ready.", newBookingButton);
 
-            Button newBookingButton = UI.shortcutButton("Make new booking");
-            newBookingButton.setOnAction(e -> {nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Select Clinic", false); nav.clearTabStack("booking");});
-
-            HBox booking = UI.equalSpacing(new HBox(10, newBookingLabel, newBookingButton));
-            booking.getStyleClass().add(UI.PAGE);
-
-            return withTrackingStyles(UI.page(UI.card(10, graphic, info), new VBox(booking, reminder)));
+            return withTrackingStyles(UI.page(UI.card(12, graphic, info), booking, reminder));
         } else {
-            return withTrackingStyles(UI.page(UI.card(10, graphic, info), reminder));
+            return withTrackingStyles(UI.page(UI.card(12, graphic, info), reminder));
         }
     }
 

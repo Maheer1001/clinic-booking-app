@@ -153,5 +153,11 @@ class BookingControllerPromptTest {
         BorderPane root = nav.getRoot();
         assertEquals(nav.lastPage, root.getCenter());
     }
-}
 
+    @Test
+    void clinicMeta_showsDistanceOnlyAfterASearch() {
+        Clinic clinic = new Clinic("Clinic 1", "Addr", "SO17 2FW", "123", List.of(), new Coordinate(0, 0), List.of());
+        assertEquals("SO17 2FW", BookingController.clinicMeta(clinic, null));
+        assertEquals("1.3 km away  ·  SO17 2FW", BookingController.clinicMeta(clinic, 1.27));
+    }
+}

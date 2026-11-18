@@ -1,5 +1,7 @@
 package view;
 
+import javafx.scene.layout.Region;
+
 import app.Data;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -51,11 +53,11 @@ public class AccessibilitySettingsView {
             if (!changing) settings.setTextSize(fromSliderValue(textSizeSlider.getValue()));
         });
 
-        HBox sizeRow = new HBox(20, new Label("Text Size: "), textSizeSlider);
+        HBox sizeRow = new HBox(20, formLabel("Text size"), textSizeSlider);
         sizeRow.setAlignment(Pos.CENTER_LEFT);
-        HBox contrastRow = new HBox(20, new Label("High Contrast: "), contrastSwitch);
+        HBox contrastRow = new HBox(20, formLabel("High contrast"), contrastSwitch);
         contrastRow.setAlignment(Pos.CENTER_LEFT);
-        HBox boldRow = new HBox(20, new Label("Bold Text: "), boldTextSwitch);
+        HBox boldRow = new HBox(20, formLabel("Bold text"), boldTextSwitch);
         boldRow.setAlignment(Pos.CENTER_LEFT);
 
         Label note = UI.muted("Changes apply straight away and are saved to your account.");
@@ -87,5 +89,12 @@ public class AccessibilitySettingsView {
             case LARGE -> "Large";
             default -> "Default";
         };
+    }
+
+    private static Label formLabel(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("form-label");
+        l.setMinWidth(Region.USE_PREF_SIZE);
+        return l;
     }
 }

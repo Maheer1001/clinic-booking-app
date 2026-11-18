@@ -18,8 +18,10 @@ import service.AsyncNotifier;
 import service.email.CancellationEmail;
 import view.notification.CancellationNotification;
 import view.reminders.ReminderDefaultsView;
+import view.ui.Dates;
 import view.ui.UI;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class MainView {
@@ -30,7 +32,7 @@ public class MainView {
     private final ToggleButton trackingButton = UI.navButton("Tracking");
     private final ToggleButton remindersButton = UI.navButton("Reminders");
     /** Entry point for per-user default appointment reminder configuration (behaviour can be moved later). */
-    private final Button deleteUser = UI.dangerButton("Delete User");
+    private final Button deleteUser = UI.dangerButton("Delete account");
     private final Button logOutButton = UI.menuButton("Log Out");
 
     public ToggleButton getBookingButton() {return bookingButton;}
@@ -70,21 +72,17 @@ public class MainView {
         List<UpcomingAppointmentDetails> appointments = controller.getUpcomingAppointments();
 
         VBox list = new VBox(10);
+        LocalDate today = LocalDate.now();
 
         if (appointments == null || appointments.isEmpty()) {
-            Label emptyTitle = new Label("Nothing booked yet");
-            emptyTitle.getStyleClass().add("empty-state-title");
-            Label emptyBody = UI.muted("Book a test, consultation or treatment at a clinic near you.");
-            emptyBody.setWrapText(true);
-            VBox empty = new VBox(6, emptyTitle, emptyBody);
-            empty.getStyleClass().add("empty-state");
-            list.getChildren().add(empty);
+            list.getChildren().add(UI.emptyState(UI.ICON_CALENDAR, "Nothing booked yet",
+                    "Book a test, consultation or treatment at a clinic near you. It takes about a minute."));
         } else {
             for (UpcomingAppointmentDetails apt : appointments) {
 
                 Label service = new Label(apt.serviceName());
                 service.getStyleClass().add("appointment-title");
-                Label when = new Label(apt.date() + "  ·  " + apt.startTime() + " – " + apt.endTime());
+                Label when = new Label(Dates.upcoming(apt.date(), today) + "  ·  " + Dates.timeRange(apt.startTime(), apt.endTime()));
                 when.getStyleClass().add("appointment-meta");
                 Label where = new Label(apt.clinicName());
                 where.getStyleClass().add("appointment-place");
@@ -95,13 +93,15 @@ public class MainView {
                 btn.getStyleClass().add("appointment-card");
                 btn.setMaxWidth(Double.MAX_VALUE);
                 btn.setAlignment(Pos.CENTER_LEFT);
+                btn.setAccessibleText(apt.serviceName() + ", " + Dates.full(Dates.parseStored(apt.date()))
+                        + " at " + apt.startTime() + ", " + apt.clinicName() + ". Open details");
 
                 int appId = apt.appId();
 
                 btn.setOnAction(e ->
                         nav.goToPage(
                                 getDetailsPage(nav, controller, dispatcher, appId),
-                                "Appointment details",
+                                "Appointment",
                                 false
                         )
                 );
@@ -113,6 +113,7 @@ public class MainView {
         ScrollPane scroll = new ScrollPane(list);
         scroll.setFitToWidth(true);
         scroll.setPannable(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
         Label heading = new Label("Upcoming appointments");
@@ -122,7 +123,7 @@ public class MainView {
         VBox bordered = UI.card(12, heading, scroll, bookButton);
         VBox.setVgrow(bordered, Priority.ALWAYS);
 
-        VBox root = new VBox(bordered);
+        VBox root = new VBox(14, greeting(appointments, today), bordered);
         root.getStyleClass().add(UI.PAGE);
 
         return root;
@@ -142,22 +143,21 @@ public class MainView {
         }
 
         UpcomingAppointmentDetails apt = aptOpt.get();
+        LocalDate date = Dates.parseStored(apt.date());
 
-        Label clinic = UI.body("Clinic: " + apt.clinicName());
-        Label service = UI.body("Service: " + apt.serviceName());
-        Label dateTime = UI.body("Date: " +
-                apt.date() + " " +
-                apt.startTime() + " - " +
-                apt.endTime());
-
-        VBox notesBox = new VBox(5);
-
+        VBox card = UI.card(14, UI.detailTitle(apt.serviceName()));
+        String countdown = Dates.countdown(date, LocalDate.now());
+        if (!countdown.isEmpty()) {
+            Label chip = new Label(countdown.substring(0, 1).toUpperCase() + countdown.substring(1));
+            chip.getStyleClass().add("chip");
+            card.getChildren().add(chip);
+        }
+        card.getChildren().addAll(
+                UI.detail("WHEN", (date != null ? Dates.full(date) : apt.date()) + ", " + Dates.timeRange(apt.startTime(), apt.endTime())),
+                UI.detail("CLINIC", apt.clinicName()));
         List<String> notes = apt.getNotesLines();
         if (!notes.isEmpty()) {
-            notesBox.getChildren().add(UI.heading("Your Notes:"));
-            for (String line : notes) {
-                notesBox.getChildren().add(UI.body(line));
-            }
+            card.getChildren().add(UI.detail("YOUR NOTES", String.join("\n", notes)));
         }
 
         Button reschedule = UI.primaryButton("Reschedule");
@@ -229,14 +229,7 @@ public class MainView {
             nav.goToHome();
         });
 
-        return UI.page(UI.card(8,
-                        clinic,
-                        service,
-                        dateTime,
-                        notesBox),
-                reschedule,
-                cancel
-        );
+        return UI.page(card, reschedule, cancel);
     }
 
 
@@ -245,13 +238,12 @@ public class MainView {
         ButtonType keep = new ButtonType("Keep it", ButtonBar.ButtonData.CANCEL_CLOSE);
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "", cancelIt, keep);
         alert.setTitle("Cancel appointment");
-        alert.setHeaderText("Cancel " + apt.serviceName() + "?");
-        alert.setContentText(apt.date() + " at " + apt.startTime() + ", " + apt.clinicName());
-        alert.setGraphic(null);
+        alert.setHeaderText("Cancel your " + apt.serviceName() + "?");
+        LocalDate date = Dates.parseStored(apt.date());
+        alert.setContentText((date != null ? Dates.full(date) : apt.date()) + " at " + apt.startTime()
+                + "\n" + apt.clinicName() + "\n\nThe time will be released and you will get a cancellation email.");
+        UI.styleDialog(alert, Data.getScene());
         DialogPane pane = alert.getDialogPane();
-        if (Data.getScene() != null) {
-            pane.getStylesheets().addAll(Data.getScene().getStylesheets());
-        }
         pane.lookupButton(cancelIt).getStyleClass().add(UI.BTN_DANGER);
         pane.lookupButton(keep).getStyleClass().add(UI.ALERT_IGNORE);
         // Default to the safe choice so Enter does not cancel.
@@ -262,16 +254,54 @@ public class MainView {
 
     public Button getQuickBookButton() { return quickBookButton; }
 
-    public Node getSettingsScene() {
-        Label accountLabel = UI.heading("Account Settings");
-        Node accountSettings = AccountView.getPage(Data.getCurrentUserId());
-        VBox account = UI.card(5, accountLabel, accountSettings, UI.page(copyOf(deleteUser)));
+    private static Label sectionTitle(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("settings-section-title");
+        return l;
+    }
 
-        Label accessibilityLabel = UI.heading("Accessibility Settings");
+    /** "Hi Alex" and a one-line summary of what is coming up. */
+    static VBox greeting(List<UpcomingAppointmentDetails> appointments, LocalDate today) {
+        model.User user = Data.getCurrentUser();
+        String first = user != null && user.firstName() != null && !user.firstName().isBlank() ? user.firstName().trim() : null;
+        Label hello = new Label(first != null ? "Hi " + first : "Welcome");
+        hello.getStyleClass().add("home-greeting");
+        Label summary = new Label(summary(appointments, today));
+        summary.getStyleClass().add("home-summary");
+        summary.setWrapText(true);
+        summary.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        VBox box = new VBox(2, hello, summary);
+        box.setPadding(new Insets(0, 4, 0, 4));
+        return box;
+    }
+
+    /** One line under the greeting, e.g. "Your STI test is tomorrow at 10:00. 2 appointments booked." */
+    static String summary(List<UpcomingAppointmentDetails> appointments, LocalDate today) {
+        if (appointments == null || appointments.isEmpty()) {
+            return "You have no upcoming appointments.";
+        }
+        UpcomingAppointmentDetails next = appointments.getFirst();
+        String when = Dates.countdown(Dates.parseStored(next.date()), today);
+        String nextLine = when.isEmpty() ? "Your next appointment is " + next.serviceName() + "."
+                : "Your " + next.serviceName() + " is " + when + " at " + next.startTime() + ".";
+        if (appointments.size() == 1) return nextLine;
+        return nextLine + " " + appointments.size() + " appointments booked.";
+    }
+
+    public Node getSettingsScene() {
+        Label accountLabel = sectionTitle("Account");
+        Node accountSettings = AccountView.getPage(Data.getCurrentUserId());
+        Button delete = copyOf(deleteUser);
+        VBox deleteBox = new VBox(delete);
+        deleteBox.setAlignment(Pos.CENTER);
+        deleteBox.setPadding(new Insets(6, 0, 4, 0));
+        VBox account = UI.card(5, accountLabel, accountSettings, deleteBox);
+
+        Label accessibilityLabel = sectionTitle("Accessibility");
         Node accessibilitySettings = AccessibilitySettingsView.getPage();
         VBox accessibility = UI.card(5, accessibilityLabel, accessibilitySettings);
 
-        Label reminderDefaultsLabel = UI.heading("Reminder Defaults Settings");
+        Label reminderDefaultsLabel = sectionTitle("Reminder defaults");
         Node reminderDefaultsSettings = new ReminderDefaultsView(new ReminderController(Data.getCurrentUserId())).getReminderDefaultsView();
         VBox reminderDefaults = UI.card(5, reminderDefaultsLabel, reminderDefaultsSettings);
 
@@ -279,6 +309,7 @@ public class MainView {
         root.setMaxWidth(Double.MAX_VALUE);
         ScrollPane sp = new ScrollPane(root);
         sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         VBox logout = new VBox(copyOf(logOutButton));
         logout.setAlignment(Pos.CENTER);

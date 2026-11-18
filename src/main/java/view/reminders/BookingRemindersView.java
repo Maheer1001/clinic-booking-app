@@ -219,7 +219,7 @@ public class BookingRemindersView {
         );
         TitledPane notifPane = styledPane("Notification", notifInner);
 
-        Button saveBtn = UI.backButton("Save Reminder");
+        Button saveBtn = UI.primaryButton("Save reminder");
         Button testEmailBtn = UI.backButton("Send test email");
         Button previewNotifBtn = UI.backButton("Preview notification");
 
@@ -349,7 +349,7 @@ public class BookingRemindersView {
         TitledPane emailPane = styledPane("Email", fields.emailSectionContent());
         TitledPane notifPane = styledPane("Notification", fields.notificationSectionContent());
 
-        Button saveBtn = UI.backButton("Save Reminder");
+        Button saveBtn = UI.primaryButton("Save reminder");
         Button testEmailBtn = UI.backButton("Send test email");
         Button previewBtn = UI.backButton("Preview notification");
 

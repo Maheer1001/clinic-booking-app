@@ -75,7 +75,8 @@ public class AccountView {
         } else {
             first.setText(nullToEmpty(info.firstName));
             last.setText(nullToEmpty(info.lastName));
-            phone.setText(nullToEmpty(info.phone));
+            // the field only accepts digits, so a number saved as "07700 900123" would otherwise vanish
+            phone.setText(nullToEmpty(info.phone).replaceAll("[^0-9]", ""));
             dob.setValue(info.dob);
             immutableEmail = nullToEmpty(info.email);
             emailValue.setText(immutableEmail);
@@ -163,15 +164,15 @@ public class AccountView {
         g.getStyleClass().addAll(UI.PAGE, "account-form-grid");
 
         int r = 0;
-        g.addRow(r++, new Label("First name: "), first);
-        g.addRow(r++, new Label("Last name: "), last);
+        g.addRow(r++, formLabel("First name"), first);
+        g.addRow(r++, formLabel("Last name"), last);
         VBox phoneBox = new VBox(4, phone, phoneCount);
         phoneBox.setAlignment(Pos.TOP_LEFT);
         phoneCount.setMaxWidth(Double.MAX_VALUE);
         phoneCount.setAlignment(Pos.CENTER_RIGHT);
-        g.addRow(r++, new Label("Phone: "), phoneBox);
-        g.addRow(r++, new Label("DOB: "), dob);
-        g.addRow(r, new Label("Email: "), emailValue);
+        g.addRow(r++, formLabel("Phone"), phoneBox);
+        g.addRow(r++, formLabel("Date of birth"), dob);
+        g.addRow(r, formLabel("Email"), emailValue);
         g.setMaxWidth(Double.MAX_VALUE);
 
         ColumnConstraints col1 = new ColumnConstraints();
@@ -197,5 +198,12 @@ public class AccountView {
         if (s == null) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    private static Label formLabel(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("form-label");
+        l.setMinWidth(Region.USE_PREF_SIZE);
+        return l;
     }
 }

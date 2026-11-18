@@ -448,4 +448,151 @@ public final class UI {
         tf.getStyleClass().add(TEXT_FIELD);
         return tf;
     }
+
+    // ---- Shared building blocks ----------------------------------------------------------------
+
+    /** Simple filled 24x24 glyphs for empty states and badges. */
+    public static final String ICON_CALENDAR = "M7 1.5h2v2.5H7z M15 1.5h2v2.5h-2z M3 4.5h18v16.5H3z M5 9h14v10H5z M7 11h4v3H7z";
+    public static final String ICON_FLASK = "M9 2h6v2h-1v5l5.4 9.2A2 2 0 0 1 17.7 21H6.3a2 2 0 0 1-1.7-2.8L10 9V4H9z";
+    public static final String ICON_PILL = "M4.2 13.4l9.2-9.2a4.5 4.5 0 0 1 6.4 6.4l-9.2 9.2a4.5 4.5 0 0 1-6.4-6.4z";
+    public static final String ICON_BELL = "M12 2a2 2 0 0 1 2 2v.3A6 6 0 0 1 18 10v5l2 2v1H4v-1l2-2v-5a6 6 0 0 1 4-5.7V4a2 2 0 0 1 2-2z M10 19.5h4a2 2 0 0 1-4 0z";
+    public static final String ICON_SEARCH = "M10 2a8 8 0 0 1 6.3 12.9l5.4 5.4-1.4 1.4-5.4-5.4A8 8 0 1 1 10 2z M10 4.5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11z";
+    public static final String ICON_CHECK = "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z";
+
+    /** A shape-filled region (colour from CSS via -fx-background-color). */
+    public static Region glyph(String svg, double size, String styleClass) {
+        javafx.scene.shape.SVGPath path = new javafx.scene.shape.SVGPath();
+        path.setContent(svg);
+        path.setFillRule(javafx.scene.shape.FillRule.EVEN_ODD);
+        Region r = new Region();
+        r.setShape(path);
+        r.setMinSize(size, size);
+        r.setPrefSize(size, size);
+        r.setMaxSize(size, size);
+        r.getStyleClass().add(styleClass);
+        return r;
+    }
+
+    /** Friendly empty state: a round icon, a short title and one line of help. */
+    public static VBox emptyState(String icon, String title, String body) {
+        StackPane badge = new StackPane(glyph(icon, 26, "empty-state-glyph"));
+        badge.getStyleClass().add("empty-state-icon");
+        Label t = new Label(title);
+        t.getStyleClass().add("empty-state-title");
+        t.setWrapText(true);
+        t.setTextAlignment(TextAlignment.CENTER);
+        Label b = new Label(body);
+        b.getStyleClass().add("empty-state-body");
+        b.setWrapText(true);
+        b.setTextAlignment(TextAlignment.CENTER);
+        b.setMaxWidth(320);
+        VBox box = new VBox(6, badge, t, b);
+        VBox.setMargin(t, new javafx.geometry.Insets(8, 0, 0, 0));
+        box.getStyleClass().add("empty-state");
+        box.setMaxWidth(Double.MAX_VALUE);
+        return box;
+    }
+
+    /** Page-top booking progress: "Step 2 of 5 · Service" over a segmented bar. */
+    public static VBox steps(int step, int total, String name) {
+        Label count = new Label("STEP " + step + " OF " + total);
+        count.getStyleClass().add("booking-step-label");
+        Label what = new Label("·  " + name);
+        what.getStyleClass().add("booking-step-name");
+        HBox labels = new HBox(6, count, what);
+        labels.setAlignment(Pos.CENTER_LEFT);
+        HBox bars = new HBox(4);
+        for (int i = 1; i <= total; i++) {
+            Region bar = new Region();
+            bar.getStyleClass().add("booking-step-bar");
+            if (i <= step) bar.getStyleClass().add("done");
+            HBox.setHgrow(bar, Priority.ALWAYS);
+            bar.setMaxWidth(Double.MAX_VALUE);
+            bars.getChildren().add(bar);
+        }
+        VBox box = new VBox(6, labels, bars);
+        box.getStyleClass().add("booking-steps");
+        box.setMaxWidth(Double.MAX_VALUE);
+        return box;
+    }
+
+    /** Muted helper text under a page heading. */
+    public static Label intro(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("page-intro");
+        l.setWrapText(true);
+        l.setMaxWidth(Double.MAX_VALUE);
+        return l;
+    }
+
+    public static Label pageHeading(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("page-heading");
+        l.setWrapText(true);
+        l.setMaxWidth(Double.MAX_VALUE);
+        return l;
+    }
+
+    /** A labelled value on a detail page ("CLINIC" above "Portswood Sexual Health Clinic"). */
+    public static VBox detail(String label, String value) {
+        Label l = new Label(label);
+        l.getStyleClass().add("detail-label");
+        Label v = new Label(value == null || value.isBlank() ? "Not recorded" : value);
+        v.getStyleClass().add("detail-value");
+        v.setWrapText(true);
+        v.setMaxWidth(Double.MAX_VALUE);
+        return new VBox(2, l, v);
+    }
+
+    /** Big bold title for a detail card. */
+    public static Label detailTitle(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("detail-title");
+        l.setWrapText(true);
+        return l;
+    }
+
+    /** A tip with a shortcut button beside it, e.g. "Keep on top of your sexual health … [Manage reminders]". */
+    public static HBox callout(String text, Button action) {
+        Label l = body(text);
+        l.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(l, Priority.ALWAYS);
+        action.setMinWidth(Region.USE_PREF_SIZE);
+        action.setMaxWidth(170);
+        HBox row = new HBox(12, l, action);
+        row.getStyleClass().add("callout");
+        row.setMaxWidth(Double.MAX_VALUE);
+        return row;
+    }
+
+    /**
+     * Gives a dialog the app's look: same stylesheets as the main window, no stock icon, the app
+     * icon in the title bar, and a fixed width so long messages wrap instead of being cut off.
+     */
+    public static void styleDialog(Dialog<?> dialog, javafx.scene.Scene owner) {
+        DialogPane pane = dialog.getDialogPane();
+        if (owner != null) {
+            pane.getStylesheets().setAll(owner.getStylesheets());
+            if (owner.getWindow() != null && dialog.getOwner() == null) dialog.initOwner(owner.getWindow());
+        }
+        if (!pane.getStylesheets().contains(STYLE)) pane.getStylesheets().add(0, STYLE);
+        dialog.setGraphic(null);
+        pane.setGraphic(null);
+        pane.setPrefWidth(380);
+        pane.setMinHeight(Region.USE_PREF_SIZE);
+        if (pane.getScene() != null && pane.getScene().getWindow() instanceof javafx.stage.Stage s) {
+            s.getIcons().setAll(new javafx.scene.image.Image("/icons/safe.png"));
+        }
+        // Buttons keep their full label ("Cancel appointment", not "Cancel appoint...").
+        Runnable fitButtons = () -> {
+            for (ButtonType type : pane.getButtonTypes()) {
+                if (pane.lookupButton(type) instanceof Button b) {
+                    ButtonBar.setButtonUniformSize(b, false);
+                    b.setMinWidth(Region.USE_PREF_SIZE);
+                }
+            }
+        };
+        fitButtons.run();
+        pane.getButtonTypes().addListener((javafx.collections.ListChangeListener<ButtonType>) c -> fitButtons.run());
+    }
 }

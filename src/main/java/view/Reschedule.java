@@ -15,6 +15,7 @@ import service.BookingCommunicationPrefs;
 import service.NotificationDispatcher;
 import service.email.RescheduleConfirmationEmail;
 import view.notification.RescheduleConfirmationNotification;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDate;
@@ -35,6 +36,12 @@ public class Reschedule {
 
     public static Node getPage(Navigator nav) {
         return buildPage(nav, "");
+    }
+
+    private static Label sectionHeading(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("section-heading");
+        return l;
     }
 
     private static Node buildPage(Navigator nav, String initialAppId) {
@@ -58,10 +65,10 @@ public class Reschedule {
         result.managedProperty().bind(result.textProperty().isNotEmpty());
         result.visibleProperty().bind(result.textProperty().isNotEmpty());
 
-        Button rescheduleBtn = UI.primaryButton("Reschedule");
+        Button rescheduleBtn = UI.primaryButton("Move appointment");
         rescheduleBtn.setDisable(true);
 
-        VBox currentBox = new VBox(5);
+        VBox currentBox = new VBox(10);
         VBox selectorBox = new VBox();
 
         final UpcomingAppointmentDetails[] currentApt = new UpcomingAppointmentDetails[1];
@@ -93,10 +100,12 @@ public class Reschedule {
             }
             UpcomingAppointmentDetails apt = aptOpt.get();
             currentApt[0] = apt;
+            java.time.LocalDate currentDate = Dates.parseStored(apt.date());
             currentBox.getChildren().setAll(
-                    UI.heading(apt.serviceName()),
-                    UI.body("Currently: " + apt.date() + " " + apt.startTime() + " - " + apt.endTime()),
-                    UI.muted(apt.clinicName()));
+                    UI.detailTitle(apt.serviceName()),
+                    UI.detail("CURRENTLY", (currentDate != null ? Dates.full(currentDate) : apt.date())
+                            + ", " + Dates.timeRange(apt.startTime(), apt.endTime())),
+                    UI.detail("CLINIC", apt.clinicName()));
 
             TimeslotProvider provider = new TimeslotProvider() {
                 @Override
@@ -112,7 +121,7 @@ public class Reschedule {
             DateTimeSelector sel = new DateTimeSelector(provider, slot -> rescheduleBtn.setDisable(false));
             sel.getTimeCombo().valueProperty().addListener((obs, o, n) -> rescheduleBtn.setDisable(n == null));
             selectorRef[0] = sel;
-            selectorBox.getChildren().setAll(new Label("Choose a new time"), sel);
+            selectorBox.getChildren().setAll(UI.card(10, sectionHeading("Choose a new time"), sel));
         };
 
         appointmentId.textProperty().addListener((obs, oldVal, newVal) -> loadAppointment.run());

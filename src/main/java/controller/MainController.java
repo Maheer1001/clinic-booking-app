@@ -61,7 +61,7 @@ public class MainController {
         //new booking - maybe move to more appropriate class?
         view.getQuickBookButton().setOnAction(e -> {
             BookingController bc = new BookingController(nav);
-            nav.goToPage(bc.getClinicSearchPage(), "Select Clinic", false);
+            nav.goToPage(bc.getClinicSearchPage(), "Find a clinic", false);
             try {
                 bc.checkForDefaultClinic();
             } catch (SQLException ignored) {}

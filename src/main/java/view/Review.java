@@ -21,7 +21,7 @@ import java.util.List;
 
 public class Review {
 
-    private static final DateTimeFormatter DOB_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter DOB_FMT = DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale.UK);
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -34,44 +34,34 @@ public class Review {
             return UI.page(UI.muted("Please select a clinic, service and time first."));
         }
 
-        VBox clinicInfo = UI.card(10, UI.heading("Clinic"));
-        addLine(clinicInfo, "Name", clinic.getName());
-        addLine(clinicInfo, "Address", clinic.getAddress());
-        addLine(clinicInfo, "Postcode", clinic.getPostcode());
-
-        VBox serviceInfo = UI.card(10, UI.heading(items.size() > 1 ? "Appointments" : "Appointment"));
+        VBox serviceInfo = UI.card(12);
         for (Item item : items) {
             Service service = item.getService();
-            VBox details = UI.innerCard(8, UI.heading(service.getName()));
-            if (service.getDescription() != null && !service.getDescription().isBlank()) {
-                details.getChildren().add(UI.body(service.getDescription()));
-            }
-            details.getChildren().add(UI.body("When: " + describeTime(item)));
-            details.getChildren().add(UI.body("Duration: " + service.getDurationMinutes() + " minutes"));
-            serviceInfo.getChildren().add(details);
+            serviceInfo.getChildren().addAll(UI.detailTitle(service.getName()),
+                    UI.detail("WHEN", describeTime(item)));
         }
+        String address = clinic.getAddress() == null ? "" : clinic.getAddress();
+        if (clinic.getPostcode() != null && !clinic.getPostcode().isBlank() && !address.contains(clinic.getPostcode())) {
+            address = address.isBlank() ? clinic.getPostcode() : address + ", " + clinic.getPostcode();
+        }
+        serviceInfo.getChildren().add(UI.detail("CLINIC", clinic.getName() + (address.isBlank() ? "" : "\n" + address)));
 
-        List<Label> labels = new ArrayList<>();
+        VBox clientInfo = UI.card(10, sectionHeading("Your details"));
         String name = (nullToEmpty(b.getFirstName()) + " " + nullToEmpty(b.getLastName())).trim();
-        if (!name.isEmpty()) {
-            labels.add(UI.body("Name: " + name));
-        }
+        int before = clientInfo.getChildren().size();
+        addIfPresent(clientInfo, "NAME", name);
         LocalDate dob = b.getDob();
         if (dob != null) {
-            labels.add(UI.body("Date of birth: " + dob.format(DOB_FMT)));
+            addIfPresent(clientInfo, "DATE OF BIRTH", dob.format(DOB_FMT));
         }
-        addIfPresent(labels, "Email", b.getEmail());
-        addIfPresent(labels, "Phone", b.getPhone());
-        addIfPresent(labels, "Gender", b.getGender());
-        addIfPresent(labels, "Sexuality", b.getSexuality());
-        addIfPresent(labels, "Accessibility needs", b.getDisabilities());
-        addIfPresent(labels, "Your notes", b.getReason());
-
-        VBox clientInfo = UI.card(10, UI.heading("Your details"));
-        if (labels.isEmpty()) {
+        addIfPresent(clientInfo, "EMAIL", b.getEmail());
+        addIfPresent(clientInfo, "PHONE", b.getPhone());
+        addIfPresent(clientInfo, "GENDER", b.getGender());
+        addIfPresent(clientInfo, "SEXUALITY", b.getSexuality());
+        addIfPresent(clientInfo, "ACCESSIBILITY NEEDS", b.getDisabilities());
+        addIfPresent(clientInfo, "YOUR NOTES", b.getReason());
+        if (clientInfo.getChildren().size() == before) {
             clientInfo.getChildren().add(UI.muted("No personal details entered."));
-        } else {
-            clientInfo.getChildren().addAll(labels);
         }
 
         Label confirmMessage = UI.error("");
@@ -105,32 +95,35 @@ public class Review {
             }
         });
 
-        ScrollPane sp = new ScrollPane(UI.pageTop(clinicInfo, serviceInfo, clientInfo, confirmMessage, confirm, changeTime));
+        Label note = UI.intro("You'll get a confirmation email and can reschedule or cancel at any time from Booking.");
+        ScrollPane sp = new ScrollPane(UI.pageTop(UI.steps(5, 5, "Review"),
+                UI.pageHeading("Check and confirm"), serviceInfo, clientInfo, note, confirmMessage, confirm, changeTime));
         sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         return sp;
     }
 
-    /** e.g. "Wed 25 Feb 2026, 10:30 - 11:00". */
+    /** e.g. "Wed 25 Feb 2026, 10:30 – 11:00". */
     static String describeTime(Item item) {
         if (item.getDate() == null || item.getTime() == null) return "Not chosen";
         String text = item.getDate().format(DATE_FMT) + ", " + item.getTime().format(TIME_FMT);
         if (item.getService() != null && item.getService().getDurationMinutes() > 0) {
-            text += " - " + item.getTime().plusMinutes(item.getService().getDurationMinutes()).format(TIME_FMT);
+            text += " – " + item.getTime().plusMinutes(item.getService().getDurationMinutes()).format(TIME_FMT);
         }
         return text;
     }
 
-    private static void addLine(VBox box, String label, String value) {
+    private static void addIfPresent(VBox box, String label, String value) {
         if (value != null && !value.isBlank()) {
-            box.getChildren().add(UI.body(label + ": " + value));
+            box.getChildren().add(UI.detail(label, value.trim()));
         }
     }
 
-    private static void addIfPresent(List<Label> labels, String label, String value) {
-        if (value != null && !value.isBlank()) {
-            labels.add(UI.body(label + ": " + value));
-        }
+    private static Label sectionHeading(String text) {
+        Label l = new Label(text);
+        l.getStyleClass().add("section-heading");
+        return l;
     }
 
     private static String nullToEmpty(String s) {

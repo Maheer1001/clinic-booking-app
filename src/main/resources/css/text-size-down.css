@@ -147,3 +147,32 @@
 .tracking-clear-btn {
     -fx-font-size: 12px; /* -2 */
 }
+
+/* Classes added in the finishing pass (same step as the rules above). */
+.label.home-greeting { -fx-font-size: 20px; }
+.label.home-summary { -fx-font-size: 12px; }
+.label.detail-title { -fx-font-size: 16px; }
+.label.detail-label { -fx-font-size: 10px; }
+.label.detail-value { -fx-font-size: 13px; }
+.label.detail-value-strong { -fx-font-size: 13px; }
+.label.entry-title { -fx-font-size: 13px; }
+.label.entry-meta { -fx-font-size: 11px; }
+.label.empty-state-title { -fx-font-size: 15px; }
+.label.empty-state-body { -fx-font-size: 12px; }
+.label.page-heading { -fx-font-size: 15px; }
+.label.page-intro { -fx-font-size: 12px; }
+.label.booking-step-label { -fx-font-size: 10px; }
+.label.booking-step-name { -fx-font-size: 10px; }
+.label.success-title { -fx-font-size: 20px; }
+.label.settings-section-title { -fx-font-size: 14px; }
+.label.form-label { -fx-font-size: 11px; }
+.label.clinic-cell-name { -fx-font-size: 13px; }
+.label.clinic-cell-meta { -fx-font-size: 11px; }
+.label.clinic-cell-detail { -fx-font-size: 11px; }
+.label.chip { -fx-font-size: 10px; }
+.label.section-label { -fx-font-size: 10px; }
+.label.section-heading { -fx-font-size: 14px; }
+.label.appointment-title { -fx-font-size: 13px; }
+.label.appointment-meta { -fx-font-size: 11px; }
+.label.appointment-place { -fx-font-size: 11px; }
+.entry-header .label.entry-title { -fx-font-size: 16px; }

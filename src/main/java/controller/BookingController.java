@@ -10,7 +10,10 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.Priority;
 import javafx.stage.Stage;
 import javafx.scene.layout.VBox;
@@ -79,21 +82,17 @@ public class BookingController {
         if (userRepository.defaultClinicExists(Data.getCurrentUserId())) {
             int clinicID = userRepository.getDefaultClinic(Data.getCurrentUserId());
             String defaultCName = bookingService.findClinicNameById(clinicID);
-            ButtonType defaultC = new ButtonType("Continue with "+ defaultCName);
+            ButtonType defaultC = new ButtonType("Yes, continue", ButtonBar.ButtonData.OK_DONE);
 
-            ButtonType ignore = new ButtonType("Select a different clinic", ButtonBar.ButtonData.CANCEL_CLOSE);
+            ButtonType ignore = new ButtonType("Choose another", ButtonBar.ButtonData.CANCEL_CLOSE);
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Default Clinic");
-            alert.setHeaderText(null);
-            alert.setContentText("You have a default clinic saved, would you like to select this clinic?" + "\n\nDefault Clinic: " + defaultCName + "\n");
-
-            DialogPane dialogPane = alert.getDialogPane();
-            dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-            Stage stage = (Stage) dialogPane.getScene().getWindow();
-            stage.getIcons().add(new Image(getClass().getResource("/icons/safe.png").toExternalForm()));
-            dialogPane.setGraphic(null);
+            alert.setTitle("Your clinic");
+            alert.setHeaderText("Book at your usual clinic?");
+            alert.setContentText(defaultCName + " is saved as your default clinic.");
 
             alert.getButtonTypes().setAll(defaultC, ignore);
+            UI.styleDialog(alert, Data.getScene());
+            DialogPane dialogPane = alert.getDialogPane();
 
             Button defaultBtn = (Button) dialogPane.lookupButton(defaultC);
             defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
@@ -107,7 +106,7 @@ public class BookingController {
                 Clinic clinic = bookingService.findClinicById(clinicID);
                 clinic.setServices(services);
                 Data.getBooking().setClinic(clinic);
-                nav.goToPage(ServiceSelection.getPage(this), "Select Service", false);
+                nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
             }
         }
     }
@@ -129,7 +128,7 @@ public class BookingController {
             );
             clinicMap.show(clinics, userCoord);
         } catch (IllegalArgumentException e) {
-            messageLabel.setText("Invalid postcode");
+            messageLabel.setText("We couldn't find that postcode. Check it and try again.");
             clinicMap.show(clinics, null);
         } catch (Exception e) {
             clinics.sort(
@@ -144,21 +143,31 @@ public class BookingController {
     public Node getClinicSearchPage() {
         TextField postcode = new TextField();
         UI.searchField(postcode);
-        postcode.setPromptText("Enter postcode");
+        postcode.setPromptText("Your postcode, e.g. SO17 1BJ");
+        postcode.setAccessibleText("Postcode");
 
         postcode.textProperty().addListener((observable, oldValue, newValue) -> messageLabel.setText(""));
 
         ListView<Clinic> list = new ListView<>();
         UI.listViewHover(list);
+        list.getStyleClass().add("clinic-list");
         list.setFixedCellSize(-1);
         List<Clinic> clinics;
         try {clinics = getClinics();} catch (SQLException ex) {clinics = new ArrayList<>();}
         list.setItems(FXCollections.observableArrayList(clinics));
-        list.setPrefHeight(clinics.size() * 40 + 2);
+        // Tall enough for every clinic (collapsed) so none is hidden below the fold.
+        list.setPrefHeight(Math.max(1, clinics.size()) * 66 + 12);
+        list.setMinHeight(Region.USE_PREF_SIZE);
         list.setCellFactory(l -> new ListCell<>() {
             private final VBox content = new VBox(6);
             private final TitledPane pane = new TitledPane();
+            private final Label name = new Label();
+            private final Label meta = new Label();
             {
+                name.getStyleClass().add("clinic-cell-name");
+                meta.getStyleClass().add("clinic-cell-meta");
+                name.setWrapText(true);
+                pane.setGraphic(new VBox(1, name, meta));
                 pane.setContent(content);
                 pane.setExpanded(false);
                 pane.setOnMouseClicked(e -> {
@@ -167,58 +176,52 @@ public class BookingController {
                         list.getSelectionModel().select(c);
                     }
                 });
+                pane.prefWidthProperty().bind(list.widthProperty().subtract(20));
+                name.maxWidthProperty().bind(list.widthProperty().subtract(70));
             }
 
             @Override
             protected void updateItem(Clinic item, boolean empty) {
 
                 super.updateItem(item, empty);
+                setText(null);
                 if (empty || item == null) {
                     setGraphic(null);
-                    setText(null);
                 } else {
-                    String header = postcodeMap.containsKey(item)
-                            ? item.getName() + "   —   " + String.format("%.1f", postcodeMap.get(item)) + " km away"
-                            : item.getName();
-                    pane.setText(header);
+                    name.setText(item.getName());
+                    meta.setText(clinicMeta(item, postcodeMap.get(item)));
+                    pane.setAccessibleText(item.getName() + ", " + meta.getText());
                     content.getChildren().clear();
 
                     if (item.getAddress() != null && !item.getAddress().isBlank()) {
-                        Label address = new Label("Address: " + item.getAddress());
-                        address.setWrapText(true);
-                        content.getChildren().add(address);
+                        content.getChildren().add(UI.detail("ADDRESS", item.getAddress()
+                                + (item.getPostcode() != null && !item.getPostcode().isBlank() ? ", " + item.getPostcode() : "")));
                     }
-
-                    if (item.getPostcode() != null && !item.getPostcode().isBlank()) {
-                        Label postcode = new Label ("Postcode: " + item.getPostcode());
-                        postcode.setWrapText(true);
-                        content.getChildren().add(postcode);
-                    }
-
                     if (item.getPhone() != null && !item.getPhone().isBlank()) {
-                        Label phone = new Label("Phone no.: " + item.getPhone());
-                        content.getChildren().add(phone);
+                        content.getChildren().add(UI.detail("PHONE", item.getPhone()));
                     }
-
-                    List<String> diss_acc = item.getDissAcc();
-                    if (diss_acc != null && !diss_acc.isEmpty()) {
-                        Label dissaccLbl = new Label("Disability accessibility: " + diss_acc);
-                        dissaccLbl.setWrapText(true);
-                        content.getChildren().add(dissaccLbl);
+                    List<String> access = item.getDissAcc();
+                    if (access != null && !access.isEmpty()) {
+                        FlowPane chips = new FlowPane(6, 6);
+                        for (String a : access) {
+                            Label chip = new Label(a);
+                            chip.getStyleClass().add("chip");
+                            chips.getChildren().add(chip);
+                        }
+                        Label accessLabel = new Label("ACCESSIBILITY");
+                        accessLabel.getStyleClass().add("detail-label");
+                        content.getChildren().add(new VBox(4, accessLabel, chips));
                     }
-
-                    pane.prefWidthProperty().bind(list.widthProperty().subtract(20));
                     setGraphic(pane);
-                    setText(null);
                 }
             }
         });
 
-        Label emptyMessage = UI.muted("No clinics available. Add clinics to the database to book.");
-        emptyMessage.setWrapText(true);
-
         Button search = UI.primaryButton("Search");
-        Button next = UI.primaryButton("Select Clinic");
+        search.setMaxWidth(Region.USE_PREF_SIZE);
+        search.setMinWidth(Region.USE_PREF_SIZE);
+        Button next = UI.primaryButton("Continue");
+        next.disableProperty().bind(list.getSelectionModel().selectedItemProperty().isNull());
 
         postcode.setOnAction(e -> search.fire()); // Enter searches
         search.setOnAction(e -> {
@@ -237,34 +240,52 @@ public class BookingController {
         HBox hbox = new HBox(10, postcode, search);
         hbox.setAlignment(Pos.CENTER);
         HBox.setHgrow(postcode, Priority.ALWAYS);
+        postcode.setMaxWidth(Double.MAX_VALUE);
 
-        clinicMap = new ClinicMap(380, 240);
+        clinicMap = new ClinicMap(380, 172);
+        // "Choose this clinic" in a map popup picks the clinic just like the list does.
+        clinicMap.setOnClinicSelected(c -> {
+            list.getSelectionModel().select(c);
+            list.scrollTo(c);
+            next.fire();
+        });
         clinicMap.show(clinics, null);
 
+        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"), hbox, messageLabel, clinicMap.node(), list);
+        page.setSpacing(12);
         if (clinics.isEmpty()) {
-            return UI.pageTop(hbox, messageLabel, clinicMap.node(), list, emptyMessage, next);
-        } else {
-            return UI.pageTop(hbox, messageLabel, clinicMap.node(), list, next);
+            page.getChildren().add(UI.emptyState(UI.ICON_SEARCH, "No clinics yet",
+                    "Add clinics to the database to start booking (see docs/sample-data.sql)."));
         }
+        page.getChildren().add(next);
+        ScrollPane sp = new ScrollPane(page);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        return sp;
     }
+
+    /** "1.3 km away · SO17 2FW" after a search, otherwise just the postcode. */
+    static String clinicMeta(Clinic clinic, Double km) {
+        String pc = clinic.getPostcode() == null ? "" : clinic.getPostcode().strip();
+        if (km == null) return pc;
+        String distance = String.format(java.util.Locale.UK, "%.1f km away", km);
+        return pc.isEmpty() ? distance : distance + "  ·  " + pc;
+    }
+
     public void selectClinic(Clinic clinic) throws SQLException {
         int userID = Data.getCurrentUserId();
         if (!userRepository.defaultClinicExists(userID)) {
 
-            ButtonType update = new ButtonType("Save");
-            ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+            ButtonType update = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+            ButtonType cancel = new ButtonType("Not now", ButtonBar.ButtonData.CANCEL_CLOSE);
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle(clinic.getName());
-            alert.setHeaderText("Save default clinic");
-            alert.setContentText("Would you like to save " + clinic.getName() + " as your default clinic?");
-
-            DialogPane dialogPane = alert.getDialogPane();
-            dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-            Stage stage = (Stage) dialogPane.getScene().getWindow();
-            stage.getIcons().add(new Image(getClass().getResource("/icons/safe.png").toExternalForm()));
-            dialogPane.setGraphic(null);
+            alert.setTitle("Default clinic");
+            alert.setHeaderText("Make this your default clinic?");
+            alert.setContentText(clinic.getName() + " will be offered first next time you book. You can change it at any time.");
 
             alert.getButtonTypes().setAll(update, cancel);
+            UI.styleDialog(alert, Data.getScene());
+            DialogPane dialogPane = alert.getDialogPane();
 
             Button defaultBtn = (Button) dialogPane.lookupButton(update);
             defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
@@ -278,22 +299,18 @@ public class BookingController {
             }
         } else {
             if (userRepository.getDefaultClinic(userID) !=  clinic.getId()) {
-                ButtonType update = new ButtonType("Update");
-                ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+                ButtonType update = new ButtonType("Change", ButtonBar.ButtonData.OK_DONE);
+                ButtonType cancel = new ButtonType("Keep current", ButtonBar.ButtonData.CANCEL_CLOSE);
                 Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-                alert.setTitle(clinic.getName());
-                alert.setHeaderText("Update default clinic");
+                alert.setTitle("Default clinic");
+                alert.setHeaderText("Change your default clinic?");
                 Clinic current = bookingService.findClinicById(userRepository.getDefaultClinic(userID));
-                alert.setContentText("Would you like to save " + clinic.getName() + " as your default clinic?"
-                        + (current != null ? "\nYour current default clinic: " + current.getName() : ""));
-
-                DialogPane dialogPane = alert.getDialogPane();
-                dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-                Stage stage = (Stage) dialogPane.getScene().getWindow();
-                stage.getIcons().add(new Image(getClass().getResource("/icons/safe.png").toExternalForm()));
-                dialogPane.setGraphic(null);
+                alert.setContentText("Use " + clinic.getName() + " as your default clinic"
+                        + (current != null ? " instead of " + current.getName() : "") + "?");
 
                 alert.getButtonTypes().setAll(update, cancel);
+                UI.styleDialog(alert, Data.getScene());
+                DialogPane dialogPane = alert.getDialogPane();
 
                 Button defaultBtn = (Button) dialogPane.lookupButton(update);
                 defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
@@ -312,7 +329,7 @@ public class BookingController {
         List<Service> services = bookingService.findServicesByClinicId(clinic.getId());
         clinic.setServices(services);
         Data.getBooking().setClinic(clinic);
-        nav.goToPage(ServiceSelection.getPage(this), "Select Service", false);
+        nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
     public void selectService(Service service) {
@@ -332,18 +349,18 @@ public class BookingController {
      * in the multi-service booking flow.
      */
     public void goToTimeslotsForItems() {
-        nav.goToPage(DateTime.getPage(this), "Select Timeslots", false);
+        nav.goToPage(DateTime.getPage(this), "Pick a time", false);
     }
 
     /**
      * Navigates back to the service selection page for the current clinic.
      */
     public void goToServiceSelection() {
-        nav.goToPage(ServiceSelection.getPage(this), "Select Service", false);
+        nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
     public void goToDetails() {
-        nav.goToPage(PersonalInfo.getPage(this), "Enter Details", false);
+        nav.goToPage(PersonalInfo.getPage(this), "Your details", false);
     }
 
     /**
@@ -405,9 +422,9 @@ public class BookingController {
         boolean showUseDefault = !newAppIds.isEmpty()
                 && defaultTemplate.filter(AppointmentReminderDefaults::hasSavedTemplate).isPresent();
 
-        Button setupRemindersBtn = UI.primaryButton("Set up reminders");
+        Button setupRemindersBtn = UI.primaryButton("Set up a reminder");
         Button defaultRemindersBtn = UI.backButton("Use default reminders");
-        Button skipBtn = UI.backButton("Skip for now");
+        Button skipBtn = UI.backButton("Done");
 
         List<Integer> savedIds = List.copyOf(newAppIds);
 
@@ -437,40 +454,52 @@ public class BookingController {
         skipBtn.setOnAction(e -> nav.goToHome());
 
         String blurb = showUseDefault
-                ? "You can apply your saved reminder defaults, open Reminders to customise per appointment, or finish later from the Reminders tab."
-                : "You can set up reminders for your new appointment(s) now, or do it later from the Reminders tab.";
+                ? "Want a reminder? Apply your saved defaults, customise it in Reminders, or do it later."
+                : "Want a reminder before your appointment? Set one up now or later from the Reminders tab.";
 
-        HBox buttonRow = new HBox(10);
-        buttonRow.setAlignment(Pos.CENTER);
-        buttonRow.getChildren().add(setupRemindersBtn);
+        setupRemindersBtn.setMaxWidth(Double.MAX_VALUE);
+        defaultRemindersBtn.setMaxWidth(Double.MAX_VALUE);
+        skipBtn.setMaxWidth(Double.MAX_VALUE);
+        VBox buttonRow = new VBox(8, setupRemindersBtn);
         if (showUseDefault) {
             buttonRow.getChildren().add(defaultRemindersBtn);
         }
         buttonRow.getChildren().add(skipBtn);
 
-        VBox summary = UI.card(8);
+        VBox summary = UI.card(10);
         for (BookingService.BookedAppointment appt : outcome.booked()) {
             String service = appt.service() != null ? appt.service().getName() : "Appointment";
             String when = appt.date() != null && appt.time() != null
                     ? appt.date().format(CONFIRMED_DATE_FMT) + " at " + appt.time().format(CONFIRMED_TIME_FMT)
                     : "";
-            VBox row = new VBox(2, UI.heading(service));
-            if (!when.isEmpty()) row.getChildren().add(UI.body(when));
-            if (!clinicName.isBlank()) row.getChildren().add(UI.muted(clinicName));
+            VBox row = new VBox(4, UI.detailTitle(service));
+            if (!when.isEmpty()) row.getChildren().add(UI.detail("WHEN", when));
+            if (!clinicName.isBlank()) row.getChildren().add(UI.detail("CLINIC", clinicName));
+            row.getChildren().add(UI.detail("REFERENCE", "APP-" + appt.appId()));
             summary.getChildren().add(row);
         }
 
-        javafx.scene.layout.VBox prompt = UI.page(
-                UI.titleSm("Booking confirmed"),
-                summary
-        );
+        StackPane badge = new StackPane(UI.glyph(UI.ICON_CHECK, 30, "success-glyph"));
+        badge.getStyleClass().add("success-badge");
+        Label title = new Label("You're booked in");
+        title.getStyleClass().add("success-title");
+        Label sub = UI.intro(hasEmail
+                ? "We've emailed a confirmation to " + recipientEmail + "."
+                : "Your booking is saved. Add an email address to get confirmations.");
+        sub.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+        sub.setAlignment(Pos.CENTER);
+        VBox hero = new VBox(8, badge, title, sub);
+        hero.setAlignment(Pos.CENTER);
+
+        javafx.scene.layout.VBox prompt = UI.pageTop(hero, summary);
         if (!outcome.unavailable().isEmpty()) {
             Label notBooked = UI.error("Not booked, the time was no longer available: "
                     + String.join(", ", outcome.unavailable()) + ". You can book it again from Booking.");
             notBooked.setWrapText(true);
             prompt.getChildren().add(notBooked);
         }
-        prompt.getChildren().addAll(UI.body(blurb), buttonRow);
+        Label blurbLabel = UI.intro(blurb);
+        prompt.getChildren().addAll(blurbLabel, buttonRow);
 
         nav.goToPage(prompt, "Booking confirmed", true);
         return outcome;
@@ -482,7 +511,7 @@ public class BookingController {
             java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
     public void goToReview() {
-        nav.goToPage(Review.getPage(this), "Review", false);
+        nav.goToPage(Review.getPage(this), "Review booking", false);
     }
 
     public BookingService getBookingService() {

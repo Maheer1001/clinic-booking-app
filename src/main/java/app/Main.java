@@ -84,10 +84,9 @@ public class Main extends Application {
         alert.setHeaderText("Can't connect to the database");
         Label body = new Label(message);
         body.setWrapText(true);
-        body.setMaxWidth(360);
+        body.setMaxWidth(330);
         alert.getDialogPane().setContent(body);
-        alert.getDialogPane().getStylesheets().add(UI.STYLE);
-        alert.setGraphic(null);
+        UI.styleDialog(alert, null);
         alert.show();
     }
 

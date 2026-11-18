@@ -50,7 +50,8 @@ public class TrackingAppointmentController extends TrackingSectionController {
         SortedList<AppointmentDetails> sortedAppointments = new SortedList<>(filteredAppointments);
         sortedAppointments.setComparator(getComparator(null));
         if (appointments.isEmpty()) {
-            return UI.page(UI.muted("You have no past appointments."));
+            return UI.page(UI.emptyState(UI.ICON_CALENDAR, "No past appointments",
+                    "Appointments you have attended will be listed here."));
         }
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
@@ -61,7 +62,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
             String left = appointment.serviceName();
             String right = when(appointment);
             Button button = view.getEntryButton(left, right);
-            button.setOnAction(e -> nav.goToPage(getDetailsPage(appointment), "View Appointment Details", false));
+            button.setOnAction(e -> nav.goToPage(getDetailsPage(appointment), "Past appointment", false));
             buttonMap.put(appointment, button);
             list.getChildren().add(button);
         }
@@ -74,6 +75,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
 
         TextField search = new TextField();
         search.setPromptText("Search");
+        search.setAccessibleText("Search");
         UI.searchField(search);
 
         ObservableList<String> items = FXCollections.observableArrayList("Date (Newest)", "Date (Oldest)", "Name (A-Z)");
@@ -139,7 +141,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
                 sortedAppointments.setComparator(getComparator(sort.getValue()));
             }
         }
-        Button clearButton = UI.clearButton("Clear All");
+        Button clearButton = UI.clearButton("Clear filters");
         clearButton.setOnAction(e -> {from.setValue(null); to.setValue(null); search.clear(); sort.getSelectionModel().clearSelection();});
 
         from.valueProperty().addListener((obs, oldVal, newVal) -> new Update().updateFilteredAppointments());
@@ -181,35 +183,19 @@ public class TrackingAppointmentController extends TrackingSectionController {
     @Override
     public Node getDetailsPage(TrackingData td) {
         AppointmentDetails appointment = (AppointmentDetails) td;
-        HBox graphic = (HBox) view.getEntryButton(appointment.serviceName(), when(appointment)).getGraphic();
+        HBox graphic = view.getEntryHeader(appointment.serviceName(), when(appointment));
 
-        VBox info = new VBox(
-                UI.heading("Clinic:"),
-                UI.body(appointment.clinicName())
-        );
+        VBox info = new VBox(10, UI.detail("CLINIC", appointment.clinicName()));
 
         List<String> lines = appointment.getNotesLines();
         if (!lines.isEmpty()) {
-            info.getChildren().add(UI.heading("Notes:"));
-            if (lines.size() > 1) {
-                for (String line : lines) {
-                    HBox hbox = bullet(line);
-                    info.getChildren().add(hbox);
-                }
-            } else {
-                info.getChildren().add(UI.body(lines.getFirst()));
-            }
+            info.getChildren().add(UI.detail("YOUR NOTES", String.join("\n", lines)));
         }
 
-        Label bookingReminderLabel = UI.body("Keep on top of your sexual health by booking regular appointments.");
-        bookingReminderLabel.setWrapText(true);
-
-        Button bookingReminderButton = UI.shortcutButton("Manage booking reminders");
+        Button bookingReminderButton = UI.shortcutButton("Check-up reminders");
         bookingReminderButton.setOnAction(e -> nav.goToPageNewTab("reminders", new RemindersView(Data.getCurrentUserId()).getRemindersScene("booking"), "Reminders", true));
+        HBox reminder = UI.callout("Regular check-ups keep you on top of your sexual health.", bookingReminderButton);
 
-        HBox reminder = UI.equalSpacing(new HBox(10, bookingReminderLabel, bookingReminderButton));
-        reminder.getStyleClass().add(UI.PAGE);
-
-        return UI.page(UI.card(10, graphic, info), reminder);
+        return UI.page(UI.card(12, graphic, info), reminder);
     }
 }

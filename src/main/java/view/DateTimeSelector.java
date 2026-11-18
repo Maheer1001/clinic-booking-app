@@ -16,7 +16,7 @@ import java.util.function.Consumer;
 public class DateTimeSelector extends VBox {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEEE d MMMM", java.util.Locale.UK);
 
     private final DatePicker datePicker = new DatePicker();
     private final ComboBox<AvailableTimeslot> timeCombo = new ComboBox<>();
@@ -32,6 +32,18 @@ public class DateTimeSelector extends VBox {
                 .orElse(null);
 
         datePicker.setShowWeekNumbers(false);
+        datePicker.setConverter(new StringConverter<>() {
+            private final DateTimeFormatter shown = DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
+            @Override
+            public String toString(LocalDate date) {
+                return date == null ? "" : date.format(shown);
+            }
+
+            @Override
+            public LocalDate fromString(String text) {
+                return null; // not editable: dates are picked from the calendar
+            }
+        });
         // Typing a date would skip the day-cell rules below, so dates are picked from the calendar only.
         datePicker.setEditable(false);
         datePicker.setPromptText("Choose a date");
@@ -58,7 +70,7 @@ public class DateTimeSelector extends VBox {
             public String toString(AvailableTimeslot slot) {
                 if (slot == null) return "";
                 return slot.startTime().format(TIME_FMT)
-                        + " - "
+                        + " – "
                         + slot.endTime().format(TIME_FMT);
             }
 
@@ -70,19 +82,24 @@ public class DateTimeSelector extends VBox {
 
         timeCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
-                message.setText("Selected: " + newVal.date().format(DATE_FMT) + ", "
+                message.setText(newVal.date().format(DATE_FMT) + ", "
                         + newVal.startTime().format(TIME_FMT)
-                        + " - "
+                        + " – "
                         + newVal.endTime().format(TIME_FMT));
+                message.getStyleClass().setAll("label", "detail-value-strong");
 
                 onSelect.accept(newVal);
             }
         });
 
         Label dateLabel = new Label("Date");
+        dateLabel.getStyleClass().add("form-label");
         dateLabel.setLabelFor(datePicker);
         Label timeLabel = new Label("Time");
+        timeLabel.getStyleClass().add("form-label");
         timeLabel.setLabelFor(timeCombo);
+        datePicker.setAccessibleText("Appointment date");
+        timeCombo.setAccessibleText("Appointment time");
 
         getChildren().addAll(dateLabel, datePicker, timeLabel, timeCombo, message);
 
@@ -99,6 +116,7 @@ public class DateTimeSelector extends VBox {
     private void showSlots(TimeslotProvider provider, LocalDate date) {
         timeCombo.getItems().clear();
         timeCombo.setValue(null);
+        message.getStyleClass().setAll("label", UI.MUTED);
         message.setText("");
         if (date == null) return;
 
@@ -109,6 +127,7 @@ public class DateTimeSelector extends VBox {
         } else {
             timeCombo.setDisable(false);
             timeCombo.getItems().addAll(slots);
+            message.setText(slots.size() == 1 ? "1 time free on this day." : slots.size() + " times free on this day.");
         }
     }
 

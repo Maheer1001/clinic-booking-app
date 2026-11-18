@@ -34,15 +34,17 @@ public class DateTime {
         }
 
         VBox container = new VBox(15);
-        container.getChildren().add(UI.muted("Times shown are at " + clinic.getName() + "."));
+        container.getChildren().addAll(UI.steps(3, 5, "Time"), new VBox(4,
+                UI.pageHeading("When suits you?"),
+                UI.intro("Free times at " + clinic.getName() + ", worked out from its opening hours.")));
 
         List<ComboBox<AvailableTimeslot>> comboBoxes = new ArrayList<>();
 
         for (Item item : items) {
 
             Service service = item.getService();
-            Label serviceLabel = UI.heading(service.getName());
-            Label duration = UI.muted(service.getDurationMinutes() + " minutes");
+            Label serviceLabel = UI.detailTitle(service.getName());
+            Label duration = UI.muted(service.getDurationMinutes() + " minute appointment");
 
             int clinicId = clinic.getId();
             int serviceId = service.getId();
@@ -114,7 +116,7 @@ public class DateTime {
         clashMessage.managedProperty().bind(clashMessage.textProperty().isNotEmpty());
         clashMessage.visibleProperty().bind(clashMessage.textProperty().isNotEmpty());
 
-        Button next = UI.primaryButton("Next");
+        Button next = UI.primaryButton("Continue");
         next.setOnAction(e -> controller.goToDetails());
         next.disableProperty().bind(allSelected.not().or(clash.isNotEmpty()));
         VBox nextBox = new VBox(10, clashMessage, next);
@@ -124,6 +126,7 @@ public class DateTime {
 
         ScrollPane sp = new ScrollPane(UI.pageTop(container));
         sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         return sp;
     }

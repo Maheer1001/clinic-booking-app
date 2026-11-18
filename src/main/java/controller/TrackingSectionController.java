@@ -4,6 +4,7 @@ import javafx.beans.binding.Bindings;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.layout.VBox;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import model.TrackingData;
@@ -47,9 +48,8 @@ public abstract class TrackingSectionController {
     }
 
     /** Shown only while search / date filters leave nothing to list, so the page is never just blank. */
-    protected Label noMatchesLabel(ObservableList<?> filtered) {
-        Label label = UI.muted("Nothing matches your search or dates. Try clearing the filters.");
-        label.setWrapText(true);
+    protected Node noMatchesLabel(ObservableList<?> filtered) {
+        VBox label = UI.emptyState(UI.ICON_SEARCH, "No matches", "Nothing matches your search or dates. Try clearing the filters.");
         label.visibleProperty().bind(Bindings.isEmpty(filtered));
         label.managedProperty().bind(label.visibleProperty());
         return label;
