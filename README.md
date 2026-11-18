@@ -1,18 +1,32 @@
 # Sexual Health Clinic App
 
-A JavaFX desktop app for booking and managing sexual health clinic appointments. Users can sign up, find clinics, book, cancel or reschedule appointments, track tests and prescriptions, and get email reminders.
+Book a sexual-health clinic appointment in under a minute: a JavaFX desktop app to find a clinic by postcode, book a slot, and keep track of test results, prescriptions and reminders.
+
+![Demo: sign in, find a clinic on the map, choose a service and time, confirm, manage bookings, track results and prescriptions](media/demo.gif)
+
+![Screens: upcoming appointments, clinic search by postcode, times generated from opening hours, test results](media/screens.png)
+
+> **Bring your own database.** The app needs a PostgreSQL database that you provide; no shared or hosted database is included. Point `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` in `.env` at any PostgreSQL 13+ (a local install, Docker, or a free hosted one such as Neon or Supabase). The tables are created automatically on first run, and `docs/sample-data.sql` adds demo clinics. See [Getting API keys / credentials](#getting-api-keys--credentials).
 
 > **Group project.** Built by a team for the University of Southampton *Software Design and Development Project* (COMP2300, 2025–26). This repo is a snapshot of the code, which I continued to develop after the module ended.
 
 ## Features
 
-- **Accounts:** sign up, log in, password reset, session handling, plus a terms and privacy flow.
-- **Clinic search:** search by postcode to sort clinics by distance and see them on an interactive OpenStreetMap map (Leaflet, no API key needed), zoomed to you and your nearest clinics. Users can set a default clinic.
-- **Booking:** choose a service and timeslot, then cancel or reschedule. Confirmation emails are sent with Thymeleaf HTML templates.
-- **Timeslots from opening hours:** available slots are generated from each clinic's opening hours and the service's length. Only booked slots are stored, and a slot drops out once its bookings reach capacity (reserved with a single conditional update, so it can't be overbooked).
-- **Tracking:** appointment, test and prescription history.
-- **Reminders:** configurable defaults, delivered by email.
-- **Accessibility:** adjustable accessibility settings.
+The demo above follows a patient through the app:
+
+1. **Sign in.** Accounts with sign-up checks, PBKDF2-hashed passwords, password reset by an emailed 6-digit code, and a terms and privacy flow.
+2. **Everything at a glance.** The home screen greets you, counts down to your next appointment and lists everything you have booked.
+3. **Find the nearest clinic.** Search by postcode (free [postcodes.io](https://postcodes.io) API). Clinics are sorted by distance and pinned on an interactive OpenStreetMap map (Leaflet, no API key). Click a pin for the address and choose the clinic straight from the popup. You can save a default clinic, which is offered first next time.
+4. **Choose a service.** STI test, HIV test, contraception and so on; tick one or more and expand each to see what it involves.
+5. **Pick a free time.** Slots are generated from each clinic's opening hours and the service's length. Only booked slots are stored, and a slot drops out once its bookings reach capacity (reserved with a single conditional update, so it can't be overbooked).
+6. **Check and confirm.** A five-step progress bar runs through the booking; the review page shows the clinic, time and your details before you confirm.
+7. **Confirmation email.** Booking, reschedule and cancellation emails are HTML (Thymeleaf templates) and are sent in the background, alongside an in-app notification with a booking reference.
+8. **Reminders your way.** Set how far ahead you are reminded, repeat reminders, quiet hours, discreet wording, and saved defaults for new bookings; check-up reminders if it has been a while since your last visit.
+9. **Manage bookings.** Reschedule to another free slot (the old one is released) or cancel; cancelling always asks first and defaults to keeping the appointment.
+10. **Track tests and prescriptions.** Test results with a clear status, treatment and clinician notes (and a shortcut to book a retest after a positive result); current and past prescriptions with dose, frequency and course dates; past appointments. Search, sort and filter each list by date.
+11. **Accessible.** Keyboard navigation with visible focus rings, screen-reader labels, and per-user high contrast, bold text and text size settings that apply instantly.
+
+![More screens: booking confirmed, reschedule, prescriptions, high contrast mode](media/screens-more.png)
 
 ## Stack
 
@@ -22,7 +36,7 @@ Java 21, JavaFX (FXML, MaterialFX, ControlsFX, WebView + Leaflet), PostgreSQL, a
 
 - **JDK 21** or newer (`java -version`). Install with `winget install --id EclipseAdoptium.Temurin.21.JDK -e`.
 - **Maven 3.9+** (`mvn -v`). Install with `winget install --id Apache.Maven -e`, or use the one bundled with IntelliJ.
-- **PostgreSQL** 14 or newer, local or hosted (only needed to run the app and the integration tests, not for `mvn test`).
+- **PostgreSQL** 13 or newer, local or hosted, that you set up yourself (only needed to run the app and the integration tests, not for `mvn test`).
 - Optional: an SMTP account for sending emails.
 
 ## Setup
@@ -32,6 +46,8 @@ git clone https://github.com/Maheer1001/clinic-booking-app.git
 cd clinic-booking-app
 mvn -DskipTests package      # downloads dependencies and compiles
 ```
+
+Then create a database for the app (next section) and put its details in `.env`. Nothing is shared: every clone uses its own PostgreSQL database.
 
 ## Configure
 
@@ -79,6 +95,11 @@ Without the SMTP keys the app still runs; it logs `[Email] WARNING` and skips se
    ```
 
    With Docker: `Get-Content docs/sample-data.sql | docker exec -i clinic-db psql -U clinic_app -d clinic_booking`.
+5. Optional demo patient: after the app has been started once (so all tables exist), load `docs/demo-data.sql` for a fictional patient with upcoming and past appointments, test results and prescriptions (dates are relative to today). Sign in as `alex.morgan@example.com` / `DemoPass2026!`.
+
+   ```powershell
+   psql -h localhost -U clinic_app -d clinic_booking -f docs/demo-data.sql
+   ```
 
 A hosted Postgres (Neon, Supabase, Render, etc.) also works: copy its JDBC URL into `DB_URL` and add `?sslmode=require`.
 
@@ -97,7 +118,7 @@ Alternatives:
 
 ### Map and postcode lookup
 
-No keys needed. The clinic map uses Leaflet with public OpenStreetMap tiles, and postcode search uses the free https://api.postcodes.io API. Both need internet access.
+No keys needed. The clinic map uses Leaflet with public OpenStreetMap tiles, and postcode search uses the free https://api.postcodes.io API. Both need internet access; without it the map shows a "Map unavailable" message and the clinic list still works.
 
 ## Run
 
@@ -105,16 +126,27 @@ No keys needed. The clinic map uses Leaflet with public OpenStreetMap tiles, and
 mvn clean javafx:run
 ```
 
-Or in IntelliJ, run `app.Main`. If the database is unreachable the window still opens and shows a "Database unavailable" warning.
+Or in IntelliJ, run `app.Main`. If the database is unreachable the window still opens and shows a "Can't connect to the database" message.
 
 ## Test
 
 ```powershell
-mvn test                 # 289 unit tests, no database needed (tests tagged "db" are excluded)
+mvn test                 # 299 unit tests, no database needed (tests tagged "db" are excluded)
 mvn test -Pdb-tests      # also runs the 9 integration tests against the Postgres in .env
 ```
 
 Email sending is disabled during tests (`-Demail.disabled=true` is set by the build).
+
+### Screenshots
+
+The images above come from a screenshot harness (`src/test/java/dev`) that drives the real app through every screen. With the demo data loaded and a desktop session:
+
+```powershell
+mvn -Pscreenshots test-compile exec:exec                      # PNGs in target/screenshots
+mvn -Pscreenshots test-compile exec:exec -Dshots.only=book    # just the booking flow
+```
+
+It books and moves appointments, so reload `docs/demo-data.sql` before running it again.
 
 More setup notes and troubleshooting: [`docs/SETUP.md`](docs/SETUP.md).
 

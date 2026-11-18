@@ -20,6 +20,7 @@ How to get the clinic booking app running from a fresh clone.
 2. **Open it in IntelliJ** (File → Open → the cloned folder). IntelliJ detects `pom.xml` and downloads the Maven dependencies; if it doesn't, right-click `pom.xml` → "Add as Maven Project".
 
 3. **Configure environment variables (.env file)**
+    - **Bring your own database:** no shared or hosted database comes with the repo. Create a PostgreSQL 13+ database yourself (local install, Docker, or a free hosted one such as Neon or Supabase) and point `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` at it. Tables are created on first run; load `docs/sample-data.sql` for demo clinics and, optionally, `docs/demo-data.sql` for a demo patient (see the README).
     - The application requires a `.env` file in the project root directory for database and email configuration
     - **Copy the example file:** Copy `.env.example` to `.env` in the project root:
     ```bash
