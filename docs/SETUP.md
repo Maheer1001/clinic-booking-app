@@ -38,6 +38,7 @@ How to get the clinic booking app running from a fresh clone.
     SMTP_USERNAME=your-email@gmail.com
     SMTP_PASSWORD=your-app-password
     MAIL_FROM=your-email@gmail.com
+    MAIL_FROM_NAME=Sexual Health Clinic
     ```
     - **Important:** 
       - For Gmail, you need to use an [App Password](https://support.google.com/accounts/answer/185833) instead of your regular password
