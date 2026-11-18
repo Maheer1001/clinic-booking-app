@@ -98,11 +98,7 @@ public class LoginController {
                     createNavigator(stage, data.userId());
                 }
                 case INVALID_INPUT -> showError("Enter a valid email address and your password.");
-                case USER_NOT_FOUND, WRONG_PASSWORD -> {
-                    showError(BAD_CREDENTIALS_MESSAGE);
-                    passwordField.clear();
-                    passwordField.requestFocus();
-                }
+                case USER_NOT_FOUND, WRONG_PASSWORD -> showBadCredentials();
                 case DB_ERROR -> showError(DB_ERROR_MESSAGE);
             }
         }, ex -> {
@@ -110,6 +106,15 @@ public class LoginController {
             continueBtn.setText("Log in");
             showError(DB_ERROR_MESSAGE);
         });
+    }
+
+    /** Empties the password box and says the details were wrong (without saying which). */
+    void showBadCredentials() {
+        // Clear first: editing the password clears the message, so clearing it afterwards
+        // used to wipe the error before the user could see it.
+        passwordField.clear();
+        passwordField.requestFocus();
+        showError(BAD_CREDENTIALS_MESSAGE);
     }
 
     private LoginData loadLogin(String email, String password) {

@@ -12,14 +12,29 @@ class PrescriptionSummaryTest {
     void getCourse_onceEveryday() {
         PrescriptionSummary rx = new PrescriptionSummary("Med", "100mg", 1, 1,
                 "01/01/25", "07/01/25", "Take with food", true);
-        assertEquals("Once everyday", rx.getCourse());
+        assertEquals("Once a day", rx.getCourse());
     }
 
     @Test
     void getCourse_twiceEveryday() {
         PrescriptionSummary rx = new PrescriptionSummary("Med", "50mg", 2, 1,
                 "01/01/25", "14/01/25", "Take morning and night", true);
-        assertEquals("Twice everyday", rx.getCourse());
+        assertEquals("Twice a day", rx.getCourse());
+    }
+
+    @Test
+    void getCourse_zeroDaysBetweenDosesMeansDaily() {
+        // Daily courses are recorded with 0 days between doses; this used to read "Once every 0 days".
+        PrescriptionSummary rx = new PrescriptionSummary("Med", "75mcg", 1, 0,
+                "01/01/25", "01/04/25", "Same time each day", true);
+        assertEquals("Once a day", rx.getCourse());
+    }
+
+    @Test
+    void getInstructionLines_nullIsEmpty() {
+        PrescriptionSummary rx = new PrescriptionSummary("Med", "75mcg", 1, 1,
+                "01/01/25", "01/04/25", null, true);
+        assertEquals(List.of(), rx.getInstructionLines());
     }
 
     @Test

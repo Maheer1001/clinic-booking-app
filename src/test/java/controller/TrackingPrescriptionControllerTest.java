@@ -28,13 +28,13 @@ public class TrackingPrescriptionControllerTest {
 
     @Test
     void testGetSearchableTextCurrent() {
-        assertEquals("Onceeverydayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
-        assertEquals("Onceeverydayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", "", "", true))));
+        assertEquals("Onceadayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
+        assertEquals("Onceadayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", "", "", true))));
     }
 
     @Test
     void testGetSearchableTextHistory() {
-        assertEquals("Onceeverydayinactivepasthistory", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().minusDays(1).format(FORMATTER), "", false))));
+        assertEquals("Onceadayinactivepasthistory", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().minusDays(1).format(FORMATTER), "", false))));
     }
 
     @Test
@@ -45,10 +45,10 @@ public class TrackingPrescriptionControllerTest {
 
     @Test
     void testGetSearchableTextDetails() {
-        assertEquals("PrescriptionOnceeverydayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("Prescription", "", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
-        assertEquals("100mgOnceeverydayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
-        assertEquals("OnceeverydayTakeorallyactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true))));
-        assertEquals("Prescription100mgOnceeverydayTakeorallyactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true))));
+        assertEquals("PrescriptionOnceadayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("Prescription", "", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
+        assertEquals("100mgOnceadayactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
+        assertEquals("OnceadayTakeorallyactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true))));
+        assertEquals("Prescription100mgOnceadayTakeorallyactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true))));
     }
 
     @Test
@@ -64,7 +64,7 @@ public class TrackingPrescriptionControllerTest {
         assertTrue(TPController.getPredicate("prescription", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
         assertTrue(TPController.getPredicate("100mg", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
         assertTrue(TPController.getPredicate("once", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
-        assertTrue(TPController.getPredicate("everyday", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
+        assertTrue(TPController.getPredicate("once a day", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
         assertTrue(TPController.getPredicate("current", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
         assertTrue(TPController.getPredicate("active", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));
         assertTrue(TPController.getPredicate("orally", null, null).test(new PrescriptionSummary("Prescription", "100mg", 1, 1, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "Take orally", true)));

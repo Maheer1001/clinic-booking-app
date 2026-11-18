@@ -13,8 +13,9 @@ public record PrescriptionSummary(String name, String dosage, int dosesPerDay, i
         } else {
             course = course + dosesPerDay + " times ";
         }
-        if (daysBetweenDoses == 1) {
-            course = course + "everyday";
+        // 0 or 1 days between doses both mean every day (0 is what the clinic records for daily courses).
+        if (daysBetweenDoses <= 1) {
+            course = course + "a day";
         } else {
             course = course + "every " + daysBetweenDoses + " days";
         }
@@ -22,6 +23,7 @@ public record PrescriptionSummary(String name, String dosage, int dosesPerDay, i
     }
 
     public List<String> getInstructionLines() {
+        if (instructions == null || instructions.isBlank()) return List.of();
         return instructions.lines().toList();
     }
 }

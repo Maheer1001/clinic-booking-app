@@ -76,6 +76,28 @@ class AuthScreensFxmlTest {
     }
 
     @Test
+    void login_wrongPasswordMessageStaysVisible() throws Exception {
+        onFx(() -> {
+            FXMLLoader loader = new FXMLLoader(AuthScreensFxmlTest.class.getResource("/fxml/login.fxml"));
+            Parent root = loader.load();
+            LoginController controller = loader.getController();
+            TextField email = (TextField) root.lookup("#emailField");
+            TextField password = (TextField) root.lookup("#passwordField");
+            Label message = (Label) root.lookup("#messageLabel");
+            email.setText("a@b.com");
+            password.setText("wrong-password1");
+
+            controller.showBadCredentials();
+
+            assertEquals("", password.getText(), "the wrong password is cleared");
+            assertEquals(LoginController.BAD_CREDENTIALS_MESSAGE, message.getText(),
+                    "clearing the password must not also clear the error");
+            assertTrue(message.isVisible());
+            return null;
+        });
+    }
+
+    @Test
     void signup_showsPasswordRules_andNeedsTermsBeforeSubmit() throws Exception {
         Data.SignUpDraft d = Data.getSignUpDraft();
         d.email = ""; d.password = ""; d.confirmPassword = "";
