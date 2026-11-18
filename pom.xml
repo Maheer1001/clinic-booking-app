@@ -119,6 +119,34 @@
 
     <profiles>
         <profile>
+            <!-- Developer tool: walks the app with the demo data and saves a PNG of every screen to
+                 target/screenshots. mvn -Pscreenshots test-compile exec:exec [-Dshots.only=book] -->
+            <id>screenshots</id>
+            <properties>
+                <shots.only></shots.only>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <configuration>
+                            <executable>java</executable>
+                            <classpathScope>test</classpathScope>
+                            <arguments>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>dev.Screenshots</argument>
+                                <argument>target/screenshots</argument>
+                                <argument>${shots.only}</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>db-tests</id>
             <properties>
                 <test.excludedGroups>none</test.excludedGroups>
