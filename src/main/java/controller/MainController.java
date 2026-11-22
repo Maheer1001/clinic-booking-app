@@ -9,8 +9,6 @@ import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.util.Duration;
 import model.AccessibilitySettings;
 import view.*;
@@ -28,22 +26,7 @@ public class MainController {
 
     public MainController(Navigator nav, MainView view, int userID) {
         this.nav = nav;
-
-        //sets up toggle group for navigation bar buttons
-        ToggleGroup group = new ToggleGroup();
-        ToggleButton booking = view.getBookingButton();
-        ToggleButton tracking = view.getTrackingButton();
-        ToggleButton reminders = view.getRemindersButton();
-        booking.setToggleGroup(group);
-        tracking.setToggleGroup(group);
-        reminders.setToggleGroup(group);
-
-        //sets actions for each - set selected property to true everytime to ensure clicking a button twice stays selected
-        booking.setOnAction(e -> {booking.selectedProperty().set(true); nav.handleTabClick("booking");});
-
-        tracking.setOnAction(e -> {tracking.selectedProperty().set(true); nav.handleTabClick("tracking");});
-
-        reminders.setOnAction(e -> {reminders.selectedProperty().set(true); nav.handleTabClick("reminders");});
+        // The tab buttons (patient or staff) are wired by the Navigator from its tab config.
 
         setUpSettingsListeners(userID);
 
@@ -71,9 +54,8 @@ public class MainController {
             } catch (SQLException ignored) {}
         });
 
-        //initial navigation states
-        booking.selectedProperty().set(true);
-        nav.handleTabClick("booking");
+        // open the first tab (Booking for patients, Today for staff)
+        nav.start();
     }
 
     /** Clears the session and returns to the login screen, optionally showing a message there. */
