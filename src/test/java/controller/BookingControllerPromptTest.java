@@ -155,6 +155,31 @@ class BookingControllerPromptTest {
     }
 
     @Test
+    void sortClinicsByPostcode_withEmptyBox_asksForAPostcodeAndKeepsTheOrder() {
+        Clinic a = new Clinic("Clinic A", "Addr", "SO17 2FW", "1", List.of(), new Coordinate(0, 0), List.of());
+        Clinic b = new Clinic("Clinic B", "Addr", "SO15 3HL", "2", List.of(), new Coordinate(0, 0), List.of());
+        List<Clinic> clinics = new java.util.ArrayList<>(List.of(a, b));
+        BookingController controller = new BookingController(new CapturingNavigator(new MainView()),
+                new CapturingBookingService(), new CapturingDispatcher(), uid -> Optional.empty(), new UserDAO());
+
+        assertTrue(controller.sortClinicsByPostcode(clinics, "   ").isEmpty(), "no distances without a postcode");
+        assertEquals(List.of(a, b), clinics);
+    }
+
+    @Test
+    void recipientName_prefersTheNameTypedForThisBooking() {
+        Book b = new Book();
+        b.setFirstName(" Sam ");
+        b.setLastName("Lee");
+        assertEquals("Sam Lee", BookingController.recipientName(b, "someone@example.com"),
+                "an account without a name has its email as display name; the typed name should win");
+        Book blank = new Book();
+        assertEquals("Alex Morgan", BookingController.recipientName(blank, "Alex Morgan"));
+        assertEquals("Patient", BookingController.recipientName(blank, " "));
+        assertEquals("Patient", BookingController.recipientName(blank, null));
+    }
+
+    @Test
     void clinicMeta_showsDistanceOnlyAfterASearch() {
         Clinic clinic = new Clinic("Clinic 1", "Addr", "SO17 2FW", "123", List.of(), new Coordinate(0, 0), List.of());
         assertEquals("SO17 2FW", BookingController.clinicMeta(clinic, null));

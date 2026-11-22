@@ -116,11 +116,22 @@ public class BookingController {
 
     public Map<Clinic, Double> sortClinicsByPostcode(List<Clinic> clinics, String postcode) {
         Map<Clinic, Double> dict = new HashMap<>();
+        if (postcode == null || postcode.isBlank()) {
+            // Searching with an empty box used to ask the postcode API and then say "We couldn't find that postcode".
+            messageLabel.setText("Enter your postcode to see the nearest clinics first.");
+            return dict;
+        }
         try {
             Coordinate userCoord = Postcode.getCoord(postcode);
 
             for (Clinic clinic : clinics) {
-                dict.put(clinic, Postcode.haversine(userCoord, Postcode.getCoord(clinic.getPostcode())));
+                // Use the clinic's stored position (the one its map pin uses) and only look the postcode up
+                // when there isn't one: a web request per clinic froze the window for seconds on every search.
+                Coordinate at = clinic.getCoords();
+                if (at == null || !Double.isFinite(at.lat()) || !Double.isFinite(at.lon())) {
+                    at = Postcode.getCoord(clinic.getPostcode());
+                }
+                dict.put(clinic, Postcode.haversine(userCoord, at));
             }
             clinics.sort(
                     Comparator.comparingDouble(dict::get)
@@ -385,11 +396,7 @@ public class BookingController {
         boolean confirmationDiscreet = commPrefs.confirmationDiscreet();
         ReminderTemplateOverrides confirmationTpl = commPrefs.confirmationTemplate();
         String recipientEmail = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : b.getEmail();
-        String recipientName = Data.getCurrentUserName() != null ? Data.getCurrentUserName()
-                : (b.getFirstName() + " " + b.getLastName()).trim();
-        if (recipientName.isBlank()) {
-            recipientName = "Patient";
-        }
+        String recipientName = recipientName(b, Data.getCurrentUserName());
         Clinic clinic = b.getClinic();
         String clinicName = clinic != null ? clinic.getName() : "";
         boolean hasEmail = recipientEmail != null && !recipientEmail.isBlank();
@@ -491,6 +498,19 @@ public class BookingController {
 
         nav.goToPage(prompt, "Booking confirmed", true);
         return outcome;
+    }
+
+    /**
+     * Who the confirmation is addressed to: the name typed on the details step, else the account's name.
+     * The account name was used first, and for an account without a name that is its email address,
+     * so the email opened "Dear someone@example.com" even though the patient had just typed their name.
+     */
+    static String recipientName(Book b, String accountName) {
+        String typed = ((b.getFirstName() == null ? "" : b.getFirstName().strip()) + " "
+                + (b.getLastName() == null ? "" : b.getLastName().strip())).strip();
+        if (!typed.isEmpty()) return typed;
+        if (accountName != null && !accountName.isBlank()) return accountName.strip();
+        return "Patient";
     }
 
     private static final java.time.format.DateTimeFormatter CONFIRMED_DATE_FMT =
