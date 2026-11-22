@@ -14,7 +14,11 @@ public class AuthService {
         INVALID_EMAIL,
         WEAK_PASSWORD,
         EMAIL_ALREADY_USED,
-        DB_ERROR
+        DB_ERROR,
+        /** Only from the sign-up overload that takes a security question: the key is not in the list. */
+        INVALID_SECURITY_QUESTION,
+        /** Only from the sign-up overload that takes a security question: the answer is blank/too short/too long. */
+        INVALID_SECURITY_ANSWER
     }
 
     public enum SignInResult {
@@ -41,19 +45,56 @@ public class AuthService {
     private static final String DUMMY_HASH = PasswordHasher.hash("not-a-real-password-0");
 
     private final UserRepository userDAO;
+    private final SecurityQuestionService securityQuestions;
 
     /**
      * Production constructor — uses the real UserDAO.
      */
     public AuthService() {
-        this(new UserDAO());
+        this(new UserDAO(), new SecurityQuestionService());
     }
 
     /**
      * Testable constructor — accepts any UserRepository implementation.
      */
     public AuthService(UserRepository userDAO) {
+        this(userDAO, new SecurityQuestionService());
+    }
+
+    public AuthService(UserRepository userDAO, SecurityQuestionService securityQuestions) {
         this.userDAO = userDAO;
+        this.securityQuestions = securityQuestions;
+    }
+
+    /**
+     * Sign-up with a security question ({@link model.SecurityQuestion} key) and answer. Everything is
+     * validated before the account is created. If the account is created but the question cannot be
+     * saved, the result is still SUCCESS: the account exists, and
+     * {@link SecurityQuestionService#hasSecurityQuestion} lets the app ask for a question later.
+     */
+    public SignUpResult signUp(String email, String password, boolean acceptedTerms,
+                               String securityQuestionKey, String securityAnswer) {
+        // Same order as the form: terms, email, password, then the question.
+        if (!acceptedTerms) return SignUpResult.TERMS_NOT_ACCEPTED;
+        if (!isValidEmail(normalize(email))) return SignUpResult.INVALID_EMAIL;
+        if (!isStrongEnoughPassword(password)) return SignUpResult.WEAK_PASSWORD;
+        if (model.SecurityQuestion.fromKey(securityQuestionKey).isEmpty()) {
+            return SignUpResult.INVALID_SECURITY_QUESTION;
+        }
+        if (!SecurityQuestionService.isValidAnswer(securityAnswer)) {
+            return SignUpResult.INVALID_SECURITY_ANSWER;
+        }
+        SignUpResult result = signUp(email, password, acceptedTerms);
+        if (result != SignUpResult.SUCCESS) return result;
+        try {
+            Integer userId = userDAO.getUserIdByEmail(normalize(email));
+            if (userId != null) {
+                securityQuestions.setSecurityQuestion(userId, securityQuestionKey, securityAnswer);
+            }
+        } catch (SQLException ignored) {
+            // Account exists; the question can be set later.
+        }
+        return result;
     }
 
     public SignUpResult signUp(String email, String password, boolean acceptedTerms) {
