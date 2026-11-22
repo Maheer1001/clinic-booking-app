@@ -71,6 +71,8 @@ public final class UI {
     public static final String ALERT_AGREE  = "alert-agree";
     public static final String ALERT_IGNORE  = "alert-ignore";
     public static final String TEXT_FIELD = "app-text-field";
+    /** Full-width, primary-height sizing shared by every in-page action button. */
+    public static final String BTN_BLOCK = "app-btn-block";
 
     /** Page container with standard padding/spacing. */
     public static VBox page(Node... children) {
@@ -142,21 +144,40 @@ public final class UI {
         return v;
     }
 
-    /** Primary action button. */
+    /*
+     * Button roles. Every in-page action uses one of these three, full width and the same height,
+     * stacked in this order: primary first, then secondary, destructive last.
+     */
+
+    /** Primary action button (filled). */
     public static Button primaryButton(String text) {
         Button b = new Button(text);
-        b.getStyleClass().add(BTN);
+        b.getStyleClass().addAll(BTN, BTN_BLOCK);
         return b;
     }
 
-    /** Back / secondary button. */
+    /** Secondary action (outlined, same size as {@link #primaryButton}), e.g. "Change reminder", "Send test email". */
+    public static Button secondaryButton(String text) {
+        Button b = new Button(text);
+        b.getStyleClass().addAll(BTN_BACK, BTN_BLOCK);
+        return b;
+    }
+
+    /** Destructive action (red outline, same size as {@link #primaryButton}), e.g. "Cancel appointment". */
+    public static Button destructiveButton(String text) {
+        Button b = new Button(text);
+        b.getStyleClass().addAll(BTN_DANGER, BTN_BLOCK);
+        return b;
+    }
+
+    /** Compact outlined button for the header icons and small inline controls; use {@link #secondaryButton} in pages. */
     public static Button backButton(String text) {
         Button b = new Button(text);
         b.getStyleClass().add(BTN_BACK);
         return b;
     }
 
-    /** Remove / destructive secondary button (light fill, red border and text). */
+    /** Compact destructive button for inline rows (e.g. "Remove" on a reminder row); use {@link #destructiveButton} in pages. */
     public static Button dangerButton(String text) {
         Button b = new Button(text);
         b.getStyleClass().add(BTN_DANGER);
@@ -374,8 +395,16 @@ public final class UI {
         return l;
     }
 
+    /** Every in-place save says "Saved." first, optionally followed by what happens next. */
+    public static final String SAVED = "Saved.";
+
     public static void showSaveConfirmation(Label label) {
-        label.setText("Changes have been saved.");
+        label.setText(SAVED);
+    }
+
+    /** "Saved. " followed by a short note, e.g. "Saved. New bookings will use these defaults." */
+    public static void showSaveConfirmation(Label label, String detail) {
+        label.setText(detail == null || detail.isBlank() ? SAVED : SAVED + " " + detail);
     }
 
     public static HBox equalSpacing(HBox hbox) {

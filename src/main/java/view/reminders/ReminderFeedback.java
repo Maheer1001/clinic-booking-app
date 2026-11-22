@@ -31,9 +31,14 @@ final class ReminderFeedback {
     }
 
     static void saveResult(Label label, boolean saved) {
+        saveResult(label, saved, (String) null);
+    }
+
+    /** "Saved. {detail}" on success (same wording on every reminder card and the defaults). */
+    static void saveResult(Label label, boolean saved, String detail) {
         if (saved) {
             clearError(label);
-            UI.showSaveConfirmation(label);
+            UI.showSaveConfirmation(label, detail);
         } else {
             showError(label, SAVE_FAILED);
         }

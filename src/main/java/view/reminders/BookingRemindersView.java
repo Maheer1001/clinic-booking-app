@@ -221,9 +221,9 @@ public class BookingRemindersView {
         );
         TitledPane notifPane = styledPane("Notification", notifInner);
 
-        Button saveBtn = UI.primaryButton("Save reminder");
-        Button testEmailBtn = UI.backButton("Send test email");
-        Button previewNotifBtn = UI.backButton("Preview notification");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button previewNotifBtn = UI.secondaryButton("Preview notification");
 
         saveBtn.setOnAction(e -> {
             boolean notify = ReminderNotifyChoice.isEnabled(notifyChoice);
@@ -354,9 +354,9 @@ public class BookingRemindersView {
         TitledPane emailPane = styledPane("Email", fields.emailSectionContent());
         TitledPane notifPane = styledPane("Notification", fields.notificationSectionContent());
 
-        Button saveBtn = UI.primaryButton("Save reminder");
-        Button testEmailBtn = UI.backButton("Send test email");
-        Button previewBtn = UI.backButton("Preview notification");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button previewBtn = UI.secondaryButton("Preview notification");
 
         saveBtn.setOnAction(e -> {
             boolean saved;
@@ -367,7 +367,7 @@ public class BookingRemindersView {
                 System.err.println("Could not save communication preferences: " + ex.getMessage());
                 saved = false;
             }
-            ReminderFeedback.saveResult(saveConfirm, saved);
+            ReminderFeedback.saveResult(saveConfirm, saved, "Future emails like this will use these settings.");
         });
         testEmailBtn.setOnAction(e -> testEmailAction.accept(saveConfirm));
         previewBtn.setOnAction(e -> previewNotificationAction.run());

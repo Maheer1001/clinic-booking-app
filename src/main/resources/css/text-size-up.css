@@ -181,3 +181,7 @@
 .label.appointment-meta { -fx-font-size: 15px; }
 .label.appointment-place { -fx-font-size: 15px; }
 .entry-header .label.entry-title { -fx-font-size: 20px; }
+
+.app-btn-block {
+    -fx-font-size: 18px; /* +2 */
+}

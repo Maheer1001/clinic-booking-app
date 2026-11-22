@@ -1699,3 +1699,13 @@
     -fx-border-insets: -3px;
     -fx-border-radius: 12px;
 }
+
+/* ---- Button roles: primary / secondary / destructive share one size (UI.*Button add app-btn-block) ---- */
+.app-btn-block {
+    -fx-max-width: infinity;
+    -fx-pref-height: 44px;
+    -fx-min-height: 44px;
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+    -fx-padding: 0 16 0 16;
+}

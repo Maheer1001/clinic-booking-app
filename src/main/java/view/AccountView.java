@@ -121,7 +121,7 @@ public class AccountView {
                     first.setText(nullToEmpty(f));
                     last.setText(nullToEmpty(l));
                     msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
-                    UI.showSaveConfirmation(msg);
+                    UI.showSaveConfirmation(msg, "Your details are up to date.");
                     // keep the logged-in user's display name (used in emails) in step with the edit
                     if (Data.getCurrentUserId() == userId) {
                         String name = ((f != null ? f : "") + " " + (l != null ? l : "")).trim();

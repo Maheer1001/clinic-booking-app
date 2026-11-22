@@ -66,7 +66,7 @@ public class Review {
         confirmMessage.managedProperty().bind(confirmMessage.textProperty().isNotEmpty());
         confirmMessage.visibleProperty().bind(confirmMessage.textProperty().isNotEmpty());
 
-        Button changeTime = UI.backButton("Choose a different time");
+        Button changeTime = UI.secondaryButton("Choose a different time");
         changeTime.setOnAction(e -> controller.goToTimeslotsForItems());
         changeTime.setVisible(false);
         changeTime.managedProperty().bind(changeTime.visibleProperty());

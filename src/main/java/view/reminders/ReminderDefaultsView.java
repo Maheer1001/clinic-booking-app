@@ -58,9 +58,9 @@ public class ReminderDefaultsView {
                 "Dr Preview",
                 LocalDateTime.now().plusDays(3).withSecond(0).withNano(0));
 
-        Button saveBtn = UI.primaryButton("Save defaults");
-        Button testEmailBtn = UI.backButton("Send preview email");
-        Button testNotifBtn = UI.backButton("Preview notification");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button testNotifBtn = UI.secondaryButton("Preview notification");
         Label saveConfirm = UI.inlineSaveConfirmation();
 
         saveBtn.setOnAction(e -> {
@@ -82,7 +82,7 @@ public class ReminderDefaultsView {
             if (saved && !p.notificationsEnabled()) {
                 saveConfirm.setText("Saved. New bookings will not get a reminder until you choose Enabled.");
             } else {
-                ReminderFeedback.saveResult(saveConfirm, saved);
+                ReminderFeedback.saveResult(saveConfirm, saved, "New bookings will use these defaults.");
             }
         });
 

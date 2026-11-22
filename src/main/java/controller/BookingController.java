@@ -455,7 +455,7 @@ public class BookingController {
                         : "Reminders are off (your saved default). You can turn them on in Reminders."),
                 ex -> blurbLabel.setText("We couldn't set up a reminder automatically. You can set one in Reminders."));
 
-        Button setupRemindersBtn = UI.backButton("Change reminder");
+        Button setupRemindersBtn = UI.secondaryButton("Change reminder");
         Button skipBtn = UI.primaryButton("Done");
 
         setupRemindersBtn.setOnAction(e -> {nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});

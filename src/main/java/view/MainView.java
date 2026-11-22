@@ -32,7 +32,7 @@ public class MainView {
     private final ToggleButton trackingButton = UI.navButton("Tracking");
     private final ToggleButton remindersButton = UI.navButton("Reminders");
     /** Entry point for per-user default appointment reminder configuration (behaviour can be moved later). */
-    private final Button deleteUser = UI.dangerButton("Delete account");
+    private final Button deleteUser = UI.destructiveButton("Delete account");
     private final Button logOutButton = UI.menuButton("Log Out");
 
     public ToggleButton getBookingButton() {return bookingButton;}
@@ -171,7 +171,7 @@ public class MainView {
 
         reschedule.setMaxWidth(Double.MAX_VALUE);
         // Destructive, so styled as such and confirmed: one stray click used to cancel the appointment.
-        Button cancel = UI.dangerButton("Cancel appointment");
+        Button cancel = UI.destructiveButton("Cancel appointment");
         cancel.setMaxWidth(Double.MAX_VALUE);
 
         cancel.setOnAction(e -> {

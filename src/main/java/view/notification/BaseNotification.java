@@ -112,7 +112,7 @@ public abstract class BaseNotification implements Notification {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         scroll.setMaxHeight(420);
 
-        Button dismissButton = UI.backButton("Dismiss");
+        Button dismissButton = UI.secondaryButton("Dismiss");
         dismissButton.setOnAction(e -> stage.close());
 
         HBox buttonRow;
@@ -138,6 +138,7 @@ public abstract class BaseNotification implements Notification {
         }
 
         buttonRow.setAlignment(Pos.CENTER_RIGHT);
+        buttonRow.getChildren().forEach(b -> HBox.setHgrow(b, Priority.ALWAYS));
 
         root = new VBox(12, scroll, buttonRow);
         root.getStyleClass().add(UI.NOTIFICATION);

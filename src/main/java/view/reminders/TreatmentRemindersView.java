@@ -167,10 +167,10 @@ public class TreatmentRemindersView {
             p.setExpanded(false);
         }
 
-        Button saveBtn = UI.primaryButton("Save reminder");
-        Button testEmailBtn = UI.backButton("Send test email");
-        Button testNotifBtn = UI.backButton("Preview notification");
-        Button resetBtn = UI.backButton("Reset to default");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button testNotifBtn = UI.secondaryButton("Preview notification");
+        Button resetBtn = UI.secondaryButton("Reset to default");
         Label saveConfirm = UI.inlineSaveConfirmation();
 
         boolean canReset = defaults != null && defaults.isPresent() && rx.getDosesPerDay() != null && rx.getDosesPerDay() > 0;
