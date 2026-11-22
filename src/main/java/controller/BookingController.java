@@ -345,31 +345,12 @@ public class BookingController {
         nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
-    public void selectService(Service service) {
-        Book booking = Data.getBooking();
-        booking.setService(service);
-
-        // Ensure there is at least one item for the selected service (single-service flow).
-        if (booking.getItems() == null || booking.getItems().isEmpty()) {
-            booking.setItems(java.util.List.of(new Item(service)));
-        }
-
-        goToTimeslotsForItems();
-    }
-
     /**
      * Navigates to the timeslot selection page for the currently selected clinic and items
      * in the multi-service booking flow.
      */
     public void goToTimeslotsForItems() {
         nav.goToPage(DateTime.getPage(this), "Pick a time", false);
-    }
-
-    /**
-     * Navigates back to the service selection page for the current clinic.
-     */
-    public void goToServiceSelection() {
-        nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
     public void goToDetails() {
