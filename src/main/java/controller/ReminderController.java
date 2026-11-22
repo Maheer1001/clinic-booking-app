@@ -143,6 +143,116 @@ public class ReminderController {
         notificationScheduler.scheduleBookingReminder(email, name, daysSinceLast, lastDate, customMessage);
     }
 
+    // ------------------------------------------------------------------ keeping the scheduler in step
+
+    /** Used for a new booking when the user has not saved their own default reminder. */
+    public static final String NEW_BOOKING_SCHEDULE = "{\"reminders\":[{\"amount\":1,\"unit\":\"day\"}]}";
+    /** Discreet by default, matching the reminder form. */
+    public static final String NEW_BOOKING_MESSAGE = "{\"discreet\":\"true\"}";
+
+    /**
+     * Gives each newly booked appointment a reminder straight away: the user's saved default if they
+     * have one (respecting a default of "off"), otherwise a discreet reminder one day before.
+     *
+     * @return true if reminders are now on for these appointments
+     */
+    public boolean applyReminderForNewBookings(List<Integer> appIds, String email, String name) {
+        Optional<AppointmentReminderDefaults> saved;
+        try {
+            saved = getDefaultAppointmentReminderTemplate().filter(AppointmentReminderDefaults::hasSavedTemplate);
+        } catch (RuntimeException e) {
+            saved = Optional.empty();
+        }
+        boolean notify = saved.map(AppointmentReminderDefaults::notificationsEnabled).orElse(true);
+        String days = saved.map(AppointmentReminderDefaults::customDays).filter(s -> !s.isBlank()).orElse(NEW_BOOKING_SCHEDULE);
+        String message = saved.map(AppointmentReminderDefaults::customMessage).filter(s -> !s.isBlank()).orElse(NEW_BOOKING_MESSAGE);
+
+        List<Appointment> upcoming = notify ? getUpcomingAppointments() : List.of();
+        for (int appId : appIds) {
+            reminderDAO.saveAppointmentReminder(userId, appId, notify, days, message);
+            if (notify && email != null && !email.isBlank()) {
+                upcoming.stream().filter(a -> a.getAppId() == appId).findFirst()
+                        .ifPresent(a -> notificationScheduler.scheduleAppointmentReminderWithSchedule(
+                                a, email, name, days, message));
+            }
+        }
+        return notify;
+    }
+
+    /**
+     * Re-creates this user's reminders from the database. The scheduler only lives while the app is
+     * open, so without this every saved reminder was forgotten the next time the app started.
+     * Times that have already passed are skipped rather than sent late, so logging in twice never
+     * re-sends anything.
+     *
+     * @return number of reminder entries scheduled
+     */
+    public int restoreScheduledReminders(String email, String name) {
+        if (email == null || email.isBlank()) {
+            return 0;
+        }
+        String displayName = name == null || name.isBlank() ? email : name;
+        int restored = 0;
+
+        List<Appointment> upcoming = getUpcomingAppointments();
+        for (AppointmentReminder r : getAppointmentReminders()) {
+            if (!r.isNotify()) continue;
+            for (Appointment a : upcoming) {
+                if (a.getAppId() == r.getAppId()) {
+                    notificationScheduler.scheduleAppointmentReminderWithSchedule(
+                            a, email, displayName, r.getCustomDays(), r.getCustomMessage(), false);
+                    restored++;
+                }
+            }
+        }
+
+        List<Prescription> prescriptions = getPrescriptionsForReminders();
+        for (PrescriptionReminder r : getPrescriptionReminders()) {
+            if (!r.isNotify() || r.getIntervalBetweenDoses() <= 0) continue;
+            for (Prescription rx : prescriptions) {
+                if (rx.getPrescriptionId() == r.getPrescriptionId()) {
+                    notificationScheduler.scheduleTreatmentReminder(
+                            rx, email, displayName, r.getIntervalBetweenDoses(), r.getCustomMessage());
+                    restored++;
+                }
+            }
+        }
+
+        for (BookingReminder r : getBookingReminders()) {
+            if (!r.isNotify()) continue;
+            Optional<LocalDate> last = getLastAppointmentDate();
+            // Only a nudge that is still in the future; an overdue one would otherwise fire on every login.
+            if (last.isPresent() && last.get().plusDays(r.getDaysSinceLast()).isAfter(LocalDate.now())) {
+                notificationScheduler.scheduleBookingReminder(
+                        email, displayName, r.getDaysSinceLast(), last.get(), r.getCustomMessage());
+                restored++;
+            }
+        }
+        return restored;
+    }
+
+    /** After an appointment moves, re-schedules its saved reminder for the new time. */
+    public void rescheduleAppointmentReminder(int appId, String email, String name) {
+        notificationScheduler.cancelAppointmentReminders(appId);
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        String displayName = name == null || name.isBlank() ? email : name;
+        getAppointmentReminders().stream()
+                .filter(r -> r.getAppId() == appId && r.isNotify())
+                .findFirst()
+                .ifPresent(r -> getUpcomingAppointments().stream()
+                        .filter(a -> a.getAppId() == appId)
+                        .findFirst()
+                        .ifPresent(a -> notificationScheduler.scheduleAppointmentReminderWithSchedule(
+                                a, email, displayName, r.getCustomDays(), r.getCustomMessage())));
+    }
+
+    /** After a cancellation, drops any reminder still waiting for that appointment. */
+    public void cancelAppointmentReminders(int appId) {
+        notificationScheduler.cancelAppointmentReminders(appId);
+    }
+
     public Optional<AppointmentReminderDefaults> getDefaultAppointmentReminderTemplate() {
         try {
             return userRepository.getDefaultAppointmentReminderTemplate(userId);

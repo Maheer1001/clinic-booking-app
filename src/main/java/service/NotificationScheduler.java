@@ -149,6 +149,16 @@ public class NotificationScheduler {
      */
     public void scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
                                                         String scheduleRaw, String customMessage) {
+        scheduleAppointmentReminderWithSchedule(appt, recipientEmail, recipientName, scheduleRaw, customMessage, true);
+    }
+
+    /**
+     * @param catchUpMissed true when the user has just saved or changed the reminder (send one catch-up
+     *                      if a time has already passed); false when restoring saved reminders at login,
+     *                      so logging in again never re-sends a reminder whose time has gone
+     */
+    public void scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
+                                                        String scheduleRaw, String customMessage, boolean catchUpMissed) {
         String key = appointmentKey(appt.getAppId());
         cancel(key);
 
@@ -187,7 +197,7 @@ public class NotificationScheduler {
             startChain(key, first, next, quietHours, beforeAppointment, stillWanted, email);
         }
 
-        if (missedOne) {
+        if (missedOne && catchUpMissed) {
             log("Some reminder times for appointment " + appt.getAppId() + " have passed; sending one reminder in " + defaultDelaySeconds + "s");
             startChain(key, now.plusSeconds(defaultDelaySeconds), null, UnaryOperator.identity(), t -> true, stillWanted, email);
         }
@@ -531,7 +541,8 @@ public class NotificationScheduler {
 
         if (rule.timeOfDay() != null && !rule.timeOfDay().isBlank()) {
             try {
-                LocalTime t = LocalTime.parse(rule.timeOfDay().trim(), HH_MM);
+                // "H:mm" also accepts single-digit hours such as "9:00" (saved by older versions).
+                LocalTime t = LocalTime.parse(rule.timeOfDay().trim(), DateTimeFormatter.ofPattern("H:mm"));
                 base = base.toLocalDate().atTime(t);
             } catch (Exception ignored) {
                 // leave base as-is on parse errors

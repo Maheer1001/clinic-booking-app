@@ -19,7 +19,6 @@ import javafx.stage.Stage;
 import javafx.scene.layout.VBox;
 import model.*;
 import service.BookingCommunicationPrefs;
-import service.AsyncNotifier;
 import service.BookingService;
 import service.NotificationDispatcher;
 import service.email.BookingConfirmationEmail;
@@ -395,13 +394,20 @@ public class BookingController {
         String clinicName = clinic != null ? clinic.getName() : "";
         boolean hasEmail = recipientEmail != null && !recipientEmail.isBlank();
 
+        // Filled in once the confirmation emails have actually gone (or failed), instead of claiming
+        // they were sent before trying.
+        Label sub = UI.intro(hasEmail
+                ? "Sending a confirmation to " + recipientEmail + "…"
+                : "Your booking is saved. Add an email address to get confirmations.");
+        int[] emailsLeft = {0};
+        boolean[] anyFailed = {false};
         for (BookingService.BookedAppointment appt : outcome.booked()) {
             if (appt.date() == null || appt.time() == null) continue;
             String bookingRef = "APP-" + appt.appId(); // same reference the cancel and reschedule emails use
             LocalDateTime appointmentDateTime = LocalDateTime.of(appt.date(), appt.time());
             String serviceName = appt.service() != null ? appt.service().getName() : "";
-            AsyncNotifier.notifyUser(
-                    notificationDispatcher,
+            if (hasEmail) emailsLeft[0]++;
+            notificationDispatcher.notifyUserAsync(
                     userId,
                     hasEmail ? new BookingConfirmationEmail(
                             recipientEmail, recipientName, bookingRef, serviceName,
@@ -411,60 +417,44 @@ public class BookingController {
                             recipientName, bookingRef, serviceName, appointmentDateTime, clinicName, "Clinician",
                             confirmationDiscreet,
                             confirmationTpl
-                    )
+                    ),
+                    hasEmail ? sent -> {
+                        if (!sent) anyFailed[0] = true;
+                        if (--emailsLeft[0] == 0) {
+                            sub.setText(anyFailed[0]
+                                    ? "Your booking is saved, but we couldn't send the confirmation email to "
+                                      + recipientEmail + ". Check your email settings and try again later."
+                                    : "We've emailed a confirmation to " + recipientEmail
+                                      + ". If it isn't in your inbox, check your spam folder.");
+                        }
+                    } : null
             );
         }
         Data.reset();
 
-        Optional<AppointmentReminderDefaults> defaultTemplate = userId >= 0
-                ? reminderDefaultsReader.load(userId)
-                : Optional.empty();
-        boolean showUseDefault = !newAppIds.isEmpty()
-                && defaultTemplate.filter(AppointmentReminderDefaults::hasSavedTemplate).isPresent();
-
-        Button setupRemindersBtn = UI.primaryButton("Set up a reminder");
-        Button defaultRemindersBtn = UI.backButton("Use default reminders");
-        Button skipBtn = UI.backButton("Done");
-
+        // Every new booking gets a reminder straight away (the user's saved default, or one day before).
+        // Before, nothing was set unless the user went to Reminders and switched each one on.
+        Label blurbLabel = UI.intro("Setting up your reminder…");
         List<Integer> savedIds = List.copyOf(newAppIds);
+        String reminderEmail = hasEmail ? recipientEmail : "";
+        String reminderName = recipientName;
+        Background.run(
+                () -> new ReminderController(userId).applyReminderForNewBookings(savedIds, reminderEmail, reminderName),
+                on -> blurbLabel.setText(on
+                        ? (hasEmail ? "We'll email you a reminder before your appointment. You can change or turn it off in Reminders."
+                                    : "Reminders are on, but you need an email address on your account to receive them.")
+                        : "Reminders are off (your saved default). You can turn them on in Reminders."),
+                ex -> blurbLabel.setText("We couldn't set up a reminder automatically. You can set one in Reminders."));
+
+        Button setupRemindersBtn = UI.backButton("Change reminder");
+        Button skipBtn = UI.primaryButton("Done");
 
         setupRemindersBtn.setOnAction(e -> {nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});
-        defaultRemindersBtn.setOnAction(e -> {
-            defaultTemplate.filter(AppointmentReminderDefaults::hasSavedTemplate).ifPresent(def -> {
-                if (savedIds.isEmpty()) {
-                    return;
-                }
-                ReminderController reminders = new ReminderController(userId);
-                String email = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : "";
-                String rawName = Data.getCurrentUserName();
-                final String reminderName = (rawName == null || rawName.isBlank()) ? email : rawName;
-                for (int appId : savedIds) {
-                    reminders.saveAppointmentReminder(appId, def.notificationsEnabled(), def.customDays(), def.customMessage());
-                    if (def.notificationsEnabled()) {
-                        reminders.getUpcomingAppointments().stream()
-                                .filter(a -> a.getAppId() == appId)
-                                .findFirst()
-                                .ifPresent(appt -> reminders.scheduleAppointmentReminderWithSchedule(
-                                        appt, email, reminderName, def.customDays(), def.customMessage()));
-                    }
-                }
-            });
-            nav.goToHome();
-        });
         skipBtn.setOnAction(e -> nav.goToHome());
 
-        String blurb = showUseDefault
-                ? "Want a reminder? Apply your saved defaults, customise it in Reminders, or do it later."
-                : "Want a reminder before your appointment? Set one up now or later from the Reminders tab.";
-
         setupRemindersBtn.setMaxWidth(Double.MAX_VALUE);
-        defaultRemindersBtn.setMaxWidth(Double.MAX_VALUE);
         skipBtn.setMaxWidth(Double.MAX_VALUE);
-        VBox buttonRow = new VBox(8, setupRemindersBtn);
-        if (showUseDefault) {
-            buttonRow.getChildren().add(defaultRemindersBtn);
-        }
-        buttonRow.getChildren().add(skipBtn);
+        VBox buttonRow = new VBox(8, skipBtn, setupRemindersBtn);
 
         VBox summary = UI.card(10);
         for (BookingService.BookedAppointment appt : outcome.booked()) {
@@ -483,9 +473,6 @@ public class BookingController {
         badge.getStyleClass().add("success-badge");
         Label title = new Label("You're booked in");
         title.getStyleClass().add("success-title");
-        Label sub = UI.intro(hasEmail
-                ? "We've emailed a confirmation to " + recipientEmail + "."
-                : "Your booking is saved. Add an email address to get confirmations.");
         sub.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
         sub.setAlignment(Pos.CENTER);
         VBox hero = new VBox(8, badge, title, sub);
@@ -498,7 +485,8 @@ public class BookingController {
             notBooked.setWrapText(true);
             prompt.getChildren().add(notBooked);
         }
-        Label blurbLabel = UI.intro(blurb);
+        blurbLabel.setWrapText(true);
+        sub.setWrapText(true);
         prompt.getChildren().addAll(blurbLabel, buttonRow);
 
         nav.goToPage(prompt, "Booking confirmed", true);

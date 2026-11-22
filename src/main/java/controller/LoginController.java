@@ -94,6 +94,7 @@ public class LoginController {
                     }
                     Data.setCurrentUser(data.userId(), email, data.name());
                     Data.setSettings(data.settings());
+                    restoreReminders(data.userId(), email, data.name());
                     Stage stage = (Stage) emailField.getScene().getWindow();
                     createNavigator(stage, data.userId());
                 }
@@ -106,6 +107,16 @@ public class LoginController {
             continueBtn.setText("Log in");
             showError(DB_ERROR_MESSAGE);
         });
+    }
+
+    /**
+     * Reminders are only held in memory while the app runs, so put this user's saved reminders back
+     * on the schedule each time they sign in. Runs in the background so login is not slowed down.
+     */
+    private static void restoreReminders(int userId, String email, String name) {
+        Background.run(() -> new ReminderController(userId).restoreScheduledReminders(email, name),
+                count -> System.out.println("[Reminders] Restored " + count + " saved reminder(s) for this user"),
+                ex -> System.err.println("[Reminders] Could not restore saved reminders: " + ex.getMessage()));
     }
 
     /** Empties the password box and says the details were wrong (without saying which). */
