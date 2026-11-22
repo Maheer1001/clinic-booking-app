@@ -2,8 +2,6 @@ package view;
 
 import app.Data;
 import controller.TrackingController;
-import javafx.application.Platform;
-import javafx.beans.binding.Bindings;
 import javafx.beans.property.*;
 import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
@@ -22,26 +20,46 @@ import service.TrackingService;
 import view.reminders.RemindersView;
 import view.ui.UI;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Stack;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
  * Controls navigation between pages in the main application.
- * Root is a BorderPane with header (back, title, home), centre content, and a persistent bottom tab bar.
+ * Root is a BorderPane with header (back, title, settings), centre content, and a persistent bottom tab bar.
+ *
+ * <p>Each tab keeps its own history: the page it is showing and a back stack. Switching tabs never
+ * touches another tab's pages, so coming back to a tab shows exactly the page it was left on (the same
+ * node, so the same scroll position, half-filled fields and chosen sub-tab). Back only moves within the
+ * current tab. A tab's home page has no back button; closing the app is left to the window controls.
  */
 public class Navigator {
     private record Page(Node page, String title, boolean isHome) {}
 
+    /** One tab's history: the page it shows (null until first visited) and the pages Back returns to. */
+    private static final class TabState {
+        final Deque<Page> back = new ArrayDeque<>();
+        Page shown;
+    }
+
+    private static final List<String> TABS = List.of("booking", "tracking", "reminders");
+
     private final MainView view;
     private final BorderPane root = new BorderPane();
-    private final Map<String, Stack<Page>> tabHistory = new HashMap<>();
+    private final Map<String, TabState> tabs = new HashMap<>();
     private final StringProperty currentTab = new SimpleStringProperty("booking");
     private final ObjectProperty<Node> currentPage = new SimpleObjectProperty<>();
     private final StringProperty title = new SimpleStringProperty();
     private final BooleanProperty isHome = new SimpleBooleanProperty(true);
     private final Map<String, Supplier<Page>> homePages = new HashMap<>();
+    private final Map<String, Runnable> tabReturnActions = new HashMap<>();
+    /** Leave guards, keyed by the page they protect (by identity). */
+    private final Map<Node, BooleanSupplier> leaveGuards = new IdentityHashMap<>();
     private final BooleanProperty isSettings = new SimpleBooleanProperty(false);
 
     private static final String HEADER_BTN = "app-header-btn";
@@ -51,14 +69,13 @@ public class Navigator {
 
     private static final String BACK_ICON = "M19,11H9l3.29-3.29a1,1,0,0,0,0-1.42,1,1,0,0,0-1.41,0l-4.29,4.3A2,2,0,0,0,6,12H6a2,2,0,0,0,.59,1.4l4.29,4.3a1,1,0,1,0,1.41-1.42L9,13H19a1,1,0,0,0,0-2Z";
     private static final String SETTINGS_ICON = "M34.283,384c17.646,30.626,56.779,41.148,87.405,23.502c0.021-0.012,0.041-0.024,0.062-0.036l9.493-5.483   c17.92,15.332,38.518,27.222,60.757,35.072V448c0,35.346,28.654,64,64,64s64-28.654,64-64v-10.944   c22.242-7.863,42.841-19.767,60.757-35.115l9.536,5.504c30.633,17.673,69.794,7.167,87.467-23.467   c17.673-30.633,7.167-69.794-23.467-87.467l0,0l-9.472-5.461c4.264-23.201,4.264-46.985,0-70.187l9.472-5.461   c30.633-17.673,41.14-56.833,23.467-87.467c-17.673-30.633-56.833-41.14-87.467-23.467l-9.493,5.483   C362.862,94.638,342.25,82.77,320,74.944V64c0-35.346-28.654-64-64-64s-64,28.654-64,64v10.944   c-22.242,7.863-42.841,19.767-60.757,35.115l-9.536-5.525C91.073,86.86,51.913,97.367,34.24,128s-7.167,69.794,23.467,87.467l0,0   l9.472,5.461c-4.264,23.201-4.264,46.985,0,70.187l-9.472,5.461C27.158,314.296,16.686,353.38,34.283,384z M256,170.667   c47.128,0,85.333,38.205,85.333,85.333S303.128,341.333,256,341.333S170.667,303.128,170.667,256S208.872,170.667,256,170.667z";
-    private static final String EXIT_ICON = "M301.258,256.01L502.645,54.645c12.501-12.501,12.501-32.769,0-45.269c-12.501-12.501-32.769-12.501-45.269,0l0,0   L256.01,210.762L54.645,9.376c-12.501-12.501-32.769-12.501-45.269,0s-12.501,32.769,0,45.269L210.762,256.01L9.376,457.376   c-12.501,12.501-12.501,32.769,0,45.269s32.769,12.501,45.269,0L256.01,301.258l201.365,201.387   c12.501,12.501,32.769,12.501,45.269,0c12.501-12.501,12.501-32.769,0-45.269L301.258,256.01z";
 
     public Navigator(MainView view) {
         this.view = view;
 
-        tabHistory.put("booking", new Stack<>());
-        tabHistory.put("tracking", new Stack<>());
-        tabHistory.put("reminders", new Stack<>());
+        for (String tab : TABS) {
+            tabs.put(tab, new TabState());
+        }
 
         int userID = Data.getCurrentUserId();
 
@@ -78,19 +95,19 @@ public class Navigator {
         settingsButton.getStyleClass().add(HEADER_BTN);
         backButton.getStyleClass().add(HEADER_BTN);
 
-        // Sized to each glyph's proportions so the three icons look the same weight.
+        // Sized to each glyph's proportions so the two icons look the same weight.
         Region backRegion = icon(BACK_ICON, 20, 17);
         Region settingsRegion = icon(SETTINGS_ICON, 20, 20);
-        Region exitRegion = icon(EXIT_ICON, 15, 15);
 
         settingsButton.setGraphic(settingsRegion);
         settingsButton.setAccessibleText("Settings");
         settingsButton.setTooltip(new Tooltip("Settings"));
-        backButton.graphicProperty().bind(Bindings.when(isHome).then(exitRegion).otherwise(backRegion));
-        Tooltip backTip = new Tooltip();
-        backTip.textProperty().bind(Bindings.when(isHome).then("Close app").otherwise("Back (Alt+Left)"));
-        backButton.setTooltip(backTip);
-        backButton.accessibleTextProperty().bind(Bindings.when(isHome).then("Close app").otherwise("Back"));
+        backButton.setGraphic(backRegion);
+        backButton.setAccessibleText("Back");
+        backButton.setTooltip(new Tooltip("Back (Alt+Left)"));
+        // A tab's home page is the top of that tab, so there is nothing to go back to and no button
+        // (the window's own controls close the app). It stays managed so the title never shifts.
+        backButton.visibleProperty().bind(isHome.not());
 
         StackPane header = getHeader(backButton, title, settingsButton);
         // Keep long titles clear of the buttons on either side; they are truncated with an ellipsis.
@@ -108,13 +125,7 @@ public class Navigator {
         // Keep the highlighted tab in sync however the tab changed (click, cross-tab link, ...).
         currentTab.addListener((obs, old, tab) -> selectTabButton(tab));
 
-        backButton.setOnAction(e -> {
-            if (isHome.get()) {
-                exit();
-            } else {
-                goBack();
-            }
-        });
+        backButton.setOnAction(e -> goBack());
         settingsButton.setOnAction(e -> goToSettings());
 
         // Keyboard shortcut for Back, like a browser.
@@ -150,112 +161,178 @@ public class Navigator {
         }
     }
 
+    private TabState state(String tab) {
+        TabState state = tabs.get(tab);
+        if (state == null) {
+            throw new IllegalArgumentException("Unknown tab: " + tab);
+        }
+        return state;
+    }
+
+    private TabState current() { return state(currentTab.get()); }
+
     /** The tab whose pages are currently shown ("booking", "tracking" or "reminders"). */
     public String getCurrentTab() { return currentTab.get(); }
 
     /** Returns the root BorderPane for the main scene. */
     public BorderPane getRoot() { return root; }
 
+    /**
+     * A bottom-tab click. Another tab: show it exactly as it was left (or its home on first visit).
+     * The tab already open: start that tab again from a fresh home page, like most mobile apps.
+     */
     public void handleTabClick(String tab) {
+        state(tab);
+        if (!confirmLeave()) {
+            selectTabButton(currentTab.get()); // the clicked button already toggled itself on
+            return;
+        }
         if (currentTab.get().equals(tab)) {
-            tabHistory.get(tab).clear();
-            Supplier<Page> factory = homePages.get(tab);
-            if (factory != null) {
-                Page curr = factory.get();
-                navigateTo(curr.page, curr.title, curr.isHome);
-            }
+            current().back.clear();
+            showHome();
         } else {
             switchTab(tab);
         }
     }
 
     private void switchTab(String tab) {
-        pushCurrentPage(currentTab.get());
         currentTab.set(tab);
-        Stack<Page> stack = tabHistory.get(tab);
-        if (stack.isEmpty()) {
-            Supplier<Page> factory = homePages.get(tab);
-            if (factory != null) {
-                Page curr = factory.get();
-                navigateTo(curr.page, curr.title, curr.isHome);
-            }
+        TabState state = current();
+        if (state.shown == null) {
+            showHome();
         } else {
-            Page next = stack.pop();
-            navigateTo(next.page, next.title, next.isHome);
+            show(state.shown);
+            Runnable onReturn = tabReturnActions.get(tab);
+            if (onReturn != null) onReturn.run();
         }
+    }
+
+    /** Builds the current tab's home page and shows it, without touching the back stack. */
+    private void showHome() {
+        Supplier<Page> factory = homePages.get(currentTab.get());
+        if (factory != null) show(factory.get());
+    }
+
+    private void show(Page page) {
+        current().shown = page;
+        currentPage.set(page.page());
+        title.set(page.title());
+        isHome.set(page.isHome());
     }
 
     /**
-     * Shows a page in another tab (e.g. "Set up reminders" from a booking). The current page is kept
-     * in its own tab's history, so returning to that tab later restores it.
+     * Shows a page in another tab (e.g. "Set up reminders" from a booking). The tab being left keeps its
+     * page, so returning to it later restores it. A home page clears the target tab's back stack;
+     * otherwise Back from the new page returns to what that tab was showing.
      */
     public void goToPageNewTab(String tab, Node page, String title, boolean isHome) {
-        if (!tabHistory.containsKey(tab)) {
-            throw new IllegalArgumentException("Unknown tab: " + tab);
-        }
-        pushCurrentPage(currentTab.get());
+        TabState target = state(tab);
+        if (!confirmLeave()) return;
         currentTab.set(tab); // the listener highlights the matching nav button
-        Stack<Page> stack = tabHistory.get(tab);
         if (isHome) {
-            stack.clear();
+            target.back.clear();
+        } else if (target.shown != null) {
+            target.back.push(target.shown);
         }
-        navigateTo(page, title, isHome);
+        show(new Page(page, title, isHome));
     }
 
+    /**
+     * Forgets a tab's history. For the tab on screen that is its back stack; for another tab it is
+     * everything, so the next visit opens its home page (e.g. after a booking is finished).
+     */
     public void clearTabStack(String tab) {
-        tabHistory.get(tab).clear();
+        TabState state = state(tab);
+        state.back.clear();
+        if (!tab.equals(currentTab.get())) {
+            state.shown = null;
+        }
+    }
+
+    /** Forgets every tab's history and listener (used on log out). */
+    public void reset() {
+        for (TabState state : tabs.values()) {
+            state.back.clear();
+            state.shown = null;
+        }
+        tabReturnActions.clear();
+        leaveGuards.clear();
+    }
+
+    /**
+     * Runs {@code action} each time the user comes back to {@code tab} from another tab and its kept
+     * page is shown again (not on its first visit, nor when the tab is rebuilt from its home).
+     * One action per tab; a later call replaces it, {@code null} removes it.
+     */
+    public void setOnTabReturn(String tab, Runnable action) {
+        state(tab);
+        if (action == null) tabReturnActions.remove(tab);
+        else tabReturnActions.put(tab, action);
+    }
+
+    /**
+     * Guards the page currently on screen: before any navigation away from it (Back, Alt+Left, a tab
+     * click, a cross-tab link, the Settings button, going home) the guard is asked, and the navigation
+     * is cancelled if it returns false. It may show a dialog (e.g. Save / Discard / Keep editing) and
+     * should return true once it is fine to leave. It stays with that page, so it applies again if the
+     * page is returned to. {@code null} removes the page's guard.
+     */
+    public void setLeaveGuard(BooleanSupplier guard) {
+        Node page = currentPage.get();
+        if (page == null) return;
+        if (guard == null) leaveGuards.remove(page);
+        else leaveGuards.put(page, guard);
+    }
+
+    /** Asks the current page's leave guard, if any; true when navigation may go ahead. */
+    public boolean confirmLeave() {
+        Node page = currentPage.get();
+        BooleanSupplier guard = page == null ? null : leaveGuards.get(page);
+        return guard == null || guard.getAsBoolean();
     }
 
     /** Updates the displayed page and title without changing history. */
     public void navigateTo(Node page, String title, Boolean isHome) {
-        currentPage.set(page);
-        this.title.set(title);
-        this.isHome.set(isHome);
+        show(new Page(page, title, isHome));
     }
 
-    /** Displays the given page, optionally pushing the current page onto the back stack. */
+    /** Displays the given page; a home page clears the tab's back stack, any other is pushed onto it. */
     public void goToPage(Node page, String title, boolean isHome) {
-        Stack<Page> stack = tabHistory.get(currentTab.get());
+        if (!confirmLeave()) return;
+        TabState state = current();
         if (isHome) {
-            navigateTo(page, title, true);
-            stack.clear();
-        } else {
-            pushCurrentPage(currentTab.get());
-            navigateTo(page, title, false);
+            state.back.clear();
+        } else if (state.shown != null) {
+            // nothing is on screen before the first page, so there is nothing to push
+            state.back.push(state.shown);
         }
-    }
-
-    /** Remembers the page on screen in the given tab's history (nothing is on screen before the first page). */
-    private void pushCurrentPage(String tab) {
-        Node page = currentPage.get();
-        if (page != null) {
-            tabHistory.get(tab).push(new Page(page, title.get(), isHome.get()));
-        }
+        show(new Page(page, title, isHome));
     }
 
     /** Number of pages Back can return to in the current tab (for tests and diagnostics). */
     int backStackSize() {
-        return tabHistory.get(currentTab.get()).size();
+        return current().back.size();
     }
 
-    /** Pops the previous page from the stack and displays it (bound to the Back button). */
+    /** Pops the previous page from the current tab's stack and displays it (bound to the Back button). */
     public void goBack() {
-        Stack<Page> stack = tabHistory.get(currentTab.get());
-        if (!stack.isEmpty()) {
-            Page previousPage = stack.pop();
-            if (isSettings.get() && previousPage.isHome()) {
-                // Settings can change what a home page shows (e.g. the "Hi <name>" greeting),
-                // so rebuild it rather than returning to the stale copy.
-                Supplier<Page> factory = homePages.get(currentTab.get());
-                if (factory != null) previousPage = factory.get();
-            }
-            navigateTo(previousPage.page(), previousPage.title(), previousPage.isHome());
-        } else {
+        TabState state = current();
+        if (state.back.isEmpty()) {
             goToHome();
+            return;
         }
+        if (!confirmLeave()) return;
+        Page previousPage = state.back.pop();
+        if (isSettings.get() && previousPage.isHome()) {
+            // Settings can change what a home page shows (e.g. the "Hi <name>" greeting),
+            // so rebuild it rather than returning to the stale copy.
+            Supplier<Page> factory = homePages.get(currentTab.get());
+            if (factory != null) previousPage = factory.get();
+        }
+        show(previousPage);
     }
 
-    /** Builds the header grid (back button, title label, home button). */
+    /** Builds the header grid (back button, title label, settings button). */
     public StackPane getHeader(Button back, Label title, Button home) {
         StackPane header = new StackPane();
         header.setPadding(new Insets(10));
@@ -284,10 +361,11 @@ public class Navigator {
         return navBar;
     }
 
+    /** Shows a fresh home page for the current tab and clears its back stack. */
     public void goToHome() {
-        String tab = currentTab.get();
-        Page home = homePages.get(tab).get();
-        goToPage(home.page, home.title, home.isHome);
+        if (!confirmLeave()) return;
+        current().back.clear();
+        showHome();
     }
 
     public void goToSettings() {
@@ -297,6 +375,4 @@ public class Navigator {
             goToPage(view.getSettingsScene(), "Settings", false);
         }
     }
-
-    public void exit() { Platform.exit(); }
 }
