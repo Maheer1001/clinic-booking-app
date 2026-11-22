@@ -110,7 +110,7 @@ public class AccountSecurityView {
                 formLabel("New email"), newEmail, formMsg, submit, cancel);
 
         Button open = UI.secondaryButton("Change email");
-        open.disableProperty().bind(loaded.not().or(question.isNull()).or(form.visibleProperty()));
+        open.disableProperty().bind(loaded.not().or(question.isNull()));
         Label needsQuestion = UI.muted(EMAIL_NEEDS_QUESTION);
         needsQuestion.setWrapText(true);
         needsQuestion.visibleProperty().bind(loaded.and(question.isNull()));
@@ -157,7 +157,7 @@ public class AccountSecurityView {
             });
         });
 
-        return new VBox(8, formLabel("Email"), emailValue, centred(open), needsQuestion, form);
+        return new VBox(8, formLabel("Email"), emailValue, opener(open, form), needsQuestion, form);
     }
 
     // ------------------------------------------------------------------ password
@@ -200,7 +200,6 @@ public class AccountSecurityView {
                 formLabel("Confirm new password"), confirm, mismatch, formMsg, submit, cancel);
 
         Button open = UI.secondaryButton("Change password");
-        open.disableProperty().bind(form.visibleProperty());
         open.setOnAction(e -> {
             openOnly(form);
             current.requestFocus();
@@ -228,12 +227,13 @@ public class AccountSecurityView {
                     form.setVisible(false);
                     showSaved("Your password has been changed.");
                 } else {
-                    formMsg.getStyleClass().setAll(UI.ERROR);
-                    formMsg.setText(r.message());
+                    // clear first: editing a field clears the message
                     if (r == ChangePasswordResult.WRONG_CURRENT_PASSWORD) {
                         current.clear();
                         current.requestFocus();
                     }
+                    formMsg.getStyleClass().setAll(UI.ERROR);
+                    formMsg.setText(r.message());
                 }
             }, ex -> {
                 busy.set(false);
@@ -242,7 +242,7 @@ public class AccountSecurityView {
             });
         });
 
-        return new VBox(8, formLabel("Password"), centred(open), form);
+        return new VBox(8, formLabel("Password"), opener(open, form), form);
     }
 
     // ------------------------------------------------------------------ security question
@@ -283,7 +283,7 @@ public class AccountSecurityView {
         Button open = UI.secondaryButton("");
         open.textProperty().bind(Bindings.when(question.isNull())
                 .then("Set security question").otherwise("Change security question"));
-        open.disableProperty().bind(loaded.not().or(form.visibleProperty()));
+        open.disableProperty().bind(loaded.not());
         Runnable clear = () -> {
             answer.clear();
             password.clear();
@@ -325,12 +325,13 @@ public class AccountSecurityView {
                     question.set(q);
                     showSaved("Your security question has been updated.");
                 } else {
-                    formMsg.getStyleClass().setAll(UI.ERROR);
-                    formMsg.setText(r.message());
+                    // clear first: editing a field clears the message
                     if (r == SetResult.WRONG_PASSWORD) {
                         password.clear();
                         password.requestFocus();
                     }
+                    formMsg.getStyleClass().setAll(UI.ERROR);
+                    formMsg.setText(r.message());
                 }
             }, ex -> {
                 busy.set(false);
@@ -339,7 +340,7 @@ public class AccountSecurityView {
             });
         });
 
-        return new VBox(8, formLabel("Security question"), currentQuestion, centred(open), form);
+        return new VBox(8, formLabel("Security question"), currentQuestion, opener(open, form), form);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -366,6 +367,14 @@ public class AccountSecurityView {
     private static VBox centred(Button b) {
         VBox box = new VBox(b);
         box.setAlignment(Pos.CENTER);
+        return box;
+    }
+
+    /** The button that opens a form; hidden while that form is open (the form has its own buttons). */
+    private static VBox opener(Button open, VBox form) {
+        VBox box = centred(open);
+        box.visibleProperty().bind(form.visibleProperty().not());
+        box.managedProperty().bind(box.visibleProperty());
         return box;
     }
 

@@ -11,7 +11,6 @@ import model.Book;
 import model.Clinic;
 import model.Item;
 import model.Service;
-import service.BookingService;
 import view.ui.UI;
 
 import java.time.LocalDate;
@@ -84,12 +83,13 @@ public class Review {
             }
             // Disable straight away so a double click can't book twice.
             confirm.setDisable(true);
-            BookingService.BookingResult result = controller.confirmBooking();
-            if (!result.anyBooked()) {
-                confirmMessage.setText("Sorry, that time is no longer available. Please choose a different time.");
-                changeTime.setVisible(true);
-                confirm.setDisable(false);
-            }
+            controller.confirmBookingOfferingName(result -> {
+                if (!result.anyBooked()) {
+                    confirmMessage.setText("Sorry, that time is no longer available. Please choose a different time.");
+                    changeTime.setVisible(true);
+                    confirm.setDisable(false);
+                }
+            });
         });
 
         Label note = UI.intro("You'll get a confirmation email and can reschedule or cancel at any time from Booking.");

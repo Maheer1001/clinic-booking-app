@@ -162,7 +162,7 @@ public class PersonalInfo {
                 field("Accessibility needs", disabilities),
                 field("Anything your clinician should know?", reason));
 
-        Label l = UI.intro("Optional details help the clinic arrange any support you need. Only the clinic sees them.");
+        Label l = UI.intro("Saved with your booking for the clinic. The optional details help them arrange any support you need. Only the clinic sees them.");
 
         VBox page = UI.pageTop(UI.steps(4, 5, "Your details"),
                 new VBox(4, UI.pageHeading("About you"), l), form, problem, next);

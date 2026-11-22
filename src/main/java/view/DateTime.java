@@ -14,6 +14,7 @@ import model.AvailableTimeslot;
 import model.Clinic;
 import model.Item;
 import model.Service;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDate;
@@ -44,7 +45,7 @@ public class DateTime {
 
             Service service = item.getService();
             Label serviceLabel = UI.detailTitle(service.getName());
-            Label duration = UI.muted(service.getDurationMinutes() + " minute appointment");
+            Label duration = UI.muted(Dates.duration(service.getDurationMinutes()));
 
             int clinicId = clinic.getId();
             int serviceId = service.getId();
@@ -76,7 +77,7 @@ public class DateTime {
                 booking.setTimeslotId(slot.timeslotId());
                 booking.setDate(slot.date());
                 booking.setTime(slot.startTime());
-            });
+            }, item.getDate()); // reopening this step (e.g. after the time was taken) keeps the patient's date
 
             comboBoxes.add(selector.getTimeCombo());
 

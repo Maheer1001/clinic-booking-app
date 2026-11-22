@@ -155,6 +155,93 @@ class BookingControllerPromptTest {
         assertEquals(nav.lastPage, root.getCenter());
     }
 
+    /** Records the name offer instead of reading or writing the account. */
+    private static class NameOfferController extends BookingController {
+        final List<String> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+        final boolean nameMissing;
+
+        NameOfferController(Navigator nav, CapturingBookingService bookingService, boolean nameMissing) {
+            super(nav, bookingService, new CapturingDispatcher(), uid -> Optional.empty(), new UserDAO());
+            this.nameMissing = nameMissing;
+        }
+
+        @Override
+        public boolean shouldOfferSaveName(String first, String last) {
+            events.add("check " + first + " " + last);
+            return nameMissing;
+        }
+
+        @Override
+        public service.AccountSecurityService.SaveNameResult saveNameToAccount(String first, String last) {
+            events.add("save " + first + " " + last);
+            return service.AccountSecurityService.SaveNameResult.SUCCESS;
+        }
+    }
+
+    private static BookingService.BookingResult bookOfferingName(NameOfferController controller) throws Exception {
+        java.util.concurrent.CompletableFuture<BookingService.BookingResult> done = new java.util.concurrent.CompletableFuture<>();
+        Platform.runLater(() -> controller.confirmBookingOfferingName(done::complete));
+        return done.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private static void bookingWithTypedName() {
+        Data.setCurrentUser(1, "patient@example.com", "patient@example.com");
+        Book b = Data.getBooking();
+        Service s1 = new Service(1, "Service A", "desc", 30);
+        Item item = new Item(s1);
+        item.setTimeslotId(10);
+        item.setDate(LocalDate.now().plusDays(1));
+        item.setTime(LocalTime.of(10, 30));
+        b.setItems(List.of(item));
+        b.setFirstName("Sam");
+        b.setLastName("Lee");
+    }
+
+    @Test
+    void confirmBookingOfferingName_savesTheTypedNameBeforeBooking() throws Exception {
+        bookingWithTypedName();
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.slotTaken = true; // keeps the test off the reminder and email paths
+        NameOfferController controller = new NameOfferController(new CapturingNavigator(new MainView()), bookingService, true);
+        List<String> asked = new java.util.ArrayList<>();
+        controller.saveNamePrompt = (f, l) -> { asked.add(f + " " + l); controller.events.add("asked"); return true; };
+
+        BookingService.BookingResult result = bookOfferingName(controller);
+
+        assertFalse(result.anyBooked());
+        assertEquals(List.of("Sam Lee"), asked);
+        assertEquals(List.of("check Sam Lee", "asked", "save Sam Lee"), controller.events);
+        assertNotNull(bookingService.lastBook, "the booking still goes ahead after saving the name");
+    }
+
+    @Test
+    void confirmBookingOfferingName_notNowBooksWithoutSaving() throws Exception {
+        bookingWithTypedName();
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.slotTaken = true;
+        NameOfferController controller = new NameOfferController(new CapturingNavigator(new MainView()), bookingService, true);
+        controller.saveNamePrompt = (f, l) -> false;
+
+        bookOfferingName(controller);
+
+        assertEquals(List.of("check Sam Lee"), controller.events, "nothing saved after Not now");
+        assertNotNull(bookingService.lastBook);
+    }
+
+    @Test
+    void confirmBookingOfferingName_accountWithANameIsNotAsked() throws Exception {
+        bookingWithTypedName();
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.slotTaken = true;
+        NameOfferController controller = new NameOfferController(new CapturingNavigator(new MainView()), bookingService, false);
+        controller.saveNamePrompt = (f, l) -> fail("should not ask when the account already has a name");
+
+        bookOfferingName(controller);
+
+        assertEquals(List.of("check Sam Lee"), controller.events);
+        assertNotNull(bookingService.lastBook);
+    }
+
     @Test
     void sortClinicsByPostcode_withEmptyBox_asksForAPostcodeAndKeepsTheOrder() {
         Clinic a = new Clinic("Clinic A", "Addr", "SO17 2FW", "1", List.of(), new Coordinate(0, 0), List.of());

@@ -324,8 +324,8 @@ public class MainView {
         VBox.setVgrow(sp, Priority.ALWAYS);
         VBox settings = new VBox(10, sp, logout);
         // Navigator asks this before leaving Settings: "Discard your changes?" for unsaved account details.
-        Object guard = accountSettings.getProperties().get(Navigator.LEAVE_GUARD);
-        if (guard != null) settings.getProperties().put(Navigator.LEAVE_GUARD, guard);
+        Object guard = accountSettings.getProperties().get(AccountView.LEAVE_GUARD);
+        if (guard != null) settings.getProperties().put(AccountView.LEAVE_GUARD, guard);
         return settings;
     }
 

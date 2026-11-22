@@ -14,8 +14,8 @@ import service.AccountService;
 import view.ui.UI;
 
 import java.time.LocalDate;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class AccountView {
@@ -23,13 +23,20 @@ public class AccountView {
     /** The choices in the "Discard your changes?" dialog. */
     enum LeaveChoice { SAVE, DISCARD, KEEP_EDITING }
 
+    /**
+     * Key in the Settings page's {@link Node#getProperties()} for its {@code BooleanSupplier} leave guard;
+     * {@link Navigator#goToSettings()} registers it with {@link Navigator#setLeaveGuard}.
+     */
+    public static final String LEAVE_GUARD = "settings.leaveGuard";
+
     /** Shows the dialog; replaced in tests. */
     static Supplier<LeaveChoice> askDiscard = AccountView::askDiscard;
 
     /**
-     * Name, phone and date of birth. The returned node carries a {@link Navigator#LEAVE_GUARD} that asks
+     * Name, phone and date of birth. The returned node carries a leave guard that asks
      * "Discard your changes?" when the user leaves Settings with unsaved edits. The email is not edited
      * here (see {@link AccountSecurityView}); Save always sends back the email stored in the database.
+     * The node carries the guard under {@link #LEAVE_GUARD}.
      */
     public static Node getPage(int userId) {
         AccountController controller = new AccountController();
@@ -134,45 +141,33 @@ public class AccountView {
         phone.textProperty().addListener((obs, o, n) -> msg.setText(""));
         dob.valueProperty().addListener((obs, o, n) -> msg.setText(""));
 
-        // Saves, then runs `after` (the navigation the leave guard held back) if it worked.
-        Consumer<Runnable> doSave = after -> {
+        // Puts a finished save on screen; true when it worked.
+        Function<AccountService.SaveResult, Boolean> showResult = r -> {
+            saving.set(false);
+            save.setText("Save");
+            if (r == AccountService.SaveResult.SUCCESS) {
+                AccountFormState s = current.get();
+                // show exactly what was stored (names are saved trimmed)
+                first.setText(s.firstName());
+                last.setText(s.lastName());
+                saved[0] = current.get();
+                msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
+                UI.showSaveConfirmation(msg, "Your details are up to date.");
+                return true;
+            }
+            msg.getStyleClass().setAll(UI.ERROR);
+            msg.setText(saveError(r));
+            return false;
+        };
+        Runnable doSave = () -> {
             AccountFormState s = current.get();
             if (!s.canSave() || saving.get()) return;
-            String f = trimToNull(s.firstName());
-            String l = trimToNull(s.lastName());
-            String p = trimToNull(s.phone());
-            LocalDate d = s.dob();
             saving.set(true);
             save.setText("Saving…");
-            Background.run(() -> {
-                // The email is never edited here: send back exactly what is stored now (it may have
-                // been changed through "Change email" since this page was built).
-                AccountService.AccountInfo now = controller.loadAccount(userId);
-                if (now == null || now.email == null) return AccountService.SaveResult.DB_ERROR;
-                return controller.saveAccount(userId, f, l, p, d, now.email);
-            }, r -> {
-                saving.set(false);
-                save.setText("Save");
-                if (r == AccountService.SaveResult.SUCCESS) {
-                    // show exactly what was stored (names are saved trimmed)
-                    first.setText(nullToEmpty(f));
-                    last.setText(nullToEmpty(l));
-                    saved[0] = current.get();
-                    msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
-                    UI.showSaveConfirmation(msg, "Your details are up to date.");
-                    if (after != null) after.run();
-                } else {
-                    msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText(saveError(r));
-                }
-            }, ex -> {
-                saving.set(false);
-                save.setText("Save");
-                msg.getStyleClass().setAll(UI.ERROR);
-                msg.setText(saveError(AccountService.SaveResult.DB_ERROR));
-            });
+            Background.run(() -> persist(controller, userId, s), showResult::apply,
+                    ex -> showResult.apply(AccountService.SaveResult.DB_ERROR));
         };
-        save.setOnAction(e -> doSave.accept(null));
+        save.setOnAction(e -> doSave.run());
         msg.visibleProperty().bind(msg.textProperty().isNotEmpty());
         msg.managedProperty().bind(msg.visibleProperty());
 
@@ -203,11 +198,13 @@ public class AccountView {
 
         VBox page = new VBox(10, g, formHint, saveBox, msg);
 
-        Predicate<Runnable> leaveGuard = retry -> {
+        // Asked by Navigator before leaving Settings (Back, the gear, a tab, going home) and by Log Out.
+        BooleanSupplier leaveGuard = () -> {
             AccountFormState s = current.get();
-            if (!s.differsFrom(saved[0])) return true;
+            if (!s.differsFrom(saved[0]) || saving.get()) return true;
             switch (askDiscard.get()) {
                 case DISCARD -> {
+                    // Settings stays open in its tab's history, so put the saved values back
                     AccountFormState back = saved[0];
                     first.setText(back.firstName());
                     last.setText(back.lastName());
@@ -217,21 +214,28 @@ public class AccountView {
                     return true;
                 }
                 case SAVE -> {
-                    if (s.canSave()) {
-                        doSave.accept(retry);
-                    } else {
+                    if (!s.canSave()) {
                         // stay so the user can fix it; the hint under the form says what is wrong
                         updateValidity.run();
                         (s.phoneOk() ? dob : phone).requestFocus();
+                        return false;
                     }
-                    return false;
+                    // The guard must answer now, so this one save waits for the database; it only
+                    // happens after the user chose Save in the dialog. Stays on Settings if it fails.
+                    AccountService.SaveResult result;
+                    try {
+                        result = persist(controller, userId, s);
+                    } catch (RuntimeException ex) {
+                        result = AccountService.SaveResult.DB_ERROR;
+                    }
+                    return showResult.apply(result);
                 }
                 default -> {
                     return false;
                 }
             }
         };
-        page.getProperties().put(Navigator.LEAVE_GUARD, leaveGuard);
+        page.getProperties().put(LEAVE_GUARD, leaveGuard);
         return page;
     }
 
@@ -254,6 +258,17 @@ public class AccountView {
         if (chosen == saveType) return LeaveChoice.SAVE;
         if (chosen == discardType) return LeaveChoice.DISCARD;
         return LeaveChoice.KEEP_EDITING;
+    }
+
+    /**
+     * Saves name, phone and date of birth. The email is never edited here: it sends back exactly what is
+     * stored now (it may have been changed through "Change email" since the page was built).
+     */
+    static AccountService.SaveResult persist(AccountController controller, int userId, AccountFormState s) {
+        AccountService.AccountInfo now = controller.loadAccount(userId);
+        if (now == null || now.email == null) return AccountService.SaveResult.DB_ERROR;
+        return controller.saveAccount(userId, trimToNull(s.firstName()), trimToNull(s.lastName()),
+                trimToNull(s.phone()), s.dob(), now.email);
     }
 
     static String saveError(AccountService.SaveResult r) {

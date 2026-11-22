@@ -16,6 +16,7 @@ import javafx.scene.layout.VBox;
 import model.Clinic;
 import model.Item;
 import model.Service;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.util.List;
@@ -89,7 +90,7 @@ public class ServiceSelection {
                     checkBox.setAccessibleText(service.getName());
                     checkBox.selectedProperty().bindBidirectional(service.selectedProperty());
                     Label description = UI.body(service.getDescription() != null ? service.getDescription() : "");
-                    Label duration = UI.muted("About " + service.getDurationMinutes() + " minutes");
+                    Label duration = UI.muted(Dates.duration(service.getDurationMinutes()));
                     // setAll, not addAll: cells are reused, so adding would pile up old labels.
                     content.getChildren().setAll(description, duration);
                     setGraphic(pane);

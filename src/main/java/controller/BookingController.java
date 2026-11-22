@@ -345,31 +345,12 @@ public class BookingController {
         nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
-    public void selectService(Service service) {
-        Book booking = Data.getBooking();
-        booking.setService(service);
-
-        // Ensure there is at least one item for the selected service (single-service flow).
-        if (booking.getItems() == null || booking.getItems().isEmpty()) {
-            booking.setItems(java.util.List.of(new Item(service)));
-        }
-
-        goToTimeslotsForItems();
-    }
-
     /**
      * Navigates to the timeslot selection page for the currently selected clinic and items
      * in the multi-service booking flow.
      */
     public void goToTimeslotsForItems() {
         nav.goToPage(DateTime.getPage(this), "Pick a time", false);
-    }
-
-    /**
-     * Navigates back to the service selection page for the current clinic.
-     */
-    public void goToServiceSelection() {
-        nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
     public void goToDetails() {
@@ -551,6 +532,48 @@ public class BookingController {
             return false;
         }
         return accountController().accountNameMissing(userId);
+    }
+
+    /** Asks "Save this name to your account?"; true when the patient chose Save. Replaceable in tests. */
+    java.util.function.BiPredicate<String, String> saveNamePrompt = BookingController::askToSaveName;
+
+    /**
+     * Books the current booking like {@link #confirmBooking()}, but first, when the account has no name,
+     * offers to save the name typed on the details step to the account (so later emails greet the patient
+     * by name). The database checks run off the FX thread; {@code onResult} gets the booking outcome on it.
+     */
+    public void confirmBookingOfferingName(java.util.function.Consumer<BookingService.BookingResult> onResult) {
+        Book b = Data.getBooking();
+        String first = b.getFirstName();
+        String last = b.getLastName();
+        Runnable book = () -> onResult.accept(confirmBooking());
+        Background.run(() -> shouldOfferSaveName(first, last), offer -> {
+            if (!offer || !saveNamePrompt.test(first, last)) {
+                book.run();
+                return;
+            }
+            Background.run(() -> saveNameToAccount(first, last), saved -> {
+                if (saved != service.AccountSecurityService.SaveNameResult.SUCCESS) {
+                    System.err.println("[Booking] Could not save the name to the account: " + saved);
+                }
+                book.run();
+            }, ex -> book.run());
+        }, ex -> book.run());
+    }
+
+    private static boolean askToSaveName(String first, String last) {
+        ButtonType save = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        ButtonType notNow = new ButtonType("Not now", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Your name");
+        alert.setHeaderText("Save this name to your account?");
+        alert.setContentText("Your account doesn't have a name yet. Save " + first.strip() + " " + last.strip()
+                + " so we can greet you by name in your emails. You can change it in Settings.");
+        alert.getButtonTypes().setAll(save, notNow);
+        UI.styleDialog(alert, Data.getScene());
+        alert.getDialogPane().lookupButton(save).getStyleClass().add(UI.ALERT_AGREE);
+        alert.getDialogPane().lookupButton(notNow).getStyleClass().add(UI.ALERT_IGNORE);
+        return alert.showAndWait().filter(r -> r == save).isPresent();
     }
 
     /** Saves the given name onto the signed-in account (after the user said yes). */

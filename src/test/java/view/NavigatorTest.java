@@ -156,6 +156,170 @@ public class NavigatorTest {
         assertSame(home, nav.getRoot().getCenter());
     }
 
+    /** The header's back button (the left one). */
+    private javafx.scene.control.Button backButton() {
+        return (javafx.scene.control.Button) ((javafx.scene.layout.StackPane) nav.getRoot().getTop()).getChildren().get(1);
+    }
+
+    /** Puts a home page and one deeper page in a tab (without building the real, database-backed homes). */
+    private VBox[] seedTab(String tab) {
+        VBox home = new VBox();
+        VBox deeper = new VBox();
+        nav.goToPageNewTab(tab, home, tab + " home", true);
+        nav.goToPage(deeper, tab + " deeper", false);
+        return new VBox[]{home, deeper};
+    }
+
+    @Test
+    void eachTabKeepsItsOwnPageAndBackStack() {
+        VBox[] booking = seedTab("booking");
+        VBox[] tracking = seedTab("tracking");
+        VBox[] reminders = seedTab("reminders");
+
+        nav.handleTabClick("booking");
+        assertSame(booking[1], nav.getRoot().getCenter(), "booking returns to the page it was left on");
+        nav.handleTabClick("tracking");
+        assertSame(tracking[1], nav.getRoot().getCenter());
+
+        // Back stays inside the tab: tracking goes to its own home, booking's stack is untouched.
+        nav.goBack();
+        assertSame(tracking[0], nav.getRoot().getCenter());
+        nav.handleTabClick("reminders");
+        assertSame(reminders[1], nav.getRoot().getCenter());
+        nav.handleTabClick("booking");
+        assertSame(booking[1], nav.getRoot().getCenter());
+        assertEquals(1, nav.backStackSize());
+        nav.goBack();
+        assertSame(booking[0], nav.getRoot().getCenter());
+
+        nav.handleTabClick("tracking");
+        assertSame(tracking[0], nav.getRoot().getCenter(), "tracking still shows the home Back took it to");
+    }
+
+    @Test
+    void switchingTabsDoesNotGrowTheBackStack() {
+        seedTab("booking");
+        seedTab("reminders");
+        for (int i = 0; i < 5; i++) {
+            nav.handleTabClick("booking");
+            nav.handleTabClick("reminders");
+        }
+        assertEquals(1, nav.backStackSize());
+        nav.handleTabClick("booking");
+        assertEquals(1, nav.backStackSize());
+    }
+
+    @Test
+    void clickingTheOpenTabStartsItAgainFromItsHome() {
+        VBox[] booking = seedTab("booking");
+        nav.handleTabClick("booking");
+        assertNotSame(booking[1], nav.getRoot().getCenter());
+        assertNotSame(booking[0], nav.getRoot().getCenter(), "a fresh home page is built");
+        assertEquals(0, nav.backStackSize());
+        assertTrue(test.containsLabelWithGivenText((Parent) nav.getRoot().getTop(), "Booking"));
+    }
+
+    @Test
+    void homePagesHaveNoBackButton() {
+        seedTab("reminders");
+        assertTrue(backButton().isVisible(), "a deeper page can go back");
+        nav.goBack();
+        assertFalse(backButton().isVisible(), "a tab's home page has nothing to go back to");
+        assertEquals("Back", backButton().getAccessibleText());
+        assertFalse(backButton().getTooltip().getText().contains("Close"));
+    }
+
+    @Test
+    void altLeftGoesBackButNotPastAHomePage() {
+        VBox[] reminders = seedTab("reminders");
+        Scene scene = new Scene(nav.getRoot(), 420, 720);
+        javafx.scene.input.KeyEvent altLeft = new javafx.scene.input.KeyEvent(
+                javafx.scene.input.KeyEvent.KEY_PRESSED, "", "", javafx.scene.input.KeyCode.LEFT,
+                false, false, true, false);
+        javafx.event.Event.fireEvent(nav.getRoot(), altLeft.copyFor(nav.getRoot(), nav.getRoot()));
+        assertSame(reminders[0], nav.getRoot().getCenter());
+        javafx.event.Event.fireEvent(nav.getRoot(), altLeft.copyFor(nav.getRoot(), nav.getRoot()));
+        assertSame(reminders[0], nav.getRoot().getCenter(), "Alt+Left does nothing on a home page");
+        assertNotNull(scene);
+    }
+
+    @Test
+    void tabReturnActionRunsOnlyWhenComingBack() {
+        int[] runs = {0};
+        nav.setOnTabReturn("reminders", () -> runs[0]++);
+        seedTab("booking");
+        seedTab("reminders"); // first visit: a page is opened, not returned to
+        assertEquals(0, runs[0]);
+        nav.handleTabClick("booking");
+        nav.handleTabClick("reminders");
+        assertEquals(1, runs[0]);
+        nav.goToPage(new VBox(), "Deeper still", false); // moving within the tab is not a return
+        assertEquals(1, runs[0]);
+        nav.setOnTabReturn("reminders", null);
+        nav.handleTabClick("booking");
+        nav.handleTabClick("reminders");
+        assertEquals(1, runs[0]);
+    }
+
+    @Test
+    void leaveGuardCanCancelEveryWayOut() {
+        seedTab("reminders");
+        VBox[] booking = seedTab("booking");
+        boolean[] allow = {false};
+        int[] asked = {0};
+        nav.setLeaveGuard(() -> { asked[0]++; return allow[0]; });
+
+        nav.goBack();
+        nav.goToPage(new VBox(), "Elsewhere", false);
+        nav.goToHome();
+        nav.goToPageNewTab("reminders", new VBox(), "Reminders", true);
+        view.getRemindersButton().setSelected(true); // the tab button toggles before the click is handled
+        nav.handleTabClick("reminders");
+        assertEquals(5, asked[0]);
+        assertSame(booking[1], nav.getRoot().getCenter(), "every navigation was cancelled");
+        assertEquals("booking", nav.getCurrentTab());
+        assertTrue(view.getBookingButton().isSelected(), "the highlighted tab snaps back");
+
+        allow[0] = true;
+        nav.handleTabClick("reminders");
+        assertEquals("reminders", nav.getCurrentTab());
+        nav.handleTabClick("booking");
+        assertSame(booking[1], nav.getRoot().getCenter());
+        nav.goBack();
+        assertEquals(7, asked[0], "the guard stays with its page and is asked again");
+        assertSame(booking[0], nav.getRoot().getCenter());
+        nav.goToPage(new VBox(), "Unguarded", false);
+        nav.goBack();
+        assertEquals(7, asked[0], "other pages are not guarded");
+    }
+
+    @Test
+    void clearingAnotherTabsHistoryMakesItStartFromHome() {
+        VBox[] reminders = seedTab("reminders");
+        seedTab("booking");
+        nav.clearTabStack("reminders");
+        nav.goToPageNewTab("reminders", new VBox(), "Reminders", true);
+        assertNotSame(reminders[1], nav.getRoot().getCenter());
+        assertEquals(0, nav.backStackSize());
+    }
+
+    @Test
+    void resetForgetsEveryTab() {
+        seedTab("reminders");
+        seedTab("booking");
+        int[] runs = {0};
+        nav.setOnTabReturn("booking", () -> runs[0]++);
+        nav.reset();
+        VBox fresh = new VBox();
+        nav.goToPageNewTab("reminders", fresh, "Reminders", true);
+        assertEquals(0, nav.backStackSize());
+        nav.goToPageNewTab("booking", new VBox(), "Booking", true);
+        nav.handleTabClick("reminders");
+        assertSame(fresh, nav.getRoot().getCenter());
+        nav.handleTabClick("booking");
+        assertEquals(0, runs[0], "return actions belong to the old session");
+    }
+
     @Test
     void tabLabelsFitAtEveryTextSize() throws Exception {
         // measure with the app's real font; the default font is narrower and would hide the problem

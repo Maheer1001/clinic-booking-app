@@ -66,6 +66,15 @@ class TrackingControllerNotificationTest {
 
     TrackingController controller;
 
+    @org.junit.jupiter.api.BeforeAll
+    static void initJavaFX() {
+        try {
+            javafx.application.Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // Toolkit already initialized in another test class.
+        }
+    }
+
     @BeforeEach
     void setUp() {
         controller = new TrackingController(new view.Navigator(new view.MainView()), new FakeTrackingService(1, List.of()));

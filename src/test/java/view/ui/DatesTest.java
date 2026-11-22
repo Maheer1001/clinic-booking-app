@@ -69,4 +69,10 @@ class DatesTest {
         assertEquals("", Dates.countdown(TODAY.minusDays(1), TODAY), "past dates have no countdown");
         assertEquals("", Dates.countdown(null, TODAY));
     }
+
+    @Test
+    void duration_isWordedTheSameOnEveryStep() {
+        assertEquals("About 30 minutes", Dates.duration(30));
+        assertEquals("About 1 minute", Dates.duration(1));
+    }
 }
