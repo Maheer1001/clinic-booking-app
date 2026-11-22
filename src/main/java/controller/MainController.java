@@ -70,6 +70,7 @@ public class MainController {
         Data.getSignUpDraft().password = "";
         Data.getSignUpDraft().confirmPassword = "";
         Data.getSignUpDraft().securityAnswer = "";
+        Data.getSignUpDraft().staffCode = "";
         Stage stage = (Stage) currScene.getWindow();
         FXMLLoader loader = new FXMLLoader(Main.class.getResource("/fxml/login.fxml"));
         try {

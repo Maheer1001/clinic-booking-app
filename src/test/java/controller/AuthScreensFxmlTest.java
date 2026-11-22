@@ -146,6 +146,65 @@ class AuthScreensFxmlTest {
     }
 
     @Test
+    void signup_staffOptionRevealsTheCodeAndAMissingCodeIsShownInline() throws Exception {
+        Data.SignUpDraft d = Data.getSignUpDraft();
+        d.termsReadToEnd = true; d.privacyReadToEnd = true;
+        try {
+            Parent root = onFx(() -> {
+                Parent r = load("/fxml/signup.fxml");
+                CheckBox staff = (CheckBox) r.lookup("#staffCheck");
+                javafx.scene.Node box = r.lookup("#staffBox");
+                assertFalse(staff.isSelected());
+                assertFalse(box.isVisible() || box.isManaged(), "the code field is hidden for patients");
+                staff.setSelected(true);
+                assertTrue(box.isVisible() && box.isManaged());
+                assertTrue(d.staff, "kept while reading the Terms");
+                ((TextField) r.lookup("#staffCodeField")).setText("clinic9");
+                assertEquals("clinic9", d.staffCode);
+                return r;
+            });
+            // coming back from the Terms screen rebuilds the form from the draft
+            onFx(() -> {
+                Parent again = load("/fxml/signup.fxml");
+                assertTrue(((CheckBox) again.lookup("#staffCheck")).isSelected());
+                assertEquals("clinic9", ((TextField) again.lookup("#staffCodeField")).getText());
+                return null;
+            });
+
+            // every other field valid and no code: the service's own message, before any database work
+            onFx(() -> {
+                ((TextField) root.lookup("#staffCodeField")).setText("  ");
+                ((TextField) root.lookup("#emailField")).setText("new@example.com");
+                ((TextField) root.lookup("#passwordField")).setText("Password1");
+                ((TextField) root.lookup("#confirmPasswordField")).setText("Password1");
+                ((CheckBox) root.lookup("#termsCheck")).setSelected(true);
+                ((CheckBox) root.lookup("#privacyCheck")).setSelected(true);
+                @SuppressWarnings("unchecked")
+                ComboBox<SecurityQuestion> question = (ComboBox<SecurityQuestion>) root.lookup("#questionBox");
+                question.setValue(SecurityQuestion.FIRST_PET);
+                ((TextField) root.lookup("#answerField")).setText("Rex the dog");
+                Button create = (Button) root.lookup("#createBtn");
+                assertFalse(create.isDisabled());
+                create.fire();
+                return null;
+            });
+            Label message = (Label) root.lookup("#messageLabel");
+            String expected = service.StaffAuthService.Status.MISSING_STAFF_CODE.message();
+            long until = System.currentTimeMillis() + 10_000;
+            while (!expected.equals(onFx(message::getText)) && System.currentTimeMillis() < until) {
+                Thread.sleep(50);
+            }
+            assertEquals(expected, onFx(message::getText));
+        } finally {
+            d.email = ""; d.password = ""; d.confirmPassword = "";
+            d.termsAccepted = false; d.privacyAccepted = false;
+            d.termsReadToEnd = false; d.privacyReadToEnd = false;
+            d.securityQuestionKey = null; d.securityAnswer = "";
+            d.staff = false; d.staffCode = "";
+        }
+    }
+
+    @Test
     void passwordReset_codeFieldAcceptsSixDigitsOnly() throws Exception {
         onFx(() -> {
             Parent root = load("/fxml/password-reset.fxml");
