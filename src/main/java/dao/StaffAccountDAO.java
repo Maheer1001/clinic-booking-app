@@ -127,43 +127,6 @@ public class StaffAccountDAO implements StaffAccountRepository {
         throw new SQLException("Could not allocate a user id");
     }
 
-    /**
-     * Makes an existing account staff at a clinic (used by the dev seed for the first admin).
-     * Patients keep their data but become staff accounts: only use this for accounts made for staff.
-     */
-    public void grantStaff(int userId, StaffRole role, int clinicId) throws SQLException {
-        try (Connection c = DB.connect()) {
-            boolean autoCommit = c.getAutoCommit();
-            c.setAutoCommit(false);
-            try {
-                try (PreparedStatement ps = c.prepareStatement("UPDATE \"User\" SET role = ? WHERE user_id = ?")) {
-                    ps.setString(1, role.name());
-                    ps.setInt(2, userId);
-                    ps.executeUpdate();
-                }
-                if (!isMember(c, userId, clinicId)) addMembership(c, userId, clinicId);
-                AuditLogDAO.insert(c, AuditEntry.of(userId, clinicId, AuditEntry.Action.STAFF_SEEDED,
-                        AuditEntry.STAFF, userId, null));
-                c.commit();
-            } catch (SQLException e) {
-                c.rollback();
-                throw e;
-            } finally {
-                c.setAutoCommit(autoCommit);
-            }
-        }
-    }
-
-    static boolean isMember(Connection c, int userId, int clinicId) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT 1 FROM \"StaffClinic\" WHERE user_id = ? AND clinic_id = ?")) {
-            ps.setInt(1, userId);
-            ps.setInt(2, clinicId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        }
-    }
 
     static void addMembership(Connection c, int userId, int clinicId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(

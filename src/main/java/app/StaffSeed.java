@@ -21,9 +21,9 @@ import java.util.List;
  * <pre>
  *   STAFF_SEED_PASSWORD=... java app.StaffSeed admin &lt;clinicId&gt; &lt;email&gt;
  * </pre>
- * creates the first CLINIC_ADMIN of a clinic (or makes an existing account one) with
- * must_reset_password set. The password comes from the environment, never the command line or SQL.
- * {@code java app.StaffSeed codes} seeds missing staff codes only.
+ * creates the first CLINIC_ADMIN of a clinic as a new account with must_reset_password set (an
+ * existing email is refused). The password comes from the environment, never the command line or SQL.
+ * {@code java app.StaffSeed codes} seeds missing demo staff codes only (demo databases).
  */
 public final class StaffSeed {
 
@@ -52,8 +52,8 @@ public final class StaffSeed {
         int added = 0;
         for (int clinicId : missing) {
             try (PreparedStatement ps = c.prepareStatement("""
-                    INSERT INTO "ClinicStaffCode" (clinic_id, code_hash)
-                    SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM "ClinicStaffCode" WHERE clinic_id = ?)
+                    INSERT INTO "ClinicStaffCode" (clinic_id, code_hash, code_is_demo)
+                    SELECT ?, ?, TRUE WHERE NOT EXISTS (SELECT 1 FROM "ClinicStaffCode" WHERE clinic_id = ?)
                     """)) {
                 ps.setInt(1, clinicId);
                 ps.setString(2, PasswordHasher.hash(demoCode(clinicId)));
@@ -68,23 +68,22 @@ public final class StaffSeed {
     }
 
     /**
-     * Creates the clinic's first admin, or promotes an existing account.
+     * Creates the clinic's first admin as a NEW account with must_reset_password set. An email that
+     * already has an account is refused (never promoted): staff and patient accounts stay separate.
      * @return the admin's user id
+     * @throws IllegalStateException if the email already has an account
      */
     public static int seedClinicAdmin(int clinicId, String email, String password) throws SQLException {
         String normalized = AuthService.normalize(email);
         if (!AuthService.isValidEmail(normalized)) throw new IllegalArgumentException("Invalid email");
-        UserDAO users = new UserDAO();
-        StaffAccountDAO staff = new StaffAccountDAO();
-        Integer existing = users.getUserIdByEmail(normalized);
-        if (existing != null) {
-            staff.grantStaff(existing, StaffRole.CLINIC_ADMIN, clinicId);
-            return existing;
+        if (new UserDAO().emailExists(normalized)) {
+            throw new IllegalStateException("An account with this email already exists; existing accounts are "
+                    + "never made staff. Use a new email for the clinic admin.");
         }
         if (!AuthService.isStrongEnoughPassword(password)) {
             throw new IllegalArgumentException("Password too weak: " + AuthService.PASSWORD_RULES);
         }
-        return staff.createStaffUser(normalized, PasswordHasher.hash(password), StaffRole.CLINIC_ADMIN,
+        return new StaffAccountDAO().createStaffUser(normalized, PasswordHasher.hash(password), StaffRole.CLINIC_ADMIN,
                 clinicId, true);
     }
 
@@ -97,8 +96,13 @@ public final class StaffSeed {
         }
         if (args.length == 3 && args[0].equals("admin")) {
             String password = System.getenv("STAFF_SEED_PASSWORD");
-            int id = seedClinicAdmin(Integer.parseInt(args[1]), args[2], password);
-            System.out.println("Clinic admin ready, user id " + id);
+            try {
+                int id = seedClinicAdmin(Integer.parseInt(args[1]), args[2], password);
+                System.out.println("Clinic admin created, user id " + id + " (must reset password at first login)");
+            } catch (IllegalStateException | IllegalArgumentException e) {
+                System.err.println("Not seeded: " + e.getMessage());
+                System.exit(1);
+            }
             return;
         }
         System.out.println("Usage: java app.StaffSeed codes | STAFF_SEED_PASSWORD=... java app.StaffSeed admin <clinicId> <email>");

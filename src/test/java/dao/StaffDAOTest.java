@@ -262,6 +262,52 @@ class StaffDAOTest {
     }
 
     @Test
+    void demoCodes_onlyWithTheFlag_markedDemo_andNeverOverwriteARotatedCode() throws Exception {
+        int clinic = 7;
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("INSERT INTO \"Clinic\" (clinic_id, name) VALUES (7, 'Seven')");
+            try {
+                DB.setDemoStaffCodes(false);
+                DB.initTables(c);
+                assertTrue(dao.staffCodeIsDemo(clinic).isEmpty(), "no flag: no code");
+
+                DB.setDemoStaffCodes(true);
+                DB.initTables(c);
+                assertEquals(Optional.of(true), dao.staffCodeIsDemo(clinic));
+                assertTrue(PasswordHasher.verify("clinic7", codeHash(clinic)));
+
+                dao.setStaffCodeHash(clinic, PasswordHasher.hash("rotated123"), clinician, NOW,
+                        AuditEntry.of(clinician, clinic, Action.ROTATE_STAFF_CODE, "x", clinic, null));
+                DB.initTables(c);
+                assertEquals(Optional.of(false), dao.staffCodeIsDemo(clinic));
+                assertTrue(PasswordHasher.verify("rotated123", codeHash(clinic)), "restart keeps the rotated code");
+                assertFalse(PasswordHasher.verify("clinic7", codeHash(clinic)));
+            } finally {
+                DB.setDemoStaffCodes(null);
+            }
+        }
+    }
+
+    private static String codeHash(int clinicId) throws Exception {
+        return new StaffAccountDAO().allStaffCodeHashes().stream()
+                .filter(h -> h.clinicId() == clinicId).findFirst().orElseThrow().codeHash();
+    }
+
+    @Test
+    void seedClinicAdmin_refusesAnExistingAccount_andCreatesANewOne() throws Exception {
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> StaffSeed.seedClinicAdmin(7, "one@example.com", "Password1"));
+        assertTrue(e.getMessage().contains("already exists"));
+        assertEquals(StaffRole.PATIENT, new UserDAO().getStaffAccess(patientOne).orElseThrow().role());
+
+        int admin = StaffSeed.seedClinicAdmin(7, "first.admin@example.com", "Password1");
+        StaffAccess a = new UserDAO().getStaffAccess(admin).orElseThrow();
+        assertEquals(StaffRole.CLINIC_ADMIN, a.role());
+        assertEquals(List.of(7), a.clinicIds());
+        assertTrue(a.mustResetPassword());
+    }
+
+    @Test
     void staffSignUp_endToEnd_andDeletionRemovesMembership() throws Exception {
         StaffAuthService auth = new StaffAuthService(new StaffAccountDAO(), new SecurityQuestionService(),
                 Clock.systemUTC());
