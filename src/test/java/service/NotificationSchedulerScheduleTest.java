@@ -116,18 +116,43 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
-    void severalMissedReminderTimes_collapseIntoOneCatchUp() throws Exception {
+    void missedReminderTimes_areSkippedWithNoCatchUp() throws Exception {
         scheduler = new NotificationScheduler(sender, 0);
         // Appointment in 30 minutes; 1-day and 2-day reminders have both passed.
         String schedule = new ReminderSchedule(List.of(
                 new ReminderSchedule.ReminderRule(1, "day", null, null),
                 new ReminderSchedule.ReminderRule(2, "day", null, null)), null).toJson();
 
-        scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(1800), "p@example.com", "Jane", schedule, null);
+        AppointmentReminderPlan plan = scheduler.scheduleAppointmentReminderWithSchedule(
+                appointmentIn(1800), "p@example.com", "Jane", schedule, null);
 
-        waitForSends(1, 2000);
-        Thread.sleep(200);
-        assertEquals(1, sender.sent.size());
+        Thread.sleep(400);
+        assertEquals(0, sender.sent.size(), "a passed reminder time must not be sent early as a catch-up");
+        assertEquals(0, scheduler.pendingCount());
+        assertTrue(plan.firstSend().isEmpty());
+        assertEquals(2, plan.passed());
+        assertEquals(0, plan.afterAppointment());
+    }
+
+    @Test
+    void onlyTheRulesThatFitAreScheduled_andTheSkippedOnesAreReported() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        Appointment appt = new Appointment(9, 1, "STI Screening", "Clinic 1", "Dr. Smith",
+                LocalDateTime.now().plusDays(3).withHour(14).withMinute(0).withSecond(0).withNano(0));
+        String schedule = new ReminderSchedule(List.of(
+                new ReminderSchedule.ReminderRule(1, "day", null, null),     // fits
+                new ReminderSchedule.ReminderRule(5, "day", null, null),     // already passed
+                new ReminderSchedule.ReminderRule(1, "hour", "18:00", null)  // 18:00 on the day: after a 14:00 appointment
+        ), null).toJson();
+
+        AppointmentReminderPlan plan = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", schedule, null);
+
+        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(1)), plan.firstSend());
+        assertEquals(1, plan.passed());
+        assertEquals(1, plan.afterAppointment());
+        assertEquals(1, scheduler.pendingCount("appointment:9"), "only the rule that fits is scheduled; no catch-up");
+        Thread.sleep(300);
+        assertEquals(0, sender.sent.size());
     }
 
     @Test
@@ -259,7 +284,8 @@ class NotificationSchedulerScheduleTest {
 
         var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
 
-        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(2)), first);
+        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(2)), first.firstSend());
+        assertEquals(0, first.skipped());
         assertEquals(2, scheduler.pendingCount("appointment:5"));
     }
 
@@ -271,12 +297,12 @@ class NotificationSchedulerScheduleTest {
         String rules = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(1, "hour", null, null)),
                 new ReminderSchedule.QuietHours("22:00", "08:00")).toJson();
 
-        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
+        var plan = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
 
-        assertTrue(first.isPresent());
-        assertTrue(first.get().isBefore(appt.getAppointmentDateTime()),
-                "06:00 moved to 08:00 by quiet hours is after the 07:00 appointment, so it must not be the reported send time");
-        assertEquals(1, scheduler.pendingCount("appointment:6"), "One catch-up reminder instead");
+        assertTrue(plan.firstSend().isEmpty(),
+                "06:00 moved to 08:00 by quiet hours is after the 07:00 appointment, so it is not scheduled");
+        assertEquals(1, plan.afterAppointment());
+        assertEquals(0, scheduler.pendingCount("appointment:6"), "and no catch-up reminder is sent instead");
     }
 
     @Test
@@ -286,9 +312,10 @@ class NotificationSchedulerScheduleTest {
                 LocalDateTime.now().plusDays(3).withHour(10).withMinute(0).withSecond(0).withNano(0));
         String rules = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(1, "hour", "18:00", null)), null).toJson();
 
-        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides(), false);
+        var plan = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
 
-        assertTrue(first.isEmpty(), "18:00 on the day of a 10:00 appointment can never be sent");
+        assertTrue(plan.firstSend().isEmpty(), "18:00 on the day of a 10:00 appointment can never be sent");
+        assertEquals(1, plan.afterAppointment());
         assertEquals(0, scheduler.pendingCount("appointment:7"));
     }
 
@@ -296,7 +323,7 @@ class NotificationSchedulerScheduleTest {
     void schedule_forPastAppointment_reportsNothing() {
         scheduler = new NotificationScheduler(sender, 30);
         assertTrue(scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(-60), "p@example.com", "P",
-                singleRule(1, "day"), discreetOverrides()).isEmpty());
+                singleRule(1, "day"), discreetOverrides()).firstSend().isEmpty());
     }
 
     @Test

@@ -12,6 +12,7 @@ import model.AppointmentReminder;
 import model.BookingReminder;
 import model.Prescription;
 import model.PrescriptionReminder;
+import service.AppointmentReminderPlan;
 import service.NotificationScheduler;
 
 import java.time.LocalDate;
@@ -122,9 +123,11 @@ public class ReminderController {
 
     /**
      * Schedule appointment reminders using the JSON schedule stored in custom_days.
+     *
+     * @return when the first reminder email will be sent and which reminder times were skipped
+     *         (already passed or after the appointment; these are not sent)
      */
-    /** @return when the first reminder email will be sent, or empty if none could be scheduled */
-    public Optional<LocalDateTime> scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
+    public AppointmentReminderPlan scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
                                                                            String scheduleRaw, String customMessage) {
         return notificationScheduler.scheduleAppointmentReminderWithSchedule(appt, email, name, scheduleRaw, customMessage);
     }
@@ -234,7 +237,7 @@ public class ReminderController {
             for (Appointment a : upcoming) {
                 if (a.getAppId() == r.getAppId()) {
                     notificationScheduler.scheduleAppointmentReminderWithSchedule(
-                            a, email, displayName, r.getCustomDays(), r.getCustomMessage(), false);
+                            a, email, displayName, r.getCustomDays(), r.getCustomMessage());
                     restored++;
                 }
             }

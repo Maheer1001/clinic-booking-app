@@ -28,8 +28,9 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * Schedules email reminders at the user's chosen time, or after a default delay (e.g. 30s) when the
- * chosen time has already passed.
+ * Schedules email reminders at the user's chosen time. Schedule-based appointment reminders whose
+ * time has already passed are skipped (see {@link #scheduleAppointmentReminderWithSchedule}); the
+ * older one-off methods still fall back to a default delay (e.g. 30s).
  *
  * <ul>
  *   <li>Reminders are keyed per appointment / prescription / booking reminder. Scheduling again replaces
@@ -145,22 +146,16 @@ public class NotificationScheduler {
     /**
      * Schedule appointment reminders based on a JSON schedule stored in custom_days.
      * Supports multiple reminders, repeats, and quiet hours. Replaces any reminders already
-     * scheduled for this appointment. Reminder times that have already passed are collapsed into a
-     * single catch-up reminder after the default delay; nothing is sent for a past appointment.
+     * scheduled for this appointment. A reminder time that has already passed, or that would only go
+     * out at or after the appointment (e.g. moved there by quiet hours), is skipped rather than sent
+     * early as a "catch-up"; the other rules are scheduled as normal. The same applies when saved
+     * reminders are restored at login, so logging in again never re-sends one whose time has gone.
+     * Nothing is sent for a past appointment.
+     *
+     * @return when the first email will go out and how many reminder times were skipped
      */
-    public Optional<LocalDateTime> scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
-                                                                           String scheduleRaw, String customMessage) {
-        return scheduleAppointmentReminderWithSchedule(appt, recipientEmail, recipientName, scheduleRaw, customMessage, true);
-    }
-
-    /**
-     * @param catchUpMissed true when the user has just saved or changed the reminder (send one catch-up
-     *                      if a time has already passed); false when restoring saved reminders at login,
-     *                      so logging in again never re-sends a reminder whose time has gone
-     * @return when the first email will go out, or empty if none was scheduled
-     */
-    public Optional<LocalDateTime> scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
-                                                                           String scheduleRaw, String customMessage, boolean catchUpMissed) {
+    public AppointmentReminderPlan scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
+                                                                         String scheduleRaw, String customMessage) {
         String key = appointmentKey(appt.getAppId());
         cancel(key);
 
@@ -168,7 +163,7 @@ public class NotificationScheduler {
         ZonedDateTime apptAt = zoned(appt.getAppointmentDateTime());
         if (!apptAt.isAfter(now)) {
             log("Appointment " + appt.getAppId() + " is in the past; no reminder scheduled");
-            return Optional.empty();
+            return AppointmentReminderPlan.pastAppointment();
         }
 
         ReminderSchedule schedule = ReminderSchedule.fromString(scheduleRaw, 2);
@@ -180,10 +175,12 @@ public class NotificationScheduler {
         BooleanSupplier stillWanted = () -> appointmentStillWanted(appt);
         Function<ZonedDateTime, Email> email = t -> appointmentEmail(appt, recipientEmail, recipientName, overrides);
 
-        boolean missedOne = false;
+        int passed = 0;
+        int afterAppointment = 0;
         ZonedDateTime firstSend = null;
         for (ReminderSchedule.ReminderRule rule : schedule.getReminders()) {
-            ZonedDateTime first = zoned(computeInitialSendAt(appt.getAppointmentDateTime(), rule));
+            ZonedDateTime nominal = zoned(computeInitialSendAt(appt.getAppointmentDateTime(), rule));
+            ZonedDateTime first = nominal;
             UnaryOperator<ZonedDateTime> next = repeatStep(rule.repeatEvery());
 
             if (next != null) {
@@ -191,25 +188,25 @@ public class NotificationScheduler {
                 while (!quietHours.apply(first).isAfter(now) && beforeAppointment.test(first)) {
                     first = next.apply(first);
                 }
-                if (!beforeAppointment.test(first)) {
-                    missedOne = true;
-                    continue;
-                }
-            } else if (!quietHours.apply(first).isAfter(now) || !beforeAppointment.test(first)) {
-                missedOne = true;
+            }
+            if (!beforeAppointment.test(nominal)) {
+                afterAppointment++;
+                continue;
+            }
+            if (!beforeAppointment.test(first) || !quietHours.apply(first).isAfter(now)) {
+                passed++;
                 continue;
             }
             startChain(key, first, next, quietHours, beforeAppointment, stillWanted, email);
             firstSend = earlier(firstSend, quietHours.apply(first));
         }
 
-        if (missedOne && catchUpMissed) {
-            log("Some reminder times for appointment " + appt.getAppId() + " have passed or fall after it; sending one reminder in " + defaultDelaySeconds + "s");
-            ZonedDateTime catchUp = now.plusSeconds(defaultDelaySeconds);
-            startChain(key, catchUp, null, UnaryOperator.identity(), t -> true, stillWanted, email);
-            firstSend = earlier(firstSend, catchUp);
+        if (passed + afterAppointment > 0) {
+            log((passed + afterAppointment) + " reminder time(s) for appointment " + appt.getAppId()
+                    + " have passed or fall after it; they will not be sent");
         }
-        return Optional.ofNullable(firstSend).map(ZonedDateTime::toLocalDateTime);
+        return new AppointmentReminderPlan(Optional.ofNullable(firstSend).map(ZonedDateTime::toLocalDateTime),
+                passed, afterAppointment);
     }
 
     private static ZonedDateTime earlier(ZonedDateTime a, ZonedDateTime b) {

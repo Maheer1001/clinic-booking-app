@@ -12,6 +12,7 @@ import model.Prescription;
 import model.PrescriptionReminder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import service.AppointmentReminderPlan;
 import service.NotificationScheduler;
 import service.email.Email;
 import service.email.EmailSender;
@@ -81,10 +82,10 @@ class ReminderControllerTest {
         }
 
         @Override
-        public Optional<LocalDateTime> scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
-                                                                               String schedule, String message, boolean catchUpMissed) {
-            calls.add("appointment " + appt.getAppId() + " " + schedule + " " + message + " catchUp=" + catchUpMissed);
-            return Optional.of(appt.getAppointmentDateTime().minusDays(1));
+        public AppointmentReminderPlan scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
+                                                                             String schedule, String message) {
+            calls.add("appointment " + appt.getAppId() + " " + schedule + " " + message);
+            return new AppointmentReminderPlan(Optional.of(appt.getAppointmentDateTime().minusDays(1)), 0, 0);
         }
 
         @Override
@@ -143,7 +144,7 @@ class ReminderControllerTest {
         assertEquals(ReminderController.NEW_BOOKING_SCHEDULE, saved.getCustomDays());
         assertEquals(ReminderController.NEW_BOOKING_MESSAGE, saved.getCustomMessage());
         assertEquals(List.of("appointment 11 " + ReminderController.NEW_BOOKING_SCHEDULE + " "
-                + ReminderController.NEW_BOOKING_MESSAGE + " catchUp=true"), scheduler.calls);
+                + ReminderController.NEW_BOOKING_MESSAGE), scheduler.calls);
     }
 
     @Test
@@ -172,7 +173,7 @@ class ReminderControllerTest {
     // ------------------------------------------------------------------ restoring at login
 
     @Test
-    void restore_schedulesOnlySavedRemindersThatAreOn_withoutCatchUp() {
+    void restore_schedulesOnlySavedRemindersThatAreOn() {
         appointments.upcoming.add(appointment(11, 3));
         appointments.upcoming.add(appointment(12, 5));
         reminders.appointment.add(new AppointmentReminder(1, USER, 11, true, "1", "", "email"));
@@ -182,7 +183,7 @@ class ReminderControllerTest {
         reminders.prescription.add(new PrescriptionReminder(1, USER, 5, true, 12, "", "email"));
 
         assertEquals(2, controller.restoreScheduledReminders(EMAIL, "Pat"));
-        assertEquals(List.of("appointment 11 1  catchUp=false", "prescription 5 every 12"), scheduler.calls);
+        assertEquals(List.of("appointment 11 1 ", "prescription 5 every 12"), scheduler.calls);
     }
 
     @Test
@@ -215,7 +216,7 @@ class ReminderControllerTest {
 
         controller.rescheduleAppointmentReminder(11, EMAIL, "Pat");
 
-        assertEquals(List.of("cancel appointment 11", "appointment 11 2  catchUp=true"), scheduler.calls);
+        assertEquals(List.of("cancel appointment 11", "appointment 11 2 "), scheduler.calls);
     }
 
     @Test

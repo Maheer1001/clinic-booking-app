@@ -66,6 +66,12 @@ final class ReminderFeedback {
                 .orElse(whenNone));
     }
 
+    /** After saving an appointment reminder: when it goes out, and any reminder times that won't be sent. */
+    static void scheduled(Label label, service.AppointmentReminderPlan plan) {
+        clearError(label);
+        label.setText(plan.message());
+    }
+
     /** Shows a problem with what was typed (nothing is saved). */
     static void invalid(Label label, String message) {
         showError(label, message);
