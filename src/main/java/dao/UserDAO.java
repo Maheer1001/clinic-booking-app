@@ -221,6 +221,7 @@ public class UserDAO implements UserRepository {
                         WHERE user_id = ? OR test_id IN (SELECT test_id FROM "Test" WHERE user_id = ?))
                 """,
                 "DELETE FROM \"BookingReminder\" WHERE user_id = ?",
+                "DELETE FROM \"BookingDetails\" WHERE app_id IN (SELECT app_id FROM \"Appointment\" WHERE user_id = ?)",
                 "DELETE FROM \"Appointment\" WHERE user_id = ?",
                 """
                 DELETE FROM "Prescription"

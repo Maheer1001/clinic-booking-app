@@ -123,6 +123,25 @@ public class DB {
         return s == null || s.isBlank();
     }
 
+    /**
+     * Personal details entered when booking, one row per appointment. Separate from "Appointment" so the
+     * sensitive fields sit in one table a future staff role can be given access to on its own.
+     */
+    public static final String BOOKING_DETAILS_TABLE = """
+            CREATE TABLE IF NOT EXISTS "BookingDetails" (
+                app_id INTEGER PRIMARY KEY REFERENCES "Appointment"(app_id),
+                first_name VARCHAR(50),
+                last_name VARCHAR(50),
+                dob DATE,
+                phone_number VARCHAR(20),
+                contact_email VARCHAR(255),
+                gender VARCHAR(100),
+                sexuality VARCHAR(100),
+                accessibility_needs VARCHAR(500),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """;
+
     public static void initTables(Connection c) throws SQLException {
         // Live DB schema (introspected) uses dob/created/updated and includes default_clinic_id + accessibility_settings.
         // Also, some clinic_id columns are not enforced as FKs in the live DB, so we keep them as plain INTEGER.
@@ -336,6 +355,13 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS updated TIMESTAMP");
             // ClinicDAO reads this column; older/fresh schemas created above do not have it.
             s.execute("ALTER TABLE \"Clinic\" ADD COLUMN IF NOT EXISTS disability_accessibility TEXT");
+
+            // docs/migrations/2026-11-22-booking-details-and-security-question.sql
+            s.execute(BOOKING_DETAILS_TABLE);
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_question VARCHAR(50)");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_answer_hash VARCHAR(255)");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_failed_attempts INTEGER");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_locked_until TIMESTAMP");
         }
     }
 }
