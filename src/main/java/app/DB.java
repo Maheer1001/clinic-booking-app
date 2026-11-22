@@ -362,6 +362,9 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_answer_hash VARCHAR(255)");
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_failed_attempts INTEGER");
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_locked_until TIMESTAMP");
+
+            // Fixed dose-reminder rhythm across logins (docs/migrations/2026-11-22-prescription-reminder-anchor.sql).
+            s.execute("ALTER TABLE \"PrescriptionReminder\" ADD COLUMN IF NOT EXISTS schedule_anchor TIMESTAMP");
         }
     }
 }

@@ -88,6 +88,58 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
+    void sentReminder_isAlsoHandedToTheInAppListener_withTheSavedWording() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        List<ReminderAlert> alerts = new CopyOnWriteArrayList<>();
+        scheduler.setAlertListener(alerts::add);
+        String saved = new ReminderTemplateOverrides(null, null, null, "Clinic soon", "Preview", "Body", false).toJson();
+
+        scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(61), "patient@example.com", "Jane Doe",
+                singleRule(1, "minute"), saved);
+
+        waitForSends(1, 3000);
+        long deadline = System.currentTimeMillis() + 1000;
+        while (alerts.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        assertEquals(1, alerts.size());
+        ReminderAlert alert = alerts.getFirst();
+        assertEquals(ReminderAlert.Kind.APPOINTMENT, alert.kind());
+        assertEquals("patient@example.com", alert.recipientEmail());
+        assertEquals("Clinic soon", alert.overrides().getNotificationTitle());
+        assertEquals("Body", alert.overrides().getNotificationBody());
+        assertEquals(Boolean.FALSE, alert.overrides().getDiscreetOverride());
+    }
+
+    @Test
+    void listenerThatThrows_doesNotStopRepeats() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        scheduler.setAlertListener(a -> { throw new IllegalStateException("popup failed"); });
+        String schedule = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(3599, "second", null,
+                new ReminderSchedule.RepeatEvery(1, "second"))), null).toJson();
+
+        scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(3600), "p@example.com", "Jane", schedule, null);
+
+        waitForSends(2, 4000);
+        assertTrue(sender.sent.size() >= 2);
+    }
+
+    @Test
+    void doseAndBookingReminders_alsoReachTheListener() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        List<ReminderAlert> alerts = new CopyOnWriteArrayList<>();
+        scheduler.setAlertListener(alerts::add);
+        Prescription rx = new Prescription(12, 1, "PrEP", "1 tablet", LocalDate.now().minusDays(3), null);
+
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 0L, null);
+        scheduler.scheduleBookingReminder("p@example.com", "Jane", 30, 0L, null);
+
+        waitForSends(2, 3000);
+        long deadline = System.currentTimeMillis() + 1000;
+        while (alerts.size() < 2 && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        assertEquals(java.util.Set.of(ReminderAlert.Kind.TREATMENT, ReminderAlert.Kind.BOOKING),
+                alerts.stream().map(ReminderAlert::kind).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
     void pastAppointment_getsNoReminder() throws Exception {
         scheduler = new NotificationScheduler(sender, 0);
 
@@ -116,18 +168,43 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
-    void severalMissedReminderTimes_collapseIntoOneCatchUp() throws Exception {
+    void missedReminderTimes_areSkippedWithNoCatchUp() throws Exception {
         scheduler = new NotificationScheduler(sender, 0);
         // Appointment in 30 minutes; 1-day and 2-day reminders have both passed.
         String schedule = new ReminderSchedule(List.of(
                 new ReminderSchedule.ReminderRule(1, "day", null, null),
                 new ReminderSchedule.ReminderRule(2, "day", null, null)), null).toJson();
 
-        scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(1800), "p@example.com", "Jane", schedule, null);
+        AppointmentReminderPlan plan = scheduler.scheduleAppointmentReminderWithSchedule(
+                appointmentIn(1800), "p@example.com", "Jane", schedule, null);
 
-        waitForSends(1, 2000);
-        Thread.sleep(200);
-        assertEquals(1, sender.sent.size());
+        Thread.sleep(400);
+        assertEquals(0, sender.sent.size(), "a passed reminder time must not be sent early as a catch-up");
+        assertEquals(0, scheduler.pendingCount());
+        assertTrue(plan.firstSend().isEmpty());
+        assertEquals(2, plan.passed());
+        assertEquals(0, plan.afterAppointment());
+    }
+
+    @Test
+    void onlyTheRulesThatFitAreScheduled_andTheSkippedOnesAreReported() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        Appointment appt = new Appointment(9, 1, "STI Screening", "Clinic 1", "Dr. Smith",
+                LocalDateTime.now().plusDays(3).withHour(14).withMinute(0).withSecond(0).withNano(0));
+        String schedule = new ReminderSchedule(List.of(
+                new ReminderSchedule.ReminderRule(1, "day", null, null),     // fits
+                new ReminderSchedule.ReminderRule(5, "day", null, null),     // already passed
+                new ReminderSchedule.ReminderRule(1, "hour", "18:00", null)  // 18:00 on the day: after a 14:00 appointment
+        ), null).toJson();
+
+        AppointmentReminderPlan plan = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", schedule, null);
+
+        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(1)), plan.firstSend());
+        assertEquals(1, plan.passed());
+        assertEquals(1, plan.afterAppointment());
+        assertEquals(1, scheduler.pendingCount("appointment:9"), "only the rule that fits is scheduled; no catch-up");
+        Thread.sleep(300);
+        assertEquals(0, sender.sent.size());
     }
 
     @Test
@@ -190,6 +267,40 @@ class NotificationSchedulerScheduleTest {
         assertTrue(first.isPresent());
         assertFalse(first.get().toLocalDate().isBefore(start), "No dose reminder before the course starts: " + first.get());
         assertTrue(first.get().isBefore(start.atStartOfDay().plusHours(12)), "First one on the start day: " + first.get());
+    }
+
+    @Test
+    void doseReminder_restoredLater_keepsTheOriginalRhythm() {
+        ZonedDateTime now = ZonedDateTime.of(2026, 11, 22, 15, 0, 0, 0, ZoneId.of("Europe/London"));
+        scheduler = new NotificationScheduler(sender, 0, Clock.fixed(now.toInstant(), now.getZone()), (a, u) -> true);
+        Prescription rx = new Prescription(10, 1, "Doxycycline", "100mg", LocalDate.of(2026, 11, 1), null);
+        LocalDateTime savedAt = LocalDateTime.of(2026, 11, 21, 9, 0); // doses due 21:00, 09:00, 21:00 ...
+
+        var next = scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 12, null, savedAt);
+
+        assertEquals(java.util.Optional.of(LocalDateTime.of(2026, 11, 22, 21, 0)), next,
+                "next tick of the saved rhythm, not 15:00 + 12h");
+        assertEquals(1, scheduler.pendingCount("prescription:10"));
+    }
+
+    @Test
+    void doseReminder_tickExactlyNow_isNotResent() {
+        ZonedDateTime anchor = ZonedDateTime.of(2026, 11, 20, 8, 0, 0, 0, ZoneId.of("Europe/London"));
+        assertEquals(anchor.plusHours(60), NotificationScheduler.nextDoseTick(anchor, 12, anchor.plusHours(48)));
+        assertEquals(anchor.plusHours(12), NotificationScheduler.nextDoseTick(anchor, 12, anchor.plusMinutes(1)),
+                "just after saving, the first dose reminder is one interval later");
+        assertEquals(anchor.plusHours(12), NotificationScheduler.nextDoseTick(anchor, 12, anchor.minusHours(5)),
+                "an anchor in the future still starts one interval after it");
+    }
+
+    @Test
+    void doseReminder_withoutAnchor_startsOneIntervalFromNow() {
+        ZonedDateTime now = ZonedDateTime.of(2026, 11, 22, 15, 0, 0, 0, ZoneId.of("Europe/London"));
+        scheduler = new NotificationScheduler(sender, 0, Clock.fixed(now.toInstant(), now.getZone()), (a, u) -> true);
+        Prescription rx = new Prescription(11, 1, "PrEP", "1 tablet", LocalDate.of(2026, 11, 1), null);
+
+        assertEquals(java.util.Optional.of(LocalDateTime.of(2026, 11, 23, 3, 0)),
+                scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 12, null));
     }
 
     @Test
@@ -259,7 +370,8 @@ class NotificationSchedulerScheduleTest {
 
         var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
 
-        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(2)), first);
+        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(2)), first.firstSend());
+        assertEquals(0, first.skipped());
         assertEquals(2, scheduler.pendingCount("appointment:5"));
     }
 
@@ -271,12 +383,12 @@ class NotificationSchedulerScheduleTest {
         String rules = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(1, "hour", null, null)),
                 new ReminderSchedule.QuietHours("22:00", "08:00")).toJson();
 
-        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
+        var plan = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
 
-        assertTrue(first.isPresent());
-        assertTrue(first.get().isBefore(appt.getAppointmentDateTime()),
-                "06:00 moved to 08:00 by quiet hours is after the 07:00 appointment, so it must not be the reported send time");
-        assertEquals(1, scheduler.pendingCount("appointment:6"), "One catch-up reminder instead");
+        assertTrue(plan.firstSend().isEmpty(),
+                "06:00 moved to 08:00 by quiet hours is after the 07:00 appointment, so it is not scheduled");
+        assertEquals(1, plan.afterAppointment());
+        assertEquals(0, scheduler.pendingCount("appointment:6"), "and no catch-up reminder is sent instead");
     }
 
     @Test
@@ -286,9 +398,10 @@ class NotificationSchedulerScheduleTest {
                 LocalDateTime.now().plusDays(3).withHour(10).withMinute(0).withSecond(0).withNano(0));
         String rules = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(1, "hour", "18:00", null)), null).toJson();
 
-        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides(), false);
+        var plan = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
 
-        assertTrue(first.isEmpty(), "18:00 on the day of a 10:00 appointment can never be sent");
+        assertTrue(plan.firstSend().isEmpty(), "18:00 on the day of a 10:00 appointment can never be sent");
+        assertEquals(1, plan.afterAppointment());
         assertEquals(0, scheduler.pendingCount("appointment:7"));
     }
 
@@ -296,7 +409,7 @@ class NotificationSchedulerScheduleTest {
     void schedule_forPastAppointment_reportsNothing() {
         scheduler = new NotificationScheduler(sender, 30);
         assertTrue(scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(-60), "p@example.com", "P",
-                singleRule(1, "day"), discreetOverrides()).isEmpty());
+                singleRule(1, "day"), discreetOverrides()).firstSend().isEmpty());
     }
 
     @Test

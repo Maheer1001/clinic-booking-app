@@ -12,6 +12,7 @@ import model.AppointmentReminder;
 import model.BookingReminder;
 import model.Prescription;
 import model.PrescriptionReminder;
+import service.AppointmentReminderPlan;
 import service.NotificationScheduler;
 
 import java.time.LocalDate;
@@ -30,6 +31,8 @@ public class ReminderController {
     private final PrescriptionDAO prescriptionDAO;
     private final NotificationScheduler notificationScheduler;
     private final UserRepository userRepository;
+    /** Dose rhythm start per prescription, as last saved here (saves the schedule call a database read). */
+    private final java.util.Map<Integer, LocalDateTime> doseAnchors = new java.util.concurrent.ConcurrentHashMap<>();
 
     public ReminderController(int userId) {
         this(userId, new ReminderDAO(), new AppointmentDAO(), new PrescriptionDAO(), NotificationScheduler.shared(),
@@ -89,8 +92,20 @@ public class ReminderController {
         return saved;
     }
 
+    /**
+     * Saves the dose reminder. The dose rhythm (doses every intervalHours from an anchor time) starts
+     * now, unless the reminder was already on with the same interval: then only the wording changed
+     * and the existing rhythm is kept, so editing the text does not move the dose times.
+     */
     public boolean savePrescriptionReminder(int prescriptionId, boolean notify, int intervalHours, String customMessage) {
-        boolean saved = reminderDAO.savePrescriptionReminder(userId, prescriptionId, notify, intervalHours, customMessage);
+        LocalDateTime anchor = findPrescriptionReminder(prescriptionId)
+                .filter(r -> notify && r.isNotify() && r.getIntervalBetweenDoses() == intervalHours)
+                .map(PrescriptionReminder::getScheduleAnchor)
+                .orElseGet(LocalDateTime::now);
+        boolean saved = reminderDAO.savePrescriptionReminder(userId, prescriptionId, notify, intervalHours, customMessage, anchor);
+        if (saved) {
+            doseAnchors.put(prescriptionId, anchor);
+        }
         if (!notify) {
             notificationScheduler.cancelTreatmentReminders(prescriptionId);
         }
@@ -122,9 +137,11 @@ public class ReminderController {
 
     /**
      * Schedule appointment reminders using the JSON schedule stored in custom_days.
+     *
+     * @return when the first reminder email will be sent and which reminder times were skipped
+     *         (already passed or after the appointment; these are not sent)
      */
-    /** @return when the first reminder email will be sent, or empty if none could be scheduled */
-    public Optional<LocalDateTime> scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
+    public AppointmentReminderPlan scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
                                                                            String scheduleRaw, String customMessage) {
         return notificationScheduler.scheduleAppointmentReminderWithSchedule(appt, email, name, scheduleRaw, customMessage);
     }
@@ -135,7 +152,15 @@ public class ReminderController {
 
     /** @return when the first dose reminder will be sent, or empty if the course ends first */
     public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String email, String name, int intervalHours, String customMessage) {
-        return notificationScheduler.scheduleTreatmentReminder(rx, email, name, intervalHours, customMessage);
+        LocalDateTime anchor = doseAnchors.get(rx.getPrescriptionId());
+        if (anchor == null) {
+            anchor = findPrescriptionReminder(rx.getPrescriptionId()).map(PrescriptionReminder::getScheduleAnchor).orElse(null);
+        }
+        return notificationScheduler.scheduleTreatmentReminder(rx, email, name, intervalHours, customMessage, anchor);
+    }
+
+    private Optional<PrescriptionReminder> findPrescriptionReminder(int prescriptionId) {
+        return getPrescriptionReminders().stream().filter(r -> r.getPrescriptionId() == prescriptionId).findFirst();
     }
 
     public void scheduleBookingReminder(String email, String name, int daysSinceLast, LocalDate lastDate) {
@@ -234,7 +259,7 @@ public class ReminderController {
             for (Appointment a : upcoming) {
                 if (a.getAppId() == r.getAppId()) {
                     notificationScheduler.scheduleAppointmentReminderWithSchedule(
-                            a, email, displayName, r.getCustomDays(), r.getCustomMessage(), false);
+                            a, email, displayName, r.getCustomDays(), r.getCustomMessage());
                     restored++;
                 }
             }
@@ -245,8 +270,15 @@ public class ReminderController {
             if (!r.isNotify() || r.getIntervalBetweenDoses() <= 0) continue;
             for (Prescription rx : prescriptions) {
                 if (rx.getPrescriptionId() == r.getPrescriptionId()) {
+                    LocalDateTime anchor = r.getScheduleAnchor();
+                    if (anchor == null) {
+                        // Saved before the rhythm was stored: start it now and keep it from here on.
+                        anchor = LocalDateTime.now();
+                        reminderDAO.setPrescriptionReminderAnchor(userId, rx.getPrescriptionId(), anchor);
+                    }
+                    // Same rhythm as before the restart, not "interval from now" (that drifted at every login).
                     notificationScheduler.scheduleTreatmentReminder(
-                            rx, email, displayName, r.getIntervalBetweenDoses(), r.getCustomMessage());
+                            rx, email, displayName, r.getIntervalBetweenDoses(), r.getCustomMessage(), anchor);
                     restored++;
                 }
             }

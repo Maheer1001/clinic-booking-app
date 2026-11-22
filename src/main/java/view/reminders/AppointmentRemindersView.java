@@ -127,8 +127,7 @@ public class AppointmentRemindersView {
                 if (email == null) email = "";
                 if (name == null || name.isBlank()) name = email;
                 ReminderFeedback.scheduled(saveConfirm,
-                        controller.scheduleAppointmentReminderWithSchedule(appt, email, name, p.scheduleJson(), p.templateOverridesJson()),
-                        "Saved, but all of these reminder times have already passed.");
+                        controller.scheduleAppointmentReminderWithSchedule(appt, email, name, p.scheduleJson(), p.templateOverridesJson()));
             }
         });
 
