@@ -24,8 +24,10 @@ public class MainController {
     private PauseTransition settingsSave;
     private AccessibilitySettings settings;
     private int settingsUserId;
+    private final Navigator nav;
 
     public MainController(Navigator nav, MainView view, int userID) {
+        this.nav = nav;
 
         //sets up toggle group for navigation bar buttons
         ToggleGroup group = new ToggleGroup();
@@ -76,6 +78,8 @@ public class MainController {
     private void logOut(String infoMessage) {
         Scene currScene = Data.getScene();
         Data.clearCurrentUser();
+        // every tab's pages and history belong to this session
+        nav.reset();
         // the in-progress booking holds personal details; don't let the next user see them
         Data.reset();
         Data.setSettings(null);
