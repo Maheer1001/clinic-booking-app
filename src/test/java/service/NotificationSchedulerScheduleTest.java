@@ -88,6 +88,58 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
+    void sentReminder_isAlsoHandedToTheInAppListener_withTheSavedWording() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        List<ReminderAlert> alerts = new CopyOnWriteArrayList<>();
+        scheduler.setAlertListener(alerts::add);
+        String saved = new ReminderTemplateOverrides(null, null, null, "Clinic soon", "Preview", "Body", false).toJson();
+
+        scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(61), "patient@example.com", "Jane Doe",
+                singleRule(1, "minute"), saved);
+
+        waitForSends(1, 3000);
+        long deadline = System.currentTimeMillis() + 1000;
+        while (alerts.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        assertEquals(1, alerts.size());
+        ReminderAlert alert = alerts.getFirst();
+        assertEquals(ReminderAlert.Kind.APPOINTMENT, alert.kind());
+        assertEquals("patient@example.com", alert.recipientEmail());
+        assertEquals("Clinic soon", alert.overrides().getNotificationTitle());
+        assertEquals("Body", alert.overrides().getNotificationBody());
+        assertEquals(Boolean.FALSE, alert.overrides().getDiscreetOverride());
+    }
+
+    @Test
+    void listenerThatThrows_doesNotStopRepeats() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        scheduler.setAlertListener(a -> { throw new IllegalStateException("popup failed"); });
+        String schedule = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(3599, "second", null,
+                new ReminderSchedule.RepeatEvery(1, "second"))), null).toJson();
+
+        scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(3600), "p@example.com", "Jane", schedule, null);
+
+        waitForSends(2, 4000);
+        assertTrue(sender.sent.size() >= 2);
+    }
+
+    @Test
+    void doseAndBookingReminders_alsoReachTheListener() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+        List<ReminderAlert> alerts = new CopyOnWriteArrayList<>();
+        scheduler.setAlertListener(alerts::add);
+        Prescription rx = new Prescription(12, 1, "PrEP", "1 tablet", LocalDate.now().minusDays(3), null);
+
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 0L, null);
+        scheduler.scheduleBookingReminder("p@example.com", "Jane", 30, 0L, null);
+
+        waitForSends(2, 3000);
+        long deadline = System.currentTimeMillis() + 1000;
+        while (alerts.size() < 2 && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        assertEquals(java.util.Set.of(ReminderAlert.Kind.TREATMENT, ReminderAlert.Kind.BOOKING),
+                alerts.stream().map(ReminderAlert::kind).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
     void pastAppointment_getsNoReminder() throws Exception {
         scheduler = new NotificationScheduler(sender, 0);
 

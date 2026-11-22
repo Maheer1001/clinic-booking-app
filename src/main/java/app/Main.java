@@ -48,6 +48,8 @@ public class Main extends Application {
         stage.show();
 
         ensureTablesExistInBackground();
+        // Scheduled reminders also pop up in the app while their user is signed in.
+        view.notification.ReminderPopups.install(service.NotificationScheduler.shared());
     }
 
     /**
