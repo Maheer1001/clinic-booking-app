@@ -269,9 +269,7 @@ public class TrackingPrescriptionController extends TrackingSectionController {
 
         HBox graphic = view.getEntryHeader(prescription.name(), "");
         // Same coloured pill as a test result's status (it was plain text here).
-        Label status = new Label(prescription.active() ? "Current" : "Finished");
-        status.getStyleClass().addAll("tracking-status", prescription.active() ? "tracking-status-current" : "tracking-status-finished");
-        status.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        Label status = prescription.active() ? statusPill("Current", "current") : statusPill("Finished", "finished");
         graphic.getChildren().set(graphic.getChildren().size() - 1, status);
         graphic.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 

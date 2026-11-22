@@ -40,7 +40,8 @@ public class TrackingAppointmentController extends TrackingSectionController {
     public String getSearchableText(TrackingData td) {
         AppointmentDetails app = (AppointmentDetails) td;
         // notes may be null; don't let the word "null" become searchable
-        return app.serviceName() + " " + app.clinicName() + " " + (app.notes() != null ? app.notes() : "");
+        return app.serviceName() + " " + app.clinicName() + " " + (app.notes() != null ? app.notes() : "")
+                + (app.missed() ? " " + MISSED : "");
     }
 
     @Override
@@ -51,7 +52,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
         sortedAppointments.setComparator(getComparator(null));
         if (appointments.isEmpty()) {
             return UI.page(UI.emptyState(UI.ICON_CALENDAR, "No past appointments",
-                    "Appointments you have attended will be listed here."));
+                    "Your past appointments will be listed here."));
         }
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
@@ -64,6 +65,11 @@ public class TrackingAppointmentController extends TrackingSectionController {
             String left = appointment.serviceName();
             String right = when(appointment);
             Button button = view.getEntryButton(left, right);
+            if (appointment.missed()) {
+                HBox row = (HBox) button.getGraphic();
+                row.getChildren().add(1, missedPill());
+                button.setAccessibleText(left + ", " + MISSED + ", " + right);
+            }
             button.setOnAction(e -> nav.goToPage(getDetailsPage(appointment), "Past appointment", false));
             buttonMap.put(appointment, button);
             list.getChildren().add(button);
@@ -153,7 +159,7 @@ public class TrackingAppointmentController extends TrackingSectionController {
 
         ScrollPane sp = new ScrollPane(UI.pageTop(searchBox, filterGrid, clearButton, list, noMatchesLabel(filteredAppointments)));
         sp.setFitToWidth(true);
-        return sp;
+        return withTrackingStyles(sp);
     }
 
     public Predicate<AppointmentDetails> getPredicate(String searchText, LocalDate dateFrom, LocalDate dateTo) {
@@ -175,6 +181,13 @@ public class TrackingAppointmentController extends TrackingSectionController {
         };
     }
 
+    /** Label for a visit the clinic marked as not attended (NO_SHOW). */
+    static final String MISSED = "Missed";
+
+    private static Label missedPill() {
+        return statusPill(MISSED, "missed");
+    }
+
     /** "5 Mar 2026, 14:00" instead of "14:00 05/03/26". */
     private static String when(AppointmentDetails app) {
         String time = app.startTime() == null || app.startTime().isBlank() ? "" : ", " + app.startTime();
@@ -185,6 +198,10 @@ public class TrackingAppointmentController extends TrackingSectionController {
     public Node getDetailsPage(TrackingData td) {
         AppointmentDetails appointment = (AppointmentDetails) td;
         HBox graphic = view.getEntryHeader(appointment.serviceName(), when(appointment));
+        if (appointment.missed()) {
+            graphic.getChildren().add(1, missedPill());
+            graphic.setAlignment(Pos.CENTER_LEFT);
+        }
 
         VBox info = new VBox(10, UI.detail("CLINIC", appointment.clinicName()));
 
@@ -197,6 +214,6 @@ public class TrackingAppointmentController extends TrackingSectionController {
         bookingReminderButton.setOnAction(e -> nav.goToPageNewTab("reminders", new RemindersView(Data.getCurrentUserId()).getRemindersScene("booking"), "Reminders", true));
         HBox reminder = UI.callout("Regular check-ups keep you on top of your sexual health.", bookingReminderButton);
 
-        return UI.page(UI.card(12, graphic, info), reminder);
+        return withTrackingStyles(UI.page(UI.card(12, graphic, info), reminder));
     }
 }

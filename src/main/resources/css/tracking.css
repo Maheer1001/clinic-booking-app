@@ -39,3 +39,10 @@
     -fx-border-color: #6b6b78;
     -fx-text-fill: #3d3d47;
 }
+
+/* A past appointment the clinic marked as not attended. */
+.tracking-status-missed {
+    -fx-background-color: #fdf1e1;
+    -fx-border-color: #a35a00;
+    -fx-text-fill: #6b3b00;
+}

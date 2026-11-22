@@ -130,6 +130,34 @@ class TrackingDAOTest {
     }
 
     @Test
+    void pastAppointments_listNoShowAsMissed() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        appointment(now.minusDays(2), "NO_SHOW", "missed visit");
+        appointment(now.minusDays(4), "COMPLETED", "attended");
+        appointment(now.minusDays(6), "CANCELLED", "cancelled");
+
+        List<AppointmentDetails> past = new AppointmentDAO().getPastAppointmentDetailsByUserId(USER);
+
+        assertEquals(List.of("missed visit", "attended"), past.stream().map(AppointmentDetails::notes).toList());
+        assertTrue(past.get(0).missed());
+        assertEquals(model.AppointmentStatus.NO_SHOW, past.get(0).status());
+        assertFalse(past.get(1).missed());
+    }
+
+    @Test
+    void upcomingAppointments_neverNoShowOrCancelled() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        appointment(now.plusDays(2), "CONFIRMED", "booked");
+        appointment(now.plusDays(3), "NO_SHOW", "marked no-show early");
+        appointment(now.plusDays(4), "CANCELLED", "cancelled");
+
+        AppointmentDAO dao = new AppointmentDAO();
+        assertEquals(List.of("booked"), dao.getUpcomingAppointmentDetailsByUserId(USER).stream()
+                .map(model.UpcomingAppointmentDetails::notes).toList());
+        assertEquals(1, dao.getUpcomingAppointmentsForUser(USER).size());
+    }
+
+    @Test
     void tests_comeMostRecentlyAddedFirst_soTheNewResultIsTheOneAnnounced() throws Exception {
         try (Connection c = DB.connect(); Statement s = c.createStatement()) {
             s.execute("INSERT INTO \"Test\" (user_id, test_type, test_date) VALUES (5, 'Older', DATE '2026-10-01')");
