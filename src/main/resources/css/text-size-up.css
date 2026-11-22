@@ -117,7 +117,8 @@
 }
 
 .app-nav-btn {
-    -fx-font-size: 20px; /* +2 */
+    -fx-font-size: 18px; /* +2; 20px cut "Reminders" short at the 420px window width */
+    -fx-padding: 4px 2px 4px 2px;
 }
 
 .app-shortcut-btn {

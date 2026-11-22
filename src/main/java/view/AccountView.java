@@ -123,6 +123,9 @@ public class AccountView {
             AccountService.SaveResult r = service.saveAccount(userId, f, l, p, d, immutableEmail);
             switch (r) {
                 case SUCCESS -> {
+                    // show exactly what was stored (names are saved trimmed)
+                    first.setText(nullToEmpty(f));
+                    last.setText(nullToEmpty(l));
                     msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
                     UI.showSaveConfirmation(msg);
                     // keep the logged-in user's display name (used in emails) in step with the edit
@@ -186,8 +189,19 @@ public class AccountView {
         return new VBox(10, g, formHint, saveBox, msg);
     }
 
-    private static TextFormatter<String> maxLength(int max) {
-        return new TextFormatter<>(change -> change.getControlNewText().length() <= max ? change : null);
+    /** Caps the text length; an over-long paste is cut to fit instead of being dropped entirely. */
+    static TextFormatter<String> maxLength(int max) {
+        return new TextFormatter<>(change -> {
+            int overflow = change.getControlNewText().length() - max;
+            if (overflow <= 0) return change;
+            String added = change.getText();
+            if (added.length() < overflow) return null;
+            change.setText(added.substring(0, added.length() - overflow));
+            // keep the caret/anchor inside the shortened text
+            int end = change.getRangeStart() + change.getText().length();
+            change.selectRange(end, end);
+            return change;
+        });
     }
 
     private static String nullToEmpty(String s) {
