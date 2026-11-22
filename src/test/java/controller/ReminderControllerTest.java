@@ -256,4 +256,16 @@ class ReminderControllerTest {
         appointments.upcoming.add(appointment(11, 2));
         assertFalse(scheduler.lastBookingStillWanted.getAsBoolean(), "no nudge to book while an appointment is booked");
     }
+
+    @Test
+    void bookingNudge_savedWhileBooked_isNotReportedAsComing() {
+        appointments.lastVisit = Optional.of(LocalDate.now().minusDays(60));
+        appointments.upcoming.add(appointment(11, 2));
+
+        Optional<LocalDateTime> when = controller.scheduleBookingReminder(EMAIL, "Pat", 30, "");
+
+        assertTrue(when.isEmpty(), "it would only be skipped at send time, so the screen must not promise it");
+        assertEquals(List.of("cancel booking " + EMAIL), scheduler.calls);
+        assertTrue(controller.hasUpcomingAppointment());
+    }
 }

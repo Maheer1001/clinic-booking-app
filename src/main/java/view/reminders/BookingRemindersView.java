@@ -250,7 +250,9 @@ public class BookingRemindersView {
                 if (name == null || name.isBlank()) name = email;
                 ReminderFeedback.scheduled(saveConfirmReminder,
                         controller.scheduleBookingReminder(email, name, days, customJson),
-                        "Saved. We'll start counting from your first visit.");
+                        controller.hasUpcomingAppointment()
+                                ? "Saved. You already have an appointment booked, so we'll count from that visit."
+                                : "Saved. We'll start counting from your first visit.");
             }
         });
 
