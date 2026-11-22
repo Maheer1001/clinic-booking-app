@@ -20,7 +20,6 @@ import javafx.scene.layout.VBox;
 import model.StaffTest;
 import model.TestDraft;
 import model.TestResultStatus;
-import service.StaffService;
 import view.Navigator;
 import view.ui.Dates;
 import view.ui.UI;
@@ -57,7 +56,7 @@ public class TestEditorView {
     private final Button release = UI.primaryButton("Release to patient");
     private final HBox header = new HBox(10);
 
-    private record RowFields(HBox row, TextField condition, ComboBox<TestResultStatus> result) {}
+    private record RowFields(VBox row, TextField condition, ComboBox<TestResultStatus> result) {}
 
     /**
      * @param appId  the appointment it was taken at (new tests only; may be null)
@@ -95,7 +94,7 @@ public class TestEditorView {
     private void build(StaffTest t) {
         type.setPromptText("e.g. STI screen");
         type.setAccessibleText("Test type");
-        UI.datePicker(date);
+        StaffUi.datePicker(date);
         date.setAccessibleText("Test date");
         date.setMaxWidth(Double.MAX_VALUE);
         for (TextArea area : List.of(notes, treatment)) {
@@ -120,6 +119,7 @@ public class TestEditorView {
         add.setOnAction(e -> addRow("", TestResultStatus.PENDING));
 
         statusLine.setWrapText(true);
+        statusLine.setMaxWidth(Double.MAX_VALUE);
         statusLine.getStyleClass().add("page-intro");
         header.setAlignment(Pos.CENTER_LEFT);
 
@@ -160,12 +160,16 @@ public class TestEditorView {
         box.setCellFactory(l -> statusCell());
         box.setButtonCell(statusCell());
         box.setAccessibleText("Result");
-        box.setMinWidth(118);
+        box.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(box, Priority.ALWAYS);
         Button remove = UI.dangerButton("Remove");
         remove.setAccessibleText("Remove this result");
-        HBox row = new HBox(8, c, box, remove);
+        remove.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        // Condition on its own line (full width), then the result and Remove: fits 420px at large text.
+        HBox controls = new HBox(8, box, remove);
+        controls.setAlignment(Pos.CENTER_LEFT);
+        VBox row = UI.innerCard(8, c, controls);
         row.getStyleClass().add("staff-result-row");
-        row.setAlignment(Pos.CENTER_LEFT);
         RowFields f = new RowFields(row, c, box);
         remove.setOnAction(e -> {
             rowFields.remove(f);
@@ -234,10 +238,5 @@ public class TestEditorView {
                     ? "Saved as a draft first: the patient sees nothing until you release it."
                     : "Draft: the patient can't see this yet.");
         }
-    }
-
-    /** The maximum note length, for the hint under the text areas. */
-    static int maxNotes() {
-        return StaffService.MAX_NOTES;
     }
 }

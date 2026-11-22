@@ -62,7 +62,7 @@ public class StaffClinicView {
                     "For clinic admins",
                     "Only a clinic admin can manage staff, the staff code and timeslots. Ask your admin if something needs changing.")));
         }
-        UI.datePicker(slotDate);
+        StaffUi.datePicker(slotDate);
         slotDate.setAccessibleText("Timeslot date");
         slotDate.setMaxWidth(Double.MAX_VALUE);
         slotDate.valueProperty().addListener((o, was, now) -> {
@@ -180,18 +180,24 @@ public class StaffClinicView {
     /** Name and email, an optional role pill, then two small buttons underneath. */
     private Node personRow(StaffMember m, StaffForms.Pill pill, Button a, Button b) {
         boolean me = m.userId() == staff.staffUserId();
-        Label name = UI.heading(m.displayName() + (me ? " (you)" : ""));
-        name.setWrapText(true);
+        // Accounts without a name show their email as the name: don't repeat it underneath.
+        boolean named = m.displayName() != null && !m.displayName().equalsIgnoreCase(m.email());
+        Label name = UI.wrappingLabel((named ? m.displayName() : m.email()) + (me ? " (you)" : ""));
+        name.getStyleClass().add(UI.HEADING);
         name.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(name, Priority.ALWAYS);
         HBox top = new HBox(10, name);
         if (pill != null) top.getChildren().add(StaffUi.pill(pill));
         top.setAlignment(Pos.CENTER_LEFT);
-        Label email = UI.muted(m.email());
-        email.setWrapText(true);
         HBox buttons = new HBox(8, a, b);
         buttons.setAlignment(Pos.CENTER_LEFT);
-        VBox row = UI.innerCard(6, top, email, buttons);
+        VBox row = UI.innerCard(6, top);
+        if (named) {
+            Label email = UI.muted(m.email());
+            email.setWrapText(true);
+            row.getChildren().add(email);
+        }
+        row.getChildren().add(buttons);
         row.setMaxWidth(Double.MAX_VALUE);
         return row;
     }

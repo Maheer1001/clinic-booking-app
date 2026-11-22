@@ -55,6 +55,16 @@ final class StaffUi {
         return root;
     }
 
+    /**
+     * A date picker that fills its row. Not {@link UI#datePicker}: that one's "tracking-date" class
+     * caps the width for the tracking filters, which cut the date off at large text.
+     */
+    static void datePicker(javafx.scene.control.DatePicker picker) {
+        picker.setShowWeekNumbers(false);
+        picker.setMaxWidth(Double.MAX_VALUE);
+        picker.setMinWidth(130);
+    }
+
     static Label pill(Pill p) {
         Label l = new Label(p.text());
         l.getStyleClass().addAll("staff-pill", "staff-pill-" + p.kind());
@@ -136,6 +146,13 @@ final class StaffUi {
     static VBox section(String heading, Node... children) {
         VBox card = UI.card(10);
         card.getChildren().add(UI.titleSmWrapping(heading));
+        for (Node n : children) {
+            // Help text in a section wraps at 420px instead of being cut off with "...".
+            if (n instanceof Label l) {
+                l.setWrapText(true);
+                l.setMaxWidth(Double.MAX_VALUE);
+            }
+        }
         card.getChildren().addAll(children);
         card.setMaxWidth(Double.MAX_VALUE);
         return card;

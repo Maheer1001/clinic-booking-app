@@ -96,7 +96,7 @@ public class PrescriptionEditorView {
         DatePicker start = new DatePicker(LocalDate.now());
         DatePicker end = new DatePicker();
         for (DatePicker dp : List.of(start, end)) {
-            UI.datePicker(dp);
+            StaffUi.datePicker(dp);
             dp.setMaxWidth(Double.MAX_VALUE);
         }
         start.setAccessibleText("Start date");

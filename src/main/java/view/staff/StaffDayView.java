@@ -41,7 +41,7 @@ public class StaffDayView {
     public Node page() {
         if (staff.clinicId() == 0) return StaffUi.scroll(StaffUi.noClinic());
 
-        UI.datePicker(picker);
+        StaffUi.datePicker(picker);
         picker.setAccessibleText("Date");
         picker.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(picker, Priority.ALWAYS);
@@ -55,6 +55,7 @@ public class StaffDayView {
         prev.setOnAction(e -> picker.setValue(date().minusDays(1)));
         next.setOnAction(e -> picker.setValue(date().plusDays(1)));
         today.setOnAction(e -> picker.setValue(LocalDate.now()));
+        for (Button b : List.of(prev, next, today)) b.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
         HBox dateBar = new HBox(8, prev, picker, next, today);
         dateBar.getStyleClass().add("staff-date-bar");
         dateBar.setAlignment(Pos.CENTER_LEFT);
