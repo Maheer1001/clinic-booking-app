@@ -186,6 +186,8 @@ public class UserDAO implements UserRepository, AccountRepository {
     /**
      * Role and clinic memberships for login routing (and for every staff action, which re-reads it).
      * Empty if the user does not exist. A patient comes back with role PATIENT and no clinics.
+     * Only ACTIVE memberships count: a staff member still waiting for their clinic admin's approval
+     * comes back with no clinics (the app shows a waiting page).
      */
     public Optional<StaffAccess> getStaffAccess(int userId) throws SQLException {
         try (Connection c = DB.connect()) {
@@ -208,7 +210,7 @@ public class UserDAO implements UserRepository, AccountRepository {
         List<Integer> clinics = new ArrayList<>();
         if (role.isStaff()) {
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT clinic_id FROM \"StaffClinic\" WHERE user_id = ? ORDER BY clinic_id")) {
+                    "SELECT clinic_id FROM \"StaffClinic\" WHERE user_id = ? AND status = 'ACTIVE' ORDER BY clinic_id")) {
                 ps.setInt(1, userId);
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) clinics.add(rs.getInt(1));

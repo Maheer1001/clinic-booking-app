@@ -80,12 +80,12 @@ class LoginRoutingTest {
     }
 
     @Test
-    void staffNavigatorStartsOnTodayWithPlaceholderPages() {
+    void staffNavigatorStartsOnTheTodayPage() {
         StaffAccess admin = access(StaffRole.CLINIC_ADMIN, List.of(1), false);
         Navigator nav = new Navigator(LoginRouting.staffTabs(admin), javafx.scene.layout.VBox::new);
         nav.start();
         assertEquals("today", nav.getCurrentTab());
-        assertTrue(hasLabel(nav.getRoot().getCenter(), "Coming soon"));
+        assertInstanceOf(javafx.scene.control.ScrollPane.class, nav.getRoot().getCenter(), "the staff day list");
         nav.handleTabClick("clinic");
         assertEquals("clinic", nav.getCurrentTab());
         assertThrows(IllegalArgumentException.class, () -> nav.handleTabClick("booking"));

@@ -91,11 +91,23 @@ public interface StaffRepository {
 
     // ------------------------------------------------------------ clinic admin
 
+    /** ACTIVE staff at the clinic (pending sign-ups are not staff there yet). */
     List<StaffMember> staff(int clinicId) throws SQLException;
 
+    /** Staff who signed up with the clinic's code and are waiting for an admin's approval. */
+    List<StaffMember> pendingStaff(int clinicId) throws SQLException;
+
+    /** PENDING -> ACTIVE (records who approved and when); false if there is no pending membership. */
+    boolean approveStaff(int clinicId, int staffUserId, int byUserId, LocalDateTime now, AuditEntry audit)
+            throws SQLException;
+
+    /** Deletes a PENDING membership (the account stays, with no clinic); false if none. */
+    boolean rejectStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException;
+
+    /** Removes an ACTIVE membership. */
     boolean removeStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException;
 
-    /** Only changes a staff account that is a member of the clinic. */
+    /** Only changes a staff account that is an ACTIVE member of the clinic. */
     boolean setRole(int clinicId, int staffUserId, StaffRole role, AuditEntry audit) throws SQLException;
 
     /** Empty if the clinic has no staff code; otherwise whether it is still the seeded demo code. */

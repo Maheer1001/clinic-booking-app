@@ -294,6 +294,53 @@ class StaffDAOTest {
     }
 
     @Test
+    void approval_pendingHasNoAccess_approveActivates_rejectDeletes_scopedToClinic() throws Exception {
+        StaffAccountDAO accounts = new StaffAccountDAO();
+        int p1 = accounts.createStaffUser("pending.one@example.com", "h", StaffRole.CLINICIAN, C1, false, true);
+        int p2 = accounts.createStaffUser("pending.two@example.com", "h", StaffRole.CLINICIAN, C1, false, true);
+        assertTrue(dao.access(p1).orElseThrow().clinicIds().isEmpty());
+        assertTrue(dao.staff(C1).stream().noneMatch(m -> m.userId() == p1), "pending is not on the staff list");
+        assertEquals(List.of(p1, p2), dao.pendingStaff(C1).stream().map(m -> m.userId()).sorted().toList());
+        assertTrue(dao.pendingStaff(C2).isEmpty());
+        assertFalse(dao.setRole(C1, p1, StaffRole.CLINIC_ADMIN, audit(Action.PROMOTE_STAFF, null)),
+                "a pending member can't be promoted");
+        assertFalse(dao.removeStaff(C1, p1, audit(Action.REMOVE_STAFF, null)), "remove is for active staff");
+
+        assertFalse(dao.approveStaff(C2, p1, clinician, NOW, audit(Action.APPROVE_STAFF, null)), "other clinic");
+        int audits = count("SELECT COUNT(*) FROM \"AuditLog\" WHERE action = 'APPROVE_STAFF'");
+        assertTrue(dao.approveStaff(C1, p1, clinician, NOW, audit(Action.APPROVE_STAFF, null)));
+        assertEquals(audits + 1, count("SELECT COUNT(*) FROM \"AuditLog\" WHERE action = 'APPROVE_STAFF'"));
+        assertEquals(List.of(C1), dao.access(p1).orElseThrow().clinicIds());
+        assertEquals(1, count("SELECT COUNT(*) FROM \"StaffClinic\" WHERE user_id = " + p1
+                + " AND approved_by = " + clinician + " AND approved_at IS NOT NULL"));
+        assertFalse(dao.approveStaff(C1, p1, clinician, NOW, audit(Action.APPROVE_STAFF, null)), "only once");
+        assertFalse(dao.rejectStaff(C1, p1, audit(Action.REJECT_STAFF, null)), "reject never removes active staff");
+
+        assertFalse(dao.rejectStaff(C2, p2, audit(Action.REJECT_STAFF, null)));
+        assertTrue(dao.rejectStaff(C1, p2, audit(Action.REJECT_STAFF, null)));
+        assertEquals(0, count("SELECT COUNT(*) FROM \"StaffClinic\" WHERE user_id = " + p2));
+        assertEquals(1, count("SELECT COUNT(*) FROM \"AuditLog\" WHERE action = 'REJECT_STAFF'"));
+        assertTrue(dao.pendingStaff(C1).isEmpty());
+        assertTrue(dao.removeStaff(C1, p1, audit(Action.REMOVE_STAFF, null)));
+    }
+
+    @Test
+    void migration_existingMembershipsBecomeActive_newRowsDefaultToPending_andRerunsSafely() throws Exception {
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            DB.applyStaffLoginMigration(c);
+            DB.applyStaffLoginMigration(c);
+            s.execute("INSERT INTO \"StaffClinic\" (user_id, clinic_id) VALUES (" + patientTwo + ", 9)");
+        }
+        assertEquals(1, count("SELECT COUNT(*) FROM \"StaffClinic\" WHERE user_id = " + patientTwo
+                + " AND status = 'PENDING'"), "a row that doesn't say otherwise is never auto-approved");
+        assertEquals(1, count("SELECT COUNT(*) FROM \"StaffClinic\" WHERE user_id = " + clinician
+                + " AND status = 'ACTIVE'"));
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("DELETE FROM \"StaffClinic\" WHERE user_id = " + patientTwo);
+        }
+    }
+
+    @Test
     void seedClinicAdmin_refusesAnExistingAccount_andCreatesANewOne() throws Exception {
         IllegalStateException e = assertThrows(IllegalStateException.class,
                 () -> StaffSeed.seedClinicAdmin(7, "one@example.com", "Password1"));
@@ -321,7 +368,10 @@ class StaffDAOTest {
         assertEquals(0, count("SELECT COUNT(*) FROM \"StaffCodeAttempt\""));
         Optional<StaffAccess> a = new UserDAO().getStaffAccess(ok.userId());
         assertEquals(StaffRole.CLINICIAN, a.orElseThrow().role());
-        assertEquals(List.of(C1), a.get().clinicIds());
+        assertEquals(List.of(), a.get().clinicIds(), "pending until the clinic admin approves");
+        assertEquals(List.of(ok.userId()), dao.pendingStaff(C1).stream().map(m -> m.userId()).toList());
+        assertTrue(dao.approveStaff(C1, ok.userId(), clinician, NOW, audit(Action.APPROVE_STAFF, null)));
+        assertEquals(List.of(C1), new UserDAO().getStaffAccess(ok.userId()).orElseThrow().clinicIds());
         assertTrue(new SecurityQuestionService().hasSecurityQuestion(ok.userId()));
 
         new UserDAO().deleteUserById(ok.userId());

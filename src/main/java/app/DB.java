@@ -423,6 +423,13 @@ public class DB {
                 )
                 """);
             s.execute("CREATE INDEX IF NOT EXISTS staff_code_attempt_email_idx ON \"StaffCodeAttempt\" (email_hash, attempted_at)");
+            // Admin approval (docs/migrations/2026-11-22-staff-approval.sql): memberships that existed
+            // before approval are ACTIVE; from now on a missing status means PENDING (never auto-approved).
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ACTIVE'");
+            s.execute("UPDATE \"StaffClinic\" SET status = 'ACTIVE' WHERE status IS NULL");
+            s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN status SET DEFAULT 'PENDING'");
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS approved_by INTEGER");
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP");
             s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS staff_notes TEXT");
             s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS attended_at TIMESTAMP");
             s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS app_id INTEGER");

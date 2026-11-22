@@ -89,7 +89,7 @@ public class StaffAccountDAO implements StaffAccountRepository {
 
     @Override
     public int createStaffUser(String email, String passwordHash, StaffRole role, int clinicId,
-                               boolean mustResetPassword) throws SQLException {
+                               boolean mustResetPassword, boolean pending) throws SQLException {
         String insertUser = """
             INSERT INTO "User" (user_id, email, password_hash, email_verified, role, must_reset_password)
             VALUES (?, ?, ?, false, ?, ?)
@@ -108,7 +108,7 @@ public class StaffAccountDAO implements StaffAccountRepository {
                         ps.setBoolean(5, mustResetPassword);
                         ps.executeUpdate();
                     }
-                    addMembership(c, userId, clinicId);
+                    addMembership(c, userId, clinicId, pending);
                     AuditLogDAO.insert(c, AuditEntry.of(userId, clinicId,
                             mustResetPassword ? AuditEntry.Action.STAFF_SEEDED : AuditEntry.Action.STAFF_SIGN_UP,
                             AuditEntry.STAFF, userId, null));
@@ -128,11 +128,16 @@ public class StaffAccountDAO implements StaffAccountRepository {
     }
 
 
-    static void addMembership(Connection c, int userId, int clinicId) throws SQLException {
+    /** "StaffClinic".status: only ACTIVE memberships give access to the clinic. */
+    public static final String ACTIVE = "ACTIVE";
+    public static final String PENDING = "PENDING";
+
+    static void addMembership(Connection c, int userId, int clinicId, boolean pending) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO \"StaffClinic\" (user_id, clinic_id) VALUES (?, ?)")) {
+                "INSERT INTO \"StaffClinic\" (user_id, clinic_id, status) VALUES (?, ?, ?)")) {
             ps.setInt(1, userId);
             ps.setInt(2, clinicId);
+            ps.setString(3, pending ? PENDING : ACTIVE);
             ps.executeUpdate();
         }
     }

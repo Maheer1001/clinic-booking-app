@@ -658,16 +658,59 @@ public class StaffDAO implements StaffRepository {
 
     @Override
     public List<StaffMember> staff(int clinicId) throws SQLException {
+        return members(clinicId, StaffAccountDAO.ACTIVE);
+    }
+
+    @Override
+    public List<StaffMember> pendingStaff(int clinicId) throws SQLException {
+        return members(clinicId, StaffAccountDAO.PENDING);
+    }
+
+    @Override
+    public boolean approveStaff(int clinicId, int staffUserId, int byUserId, LocalDateTime now, AuditEntry audit)
+            throws SQLException {
+        return guarded(c -> {
+            try (PreparedStatement ps = c.prepareStatement("""
+                    UPDATE "StaffClinic" SET status = 'ACTIVE', approved_by = ?, approved_at = ?
+                    WHERE clinic_id = ? AND user_id = ? AND status = 'PENDING'
+                    """)) {
+                ps.setInt(1, byUserId);
+                ps.setTimestamp(2, Timestamp.valueOf(now));
+                ps.setInt(3, clinicId);
+                ps.setInt(4, staffUserId);
+                if (ps.executeUpdate() != 1) throw new NothingChanged();
+            }
+            AuditLogDAO.insert(c, audit);
+            return true;
+        });
+    }
+
+    @Override
+    public boolean rejectStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException {
+        return guarded(c -> {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "DELETE FROM \"StaffClinic\" WHERE clinic_id = ? AND user_id = ? AND status = 'PENDING'")) {
+                ps.setInt(1, clinicId);
+                ps.setInt(2, staffUserId);
+                if (ps.executeUpdate() != 1) throw new NothingChanged();
+            }
+            AuditLogDAO.insert(c, audit);
+            return true;
+        });
+    }
+
+    private List<StaffMember> members(int clinicId, String status) throws SQLException {
         String sql = """
             SELECT u.user_id, u.email, u.first_name, u.last_name, u.role
             FROM "StaffClinic" sc JOIN "User" u ON u.user_id = sc.user_id
-            WHERE sc.clinic_id = ?
+            WHERE sc.clinic_id = ? AND sc.status = ?
             ORDER BY u.email
             """;
         List<StaffMember> out = new ArrayList<>();
         try (Connection c = DB.connect();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, clinicId);
+            ps.setString(2, status);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     User u = new User(rs.getInt("user_id"), rs.getString("email"), rs.getString("first_name"),
@@ -684,7 +727,7 @@ public class StaffDAO implements StaffRepository {
     public boolean removeStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException {
         return guarded(c -> {
             try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM \"StaffClinic\" WHERE clinic_id = ? AND user_id = ?")) {
+                    "DELETE FROM \"StaffClinic\" WHERE clinic_id = ? AND user_id = ? AND status = 'ACTIVE'")) {
                 ps.setInt(1, clinicId);
                 ps.setInt(2, staffUserId);
                 if (ps.executeUpdate() != 1) throw new NothingChanged();
@@ -699,7 +742,8 @@ public class StaffDAO implements StaffRepository {
         String sql = """
             UPDATE "User" SET role = ?
             WHERE user_id = ? AND role IN ('CLINICIAN', 'CLINIC_ADMIN')
-              AND EXISTS (SELECT 1 FROM "StaffClinic" sc WHERE sc.user_id = ? AND sc.clinic_id = ?)
+              AND EXISTS (SELECT 1 FROM "StaffClinic" sc WHERE sc.user_id = ? AND sc.clinic_id = ?
+                          AND sc.status = 'ACTIVE')
             """;
         return guarded(c -> {
             try (PreparedStatement ps = c.prepareStatement(sql)) {

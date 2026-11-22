@@ -177,6 +177,10 @@ class StaffServiceTest {
         int slot = service.createTimeslot(ADMIN, CLINIC_1, 1, TODAY.plusDays(2), LocalTime.of(9, 0),
                 LocalTime.of(9, 30), 2).value().timeslotId();
         service.updateTimeslot(ADMIN, CLINIC_1, slot, TODAY.plusDays(2), LocalTime.of(9, 0), LocalTime.of(9, 30), 4);
+        repo.addPending(13, CLINIC_1);
+        repo.addPending(14, CLINIC_1);
+        service.approveStaff(ADMIN, CLINIC_1, 13);
+        service.rejectStaff(ADMIN, CLINIC_1, 14);
         service.removeStaff(ADMIN, CLINIC_1, CLINICIAN);
 
         assertEquals(Set.of(Action.values()).stream()
@@ -411,6 +415,64 @@ class StaffServiceTest {
         assertTrue(rotated.value().hasCode());
         assertFalse(rotated.value().demo());
         assertNull(rotated.message());
+    }
+
+    // ------------------------------------------------------------ approval of new staff
+
+    private static final int PENDING_STAFF = 13;
+
+    @Test
+    void pendingStaff_seeNothingAtTheClinic() {
+        repo.addPending(PENDING_STAFF, CLINIC_1);
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(PENDING_STAFF, CLINIC_1, TODAY).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.patientRecord(PENDING_STAFF, CLINIC_1, PATIENT_HERE).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.searchPatients(PENDING_STAFF, CLINIC_1, "Patient").status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.timeslots(PENDING_STAFF, CLINIC_1, TODAY).status());
+        assertTrue(service.access(PENDING_STAFF).value().clinicIds().isEmpty());
+        assertTrue(repo.audits.isEmpty(), "nothing read, nothing audited");
+        assertTrue(service.listStaff(ADMIN, CLINIC_1).value().stream().noneMatch(m -> m.userId() == PENDING_STAFF),
+                "not on the staff list until approved");
+    }
+
+    @Test
+    void approvalActions_areAdminOnly_andScopedToTheClinic() {
+        repo.addPending(PENDING_STAFF, CLINIC_1);
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.pendingStaff(CLINICIAN, CLINIC_1).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.approveStaff(CLINICIAN, CLINIC_1, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.rejectStaff(CLINICIAN, CLINIC_1, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.approveStaff(ADMIN, CLINIC_2, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.approveStaff(PENDING_STAFF, CLINIC_1, PENDING_STAFF).status(),
+                "can't approve yourself");
+        assertEquals(List.of(PENDING_STAFF),
+                service.pendingStaff(ADMIN, CLINIC_1).value().stream().map(m -> m.userId()).toList());
+        assertEquals(StaffResult.Status.NOT_FOUND, service.approveStaff(ADMIN, CLINIC_1, CLINICIAN).status(),
+                "already-active staff are not pending");
+    }
+
+    @Test
+    void approve_givesAccess_andIsAudited() {
+        repo.addPending(PENDING_STAFF, CLINIC_1);
+        StaffResult<List<model.StaffMember>> r = service.approveStaff(ADMIN, CLINIC_1, PENDING_STAFF);
+        assertTrue(r.ok(), r.message());
+        assertTrue(r.value().isEmpty());
+        assertEquals("Approved. They can now use the staff area.", r.message());
+        assertTrue(auditedActions().contains(Action.APPROVE_STAFF));
+        assertTrue(service.dayList(PENDING_STAFF, CLINIC_1, TODAY).ok());
+        assertTrue(service.listStaff(ADMIN, CLINIC_1).value().stream().anyMatch(m -> m.userId() == PENDING_STAFF));
+        assertEquals(StaffResult.Status.NOT_FOUND, service.approveStaff(ADMIN, CLINIC_1, PENDING_STAFF).status());
+    }
+
+    @Test
+    void reject_removesTheRequest_andIsAudited() {
+        repo.addPending(PENDING_STAFF, CLINIC_1);
+        StaffResult<List<model.StaffMember>> r = service.rejectStaff(ADMIN, CLINIC_1, PENDING_STAFF);
+        assertTrue(r.ok(), r.message());
+        assertTrue(r.value().isEmpty());
+        assertTrue(auditedActions().contains(Action.REJECT_STAFF));
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(PENDING_STAFF, CLINIC_1, TODAY).status());
+        assertEquals(StaffResult.Status.NOT_FOUND, service.rejectStaff(ADMIN, CLINIC_1, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_FOUND, service.rejectStaff(ADMIN, CLINIC_1, CLINICIAN).status(),
+                "reject never removes active staff");
     }
 
     @Test
