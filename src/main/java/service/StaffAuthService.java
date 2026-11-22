@@ -17,7 +17,8 @@ import java.util.List;
 /**
  * Staff sign-up ("I'm clinic staff" on the sign-up screen). The same checks as a patient sign-up
  * ({@link AuthService}) plus the clinic's staff code, which decides the clinic the new CLINICIAN
- * account is tied to. No JavaFX here; it hashes (PBKDF2) once per clinic, so call it off the JavaFX
+ * account is tied to. The membership starts PENDING: the account sees nothing at the clinic until the
+ * clinic admin approves it ({@link StaffService#approveStaff}). No JavaFX here; it hashes (PBKDF2) once per clinic, so call it off the JavaFX
  * thread. Results carry a {@code message()} ready to show.
  *
  * <p>A wrong code never says which clinics exist: every clinic's code is checked every time (no early
@@ -32,7 +33,7 @@ public class StaffAuthService {
     public static final int WINDOW_MINUTES = 15;
 
     public enum Status {
-        SUCCESS("Your staff account is ready. Log in to continue."),
+        SUCCESS("Account created. Your clinic admin needs to approve it before you can sign in to the staff area."),
         TERMS_NOT_ACCEPTED("Please accept the Terms of Service and Privacy Policy."),
         INVALID_EMAIL("Please enter a valid email address."),
         WEAK_PASSWORD("Password is too weak. " + AuthService.PASSWORD_RULES),
@@ -124,7 +125,7 @@ public class StaffAuthService {
             if (repository.emailExists(normalized)) return StaffSignUpResult.of(Status.EMAIL_ALREADY_USED);
 
             int userId = repository.createStaffUser(normalized, PasswordHasher.hash(password),
-                    StaffRole.CLINICIAN, clinicId, false);
+                    StaffRole.CLINICIAN, clinicId, false, true);
             repository.clearFailedCodeAttempts(emailHash);
             // As for patients: if the question cannot be saved the account still exists and the
             // app can ask for a question later (SecurityQuestionService.hasSecurityQuestion).

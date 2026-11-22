@@ -50,6 +50,9 @@ class StaffAuthServiceTest {
         assertEquals(StaffRole.CLINICIAN, c.role());
         assertEquals(2, c.clinicId());
         assertTrue(PasswordHasher.verify(PASSWORD, c.hash()));
+        assertTrue(c.pending(), "a clinic code only creates a PENDING membership");
+        assertEquals("Account created. Your clinic admin needs to approve it before you can sign in to the staff area.",
+                r.message());
     }
 
     @Test
@@ -130,7 +133,7 @@ class StaffAuthServiceTest {
 
     private static final class FakeRepo implements StaffAccountRepository {
         record Attempt(String emailHash, LocalDateTime at) {}
-        record Created(String email, String hash, StaffRole role, int clinicId) {}
+        record Created(String email, String hash, StaffRole role, int clinicId, boolean pending) {}
 
         final List<ClinicCodeHash> codes = new ArrayList<>();
         final List<Attempt> attempts = new ArrayList<>();
@@ -165,8 +168,8 @@ class StaffAuthServiceTest {
         @Override public boolean emailExists(String email) throws SQLException { check(); return existing.contains(email); }
 
         @Override public int createStaffUser(String email, String passwordHash, StaffRole role, int clinicId,
-                                             boolean mustResetPassword) {
-            created.add(new Created(email, passwordHash, role, clinicId));
+                                             boolean mustResetPassword, boolean pending) {
+            created.add(new Created(email, passwordHash, role, clinicId, pending));
             return 100 + created.size();
         }
     }

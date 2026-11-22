@@ -28,8 +28,18 @@ public interface StaffAccountRepository {
 
     /**
      * Creates the account with the role, its clinic membership and an audit row, in one transaction.
+     * The membership is ACTIVE (used for the seeded first admin and in tests).
      * @return the new user id
      */
+    default int createStaffUser(String email, String passwordHash, StaffRole role, int clinicId,
+                                boolean mustResetPassword) throws SQLException {
+        return createStaffUser(email, passwordHash, role, clinicId, mustResetPassword, false);
+    }
+
+    /**
+     * As above; {@code pending} creates the membership PENDING: the account can log in but sees no
+     * clinic until a clinic admin approves it (staff sign-up with a clinic code).
+     */
     int createStaffUser(String email, String passwordHash, StaffRole role, int clinicId,
-                        boolean mustResetPassword) throws SQLException;
+                        boolean mustResetPassword, boolean pending) throws SQLException;
 }

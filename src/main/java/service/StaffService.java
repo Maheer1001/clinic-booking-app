@@ -41,7 +41,8 @@ import java.util.Set;
  * <p>Every method takes the acting staff member's user id and the clinic they are working in, and
  * re-reads that user's role and clinic membership from the database before doing anything: a patient
  * account gets NOT_STAFF, a clinic they don't work at NOT_AT_CLINIC, and admin-only actions ADMIN_ONLY
- * for a clinician. Patients are only visible if they have an appointment at the clinic (others come
+ * for a clinician. A membership still waiting for the clinic admin's approval (PENDING) does not count:
+ * {@link StaffRepository#access} only lists ACTIVE clinics. Patients are only visible if they have an appointment at the clinic (others come
  * back NOT_FOUND, the same as a record that does not exist), and only that clinic's records are
  * returned. Every read of a patient record and every write appends to the AuditLog (ids only); if the
  * audit row cannot be written the data is not returned.
@@ -387,6 +388,39 @@ public class StaffService {
 
     public StaffResult<List<StaffMember>> listStaff(int staffUserId, int clinicId) {
         return run(staffUserId, clinicId, true, a -> StaffResult.ok(repo.staff(clinicId)));
+    }
+
+    /**
+     * People who signed up with this clinic's staff code and are waiting for approval. Until approved
+     * they are not staff here: every other call treats them as NOT_AT_CLINIC.
+     */
+    public StaffResult<List<StaffMember>> pendingStaff(int staffUserId, int clinicId) {
+        return run(staffUserId, clinicId, true, a -> StaffResult.ok(repo.pendingStaff(clinicId)));
+    }
+
+    /** Approves a pending sign-up: they can use the staff area at this clinic. Returns the pending list left. */
+    public StaffResult<List<StaffMember>> approveStaff(int staffUserId, int clinicId, int targetUserId) {
+        return run(staffUserId, clinicId, true, a -> {
+            AuditEntry audit = AuditEntry.of(staffUserId, clinicId, Action.APPROVE_STAFF, AuditEntry.STAFF,
+                    targetUserId, null);
+            if (!repo.approveStaff(clinicId, targetUserId, staffUserId, nowUtc(), audit)) {
+                return StaffResult.fail(StaffResult.Status.NOT_FOUND);
+            }
+            return StaffResult.ok(repo.pendingStaff(clinicId), "Approved. They can now use the staff area.");
+        });
+    }
+
+    /**
+     * Rejects a pending sign-up: the membership is removed (their account stays, with no clinic).
+     * Returns the pending list left.
+     */
+    public StaffResult<List<StaffMember>> rejectStaff(int staffUserId, int clinicId, int targetUserId) {
+        return run(staffUserId, clinicId, true, a -> {
+            AuditEntry audit = AuditEntry.of(staffUserId, clinicId, Action.REJECT_STAFF, AuditEntry.STAFF,
+                    targetUserId, null);
+            if (!repo.rejectStaff(clinicId, targetUserId, audit)) return StaffResult.fail(StaffResult.Status.NOT_FOUND);
+            return StaffResult.ok(repo.pendingStaff(clinicId), "Request rejected.");
+        });
     }
 
     /** Removes the person from this clinic (their account stays). A clinic always keeps one admin. */

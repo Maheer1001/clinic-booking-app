@@ -52,6 +52,43 @@ class FakeStaffRepository implements StaffRepository {
         }
     }
 
+    final Map<Integer, List<StaffMember>> pending = new HashMap<>();
+
+    /** A staff sign-up waiting for approval: like the SQL, access lists no clinic for it. */
+    void addPending(int userId, int clinicId) {
+        access.putIfAbsent(userId, new StaffAccess(userId, StaffRole.CLINICIAN, List.of(), false));
+        pending.computeIfAbsent(clinicId, k -> new ArrayList<>())
+                .add(new StaffMember(userId, "p" + userId + "@x.test", "Pending " + userId, StaffRole.CLINICIAN));
+    }
+
+    @Override
+    public List<StaffMember> pendingStaff(int clinicId) {
+        return List.copyOf(pending.getOrDefault(clinicId, List.of()));
+    }
+
+    @Override
+    public boolean approveStaff(int clinicId, int staffUserId, int byUserId, LocalDateTime now, AuditEntry audit)
+            throws SQLException {
+        List<StaffMember> list = pending.getOrDefault(clinicId, new ArrayList<>());
+        Optional<StaffMember> m = list.stream().filter(x -> x.userId() == staffUserId).findFirst();
+        if (m.isEmpty()) return false;
+        list.remove(m.get());
+        staff.computeIfAbsent(clinicId, k -> new ArrayList<>()).add(m.get());
+        StaffAccess a = access.get(staffUserId);
+        List<Integer> clinics = new ArrayList<>(a.clinicIds());
+        clinics.add(clinicId);
+        access.put(staffUserId, new StaffAccess(staffUserId, a.role(), clinics, false));
+        write(audit);
+        return true;
+    }
+
+    @Override
+    public boolean rejectStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException {
+        boolean removed = pending.getOrDefault(clinicId, new ArrayList<>()).removeIf(m -> m.userId() == staffUserId);
+        if (removed) write(audit);
+        return removed;
+    }
+
     void addAppointment(int appId, int clinicId, int patientId, LocalDate date, String status) {
         appClinic.put(appId, clinicId);
         appointments.put(appId, new StaffAppointment(new ClinicBookingDetails(appId, patientId, date,
