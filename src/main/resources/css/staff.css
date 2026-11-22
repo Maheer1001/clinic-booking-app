@@ -1,0 +1,67 @@
+/* Staff screens only (added to each staff page root). Shared styles live in app.css. */
+
+/* Status pills: same shape as the patient app's result pills (tracking.css). Dark text on a pale
+   fill with a strong border, so they stay readable in high contrast. The list-button selectors keep
+   the colours when a pill sits inside a list card (.app-list-btn .label sets its own text colour). */
+.staff-pill,
+.app-list-btn .label.staff-pill {
+    -fx-padding: 2 10 2 10;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-font-weight: bold;
+    -fx-font-size: 0.9em;
+}
+
+.staff-pill-good, .app-list-btn .label.staff-pill-good {
+    -fx-background-color: #e3f4e8;
+    -fx-border-color: #2e7d4f;
+    -fx-text-fill: #1d5235;
+}
+
+.staff-pill-bad, .app-list-btn .label.staff-pill-bad {
+    -fx-background-color: #fdecea;
+    -fx-border-color: #b3261e;
+    -fx-text-fill: #8c1d18;
+}
+
+.staff-pill-warn, .app-list-btn .label.staff-pill-warn {
+    -fx-background-color: #fff4e0;
+    -fx-border-color: #9a5b00;
+    -fx-text-fill: #6b3f00;
+}
+
+.staff-pill-booked, .app-list-btn .label.staff-pill-booked {
+    -fx-background-color: #F4EEFA;
+    -fx-border-color: #5B2A86;
+    -fx-text-fill: #3B1A58;
+}
+
+.staff-pill-draft, .app-list-btn .label.staff-pill-draft {
+    -fx-background-color: #fff8d6;
+    -fx-border-color: #8a6d00;
+    -fx-text-fill: #5c4800;
+}
+
+.staff-pill-neutral, .app-list-btn .label.staff-pill-neutral {
+    -fx-background-color: #f1f1f4;
+    -fx-border-color: #6b6b78;
+    -fx-text-fill: #3d3d47;
+}
+
+/* Clinic switcher and date bar on the day list. */
+.staff-date-bar {
+    -fx-alignment: center-left;
+}
+
+/* The new staff code, shown once: large and easy to copy. */
+.staff-code {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+/* One result row in the test editor. */
+.staff-result-row {
+    -fx-alignment: center-left;
+}
