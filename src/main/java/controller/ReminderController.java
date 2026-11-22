@@ -152,16 +152,25 @@ public class ReminderController {
      * 30 seconds later to people who had never been), and it is not sent while an appointment is
      * already booked.
      *
-     * @return when it will be sent, or empty if there is no previous visit to count from
+     * With an appointment already booked nothing is scheduled now: the count restarts from that
+     * visit (picked up at the next sign-in). Before, the screen said a nudge would be emailed in 30
+     * seconds and then it was silently skipped.
+     *
+     * @return when it will be sent, or empty if there is no previous visit to count from or an
+     *         appointment is already booked (see {@link #hasUpcomingAppointment()})
      */
     public Optional<LocalDateTime> scheduleBookingReminder(String email, String name, int daysSinceLast, String customMessage) {
         Optional<LocalDate> last = getLastAppointmentDate();
-        if (last.isEmpty()) {
+        if (last.isEmpty() || hasUpcomingAppointment()) {
             notificationScheduler.cancelBookingReminders(email);
             return Optional.empty();
         }
         return notificationScheduler.scheduleBookingReminder(email, name, daysSinceLast, last.get(), customMessage,
                 this::hasNoUpcomingAppointment);
+    }
+
+    public boolean hasUpcomingAppointment() {
+        return !getUpcomingAppointments().isEmpty();
     }
 
     private boolean hasNoUpcomingAppointment() {

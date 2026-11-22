@@ -11,6 +11,7 @@ import model.BookingCommunicationPreferences;
 import model.BookingReminder;
 import model.ReminderTemplateOverrides;
 import service.NotificationDispatcher;
+import service.NotificationScheduler;
 import service.email.BookingConfirmationEmail;
 import service.email.CancellationEmail;
 import service.email.MakeAppointmentReminderEmail;
@@ -250,7 +251,9 @@ public class BookingRemindersView {
                 if (name == null || name.isBlank()) name = email;
                 ReminderFeedback.scheduled(saveConfirmReminder,
                         controller.scheduleBookingReminder(email, name, days, customJson),
-                        "Saved. We'll start counting from your first visit.");
+                        controller.hasUpcomingAppointment()
+                                ? "Saved. You already have an appointment booked, so we'll count from that visit."
+                                : "Saved. We'll start counting from your first visit.");
             }
         });
 
@@ -281,7 +284,7 @@ public class BookingRemindersView {
             sendTestEmailAsync(
                     new MakeAppointmentReminderEmail(
                             recipientEmail, recipientName,
-                            "It has been " + days + " days since your last visit",
+                            NotificationScheduler.bookingReminderReason(days),
                             "Routine Sexual Health Check-up",
                             current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
                             DiscreetReminderChoice.isDiscreet(current)
@@ -303,7 +306,7 @@ public class BookingRemindersView {
 
             new MakeAppointmentReminderNotification(
                     Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "",
-                    "It has been " + days + " days since your last visit",
+                    NotificationScheduler.bookingReminderReason(days),
                     "Routine Sexual Health Check-up",
                     current.getNotificationTitle(),
                     current.getNotificationPreview(),
