@@ -219,6 +219,12 @@ public class AppointmentDAO implements AppointmentRepository {
         }
     }
 
+    /**
+     * Appointments that have started, newest first: ones the clinic marked COMPLETED, and booked
+     * (CONFIRMED) ones whose time has passed. Nothing in the app moves a booking to COMPLETED, so
+     * counting only those left the patient's own past bookings out of their history; and the old
+     * "date before today" check (on the database server's clock) hid visits from earlier today.
+     */
     @Override
     public List<AppointmentDetails> getPastAppointmentDetailsByUserId(int userId) {
         String sql = """
@@ -227,10 +233,25 @@ public class AppointmentDAO implements AppointmentRepository {
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
             JOIN "Service" s ON t.service_id = s.service_id
             JOIN "Clinic" c ON t.clinic_id = c.clinic_id
-            WHERE a.user_id = ? AND a.status = 'COMPLETED' AND t.date < CURRENT_DATE
+            WHERE a.user_id = ? AND a.status IN ('COMPLETED', 'CONFIRMED') AND NOT
+            """ + NOT_STARTED + """
+
             ORDER BY t.date DESC, t.start_time DESC
             """;
-        return getAppointmentDetailsFromQuery(sql, userId);
+        List<AppointmentDetails> list = new ArrayList<>();
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            bindNow(ps, 2);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(toAppointmentDetails(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
     }
 
     @Override
@@ -317,30 +338,18 @@ public class AppointmentDAO implements AppointmentRepository {
         return timeslotDAO.findAvailable(clinicId, serviceId, date);
     }
 
-    private List<AppointmentDetails> getAppointmentDetailsFromQuery(String sql, int userId) {
-        List<AppointmentDetails> list = new ArrayList<>();
-        try (Connection c = DB.connect();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    LocalDate d = rs.getObject("date", LocalDate.class);
-                    LocalTime start = rs.getObject("start_time", LocalTime.class);
-                    LocalTime end = rs.getObject("end_time", LocalTime.class);
-                    String dateStr = d != null ? d.format(DATE_FMT) : "";
-                    String startStr = start != null ? start.format(TIME_FMT) : "";
-                    String endStr = end != null ? end.format(TIME_FMT) : "";
-                    list.add(new AppointmentDetails(
-                            dateStr, startStr, endStr,
-                            rs.getString("service_name"),
-                            rs.getString("clinic_name"),
-                            rs.getString("notes")));
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return list;
+    private static AppointmentDetails toAppointmentDetails(ResultSet rs) throws SQLException {
+        LocalDate d = rs.getObject("date", LocalDate.class);
+        LocalTime start = rs.getObject("start_time", LocalTime.class);
+        LocalTime end = rs.getObject("end_time", LocalTime.class);
+        String dateStr = d != null ? d.format(DATE_FMT) : "";
+        String startStr = start != null ? start.format(TIME_FMT) : "";
+        String endStr = end != null ? end.format(TIME_FMT) : "";
+        return new AppointmentDetails(
+                dateStr, startStr, endStr,
+                rs.getString("service_name"),
+                rs.getString("clinic_name"),
+                rs.getString("notes"));
     }
 
     @Override

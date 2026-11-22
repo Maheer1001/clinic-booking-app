@@ -92,13 +92,26 @@ public class PrescriptionDAO implements PrescriptionRepository {
                             startStr,
                             endStr,
                             rs.getString("instructions") != null ? rs.getString("instructions") : "",
-                            endDate == null || endDate.isAfter(LocalDate.now()))); //rs.getBoolean("actively_taking")));
+                            isActive(endDate, (Boolean) rs.getObject("actively_taking"), LocalDate.now())));
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return list;
+    }
+
+    /**
+     * Current = not stopped by the clinic and not past its end date. The course's last day still
+     * counts (it used to show as finished on that day, while dose reminders still offered it), and a
+     * course marked as no longer taken is finished even if its end date is ahead, matching
+     * {@link #getPrescriptionsForRemindersByUserId}.
+     */
+    static boolean isActive(LocalDate endDate, Boolean activelyTaking, LocalDate today) {
+        if (Boolean.FALSE.equals(activelyTaking)) {
+            return false;
+        }
+        return endDate == null || !endDate.isBefore(today);
     }
 
     @Override

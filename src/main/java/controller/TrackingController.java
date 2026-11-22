@@ -97,7 +97,7 @@ public class TrackingController {
 
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yy");
 
-        // Tests are ordered newest-first; treat the first `newCount` as new entries.
+        // Tests come most recently added first (by id); treat the first `newCount` as new entries.
         for (int i = 0; i < newCount && i < tests.size(); i++) {
             Test t = tests.get(i);
             String testType = t.testType();

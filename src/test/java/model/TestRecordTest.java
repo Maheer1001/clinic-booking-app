@@ -42,6 +42,14 @@ class TestRecordTest {
     }
 
     @Test
+    void blankTreatmentAndNotes_countAsNotRecorded() {
+        // Blank values used to show empty TREATMENT / CLINICIAN NOTES sections on the result page.
+        model.Test test = new model.Test("Swab", "10/11/26", "   ", "", new ArrayList<>());
+        assertFalse(test.isTreatment());
+        assertFalse(test.isClinicianNotes());
+    }
+
+    @Test
     void recordAccessors_returnCorrectValues() {
         List<TestResult> results = List.of(
                 new TestResult("Chlamydia", TestResultStatus.POSITIVE));

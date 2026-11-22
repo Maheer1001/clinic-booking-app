@@ -22,7 +22,7 @@ import view.ui.UI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -42,8 +42,8 @@ public class TrackingPrescriptionController extends TrackingSectionController {
     public String getSearchableText(TrackingData td) {
         PrescriptionSummary pres = (PrescriptionSummary) td;
         String text = pres.name() + " " + pres.dosage() + " " + pres.getCourse() + " " + pres.instructions();
-        LocalDate end = TrackingDates.parse(pres.endDate());
-        text += end == null || end.isAfter(LocalDate.now()) ? " active current" : " inactive past history";
+        // Same rule as the CURRENT / PAST sections, so searching "current" finds what is listed there.
+        text += pres.active() ? " active current" : " inactive past history finished";
         return text;
     }
 
@@ -78,8 +78,9 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         listHistory.visibleProperty().bind(Bindings.isNotEmpty(filteredHistory));
         listHistory.managedProperty().bind(listHistory.visibleProperty());
 
-        Map<PrescriptionSummary, Button> buttonCurrent = new HashMap<>();
-        Map<PrescriptionSummary, Button> buttonHistory = new HashMap<>();
+        // Keyed by identity: a repeated course with identical details must still get a button each.
+        Map<PrescriptionSummary, Button> buttonCurrent = new IdentityHashMap<>();
+        Map<PrescriptionSummary, Button> buttonHistory = new IdentityHashMap<>();
 
         for (PrescriptionSummary prescription : sortedCurrent) {
             String left = prescription.name();
@@ -251,6 +252,21 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         };
     }
 
+    /**
+     * The end of the course for the details card. A finished course whose end date has not come
+     * (the clinic stopped it early) says "Stopped early" rather than "Finished" next to a future date.
+     */
+    static String endText(PrescriptionSummary prescription, LocalDate today) {
+        LocalDate end = TrackingDates.parse(prescription.endDate());
+        if (!prescription.active() && (end == null || !end.isBefore(today))) {
+            return "Stopped early";
+        }
+        if (end == null) {
+            return "Ongoing";
+        }
+        return TrackingDates.display(prescription.endDate());
+    }
+
     @Override
     public Node getDetailsPage(TrackingData td) {
         PrescriptionSummary prescription = (PrescriptionSummary) td;
@@ -259,8 +275,7 @@ public class TrackingPrescriptionController extends TrackingSectionController {
 
         HBox doseRow = new HBox(16, UI.detail("DOSE", prescription.dosage()), UI.detail("HOW OFTEN", prescription.getCourse()));
         HBox dateRow = new HBox(16, UI.detail("STARTED", TrackingDates.display(prescription.startDate())),
-                UI.detail("ENDS", prescription.endDate() == null || prescription.endDate().isEmpty()
-                        ? "Ongoing" : TrackingDates.display(prescription.endDate())));
+                UI.detail(prescription.active() ? "ENDS" : "ENDED", endText(prescription, LocalDate.now())));
         for (HBox row : List.of(doseRow, dateRow)) {
             for (Node n : row.getChildren()) {
                 HBox.setHgrow(n, Priority.ALWAYS);

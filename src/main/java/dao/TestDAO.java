@@ -17,13 +17,19 @@ public class TestDAO implements TestRepository {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yy");
 
+    /**
+     * The user's tests, most recently added first. The new-result notification treats the first
+     * entries as the new ones, so this is by id rather than test date: ordering by date put a test
+     * with no date (NULLs sort first) or a back-dated one ahead of the one just added, and the wrong
+     * test, or none, was announced. The tracking list sorts by date itself.
+     */
     @Override
     public List<Test> getTestsByUserId(int userId) {
         String testSql = """
             SELECT test_id, test_type, test_date, clinician_notes, treatment_instructions
             FROM "Test"
             WHERE user_id = ?
-            ORDER BY test_date DESC
+            ORDER BY test_id DESC
             """;
         List<Test> tests = new ArrayList<>();
         try (Connection c = DB.connect();

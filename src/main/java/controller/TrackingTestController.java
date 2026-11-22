@@ -23,7 +23,7 @@ import view.ui.UI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -45,7 +45,9 @@ public class TrackingTestController extends TrackingSectionController {
         text.append(test.isTreatment() ? "treatment " + test.treatment() + " " : "");
         text.append(test.isClinicianNotes() ? "notes " + test.clinicianNotes() : "");
         for (TestResult res : test.testResults()) {
-            text.append(res.condition()).append(res.result()).append(" ");
+            // Spaced, so "chlamydia positive" matches (it used to read "ChlamydiaPOSITIVE").
+            TestResultStatus status = res.result() != null ? res.result() : TestResultStatus.PENDING;
+            text.append(" ").append(res.condition()).append(" ").append(status.label()).append(" ");
         }
         return text.toString();
     }
@@ -65,7 +67,8 @@ public class TrackingTestController extends TrackingSectionController {
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
 
-        Map<Test, Button> buttonMap = new HashMap<>();
+        // Keyed by identity: two identical test records must still get a button each.
+        Map<Test, Button> buttonMap = new IdentityHashMap<>();
 
         for (Test test : sortedTests) {
             String left = test.testType();

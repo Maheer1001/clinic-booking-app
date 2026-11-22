@@ -21,7 +21,7 @@ import view.ui.UI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -56,7 +56,9 @@ public class TrackingAppointmentController extends TrackingSectionController {
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
 
-        Map<AppointmentDetails, Button> buttonMap = new HashMap<>();
+        // Keyed by identity: records are equal when their fields match (e.g. two visits to the same
+        // service at the same time), and a value-keyed map then put one button in the list twice.
+        Map<AppointmentDetails, Button> buttonMap = new IdentityHashMap<>();
 
         for (AppointmentDetails appointment : sortedAppointments) {
             String left = appointment.serviceName();
