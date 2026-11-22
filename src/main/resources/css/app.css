@@ -1709,3 +1709,10 @@
     -fx-font-weight: 700;
     -fx-padding: 0 16 0 16;
 }
+
+/* Service names on the booking service step (wrap beside their checkbox). */
+.service-name {
+    -fx-text-fill: #5B2A86;
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
+}

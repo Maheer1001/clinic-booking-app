@@ -185,3 +185,7 @@
 .app-btn-block {
     -fx-font-size: 18px; /* +2 */
 }
+
+.label.service-name {
+    -fx-font-size: 16px; /* +2 */
+}

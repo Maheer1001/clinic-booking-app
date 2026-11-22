@@ -80,7 +80,7 @@ public class MainView {
         } else {
             for (UpcomingAppointmentDetails apt : appointments) {
 
-                Label service = new Label(apt.serviceName());
+                Label service = UI.wrappingLabel(apt.serviceName());
                 service.getStyleClass().add("appointment-title");
                 Label when = new Label(Dates.upcoming(apt.date(), today) + "  ·  " + Dates.timeRange(apt.startTime(), apt.endTime()));
                 when.getStyleClass().add("appointment-meta");
@@ -93,6 +93,8 @@ public class MainView {
                 btn.getStyleClass().add("appointment-card");
                 btn.setMaxWidth(Double.MAX_VALUE);
                 btn.setAlignment(Pos.CENTER_LEFT);
+                // Sized to the card so a long service name wraps and the card grows instead of cutting it off.
+                details.prefWidthProperty().bind(btn.widthProperty().subtract(34));
                 btn.setAccessibleText(apt.serviceName() + ", " + Dates.full(Dates.parseStored(apt.date()))
                         + " at " + apt.startTime() + ", " + apt.clinicName() + ". Open details");
 

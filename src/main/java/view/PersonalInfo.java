@@ -86,7 +86,7 @@ public class PersonalInfo {
             reason.setText(booking.getReason());
         }
 
-        Button next = UI.primaryButton("Next");
+        Button next = UI.primaryButton("Continue");
 
         Label problem = UI.error("");
         problem.setWrapText(true);
@@ -128,7 +128,13 @@ public class PersonalInfo {
         disabilities.setAccessibleText("Accessibility needs, optional");
         reason.setAccessibleText("Notes for your clinician, optional");
         dob.setMaxWidth(Double.MAX_VALUE);
-        dob.setPromptText("Optional, choose a date");
+        dob.setPromptText("Optional");
+        first.setPromptText("Required");
+        last.setPromptText("Required");
+        // Shown so the details match the review page; booking emails go to the account's address.
+        email.setEditable(false);
+        email.setFocusTraversable(false);
+        email.setAccessibleText("Email, from your account");
         // Picked from the calendar only (as on Account): typed text that didn't parse was silently ignored.
         dob.setEditable(false);
         dob.setDayCellFactory(p -> new DateCell() {
@@ -146,16 +152,20 @@ public class PersonalInfo {
         HBox about = new HBox(10, field("Date of birth", dob), field("Phone", phone));
         for (Node n : about.getChildren()) HBox.setHgrow(n, Priority.ALWAYS);
         HBox identity = new HBox(10, field("Gender", gender), field("Sexuality", sexuality));
+        VBox emailField = field("Email", email);
+        boolean hasEmail = email.getText() != null && !email.getText().isBlank();
+        emailField.setVisible(hasEmail);
+        emailField.setManaged(hasEmail);
         for (Node n : identity.getChildren()) HBox.setHgrow(n, Priority.ALWAYS);
 
-        VBox form = UI.card(12, names, about, identity,
+        VBox form = UI.card(12, names, emailField, about, identity,
                 field("Accessibility needs", disabilities),
                 field("Anything your clinician should know?", reason));
 
         Label l = UI.intro("Optional details help the clinic arrange any support you need. Only the clinic sees them.");
-        next.setText("Review booking");
 
-        VBox page = UI.pageTop(UI.steps(4, 5, "Your details"), form, l, problem, next);
+        VBox page = UI.pageTop(UI.steps(4, 5, "Your details"),
+                new VBox(4, UI.pageHeading("About you"), l), form, problem, next);
         ScrollPane sp = new ScrollPane(page);
         sp.setFitToWidth(true);
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);

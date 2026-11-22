@@ -261,7 +261,10 @@ public class BookingController {
         });
         clinicMap.show(clinics, null);
 
-        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"), hbox, messageLabel, clinicMap.node(), list);
+        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"),
+                new VBox(4, UI.pageHeading("Where would you like to go?"),
+                        UI.intro("Search by postcode to see the nearest clinics, or pick one on the map.")),
+                hbox, messageLabel, clinicMap.node(), list);
         page.setSpacing(12);
         if (clinics.isEmpty()) {
             page.getChildren().add(UI.emptyState(UI.ICON_SEARCH, "No clinics yet",

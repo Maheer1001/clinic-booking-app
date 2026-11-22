@@ -326,6 +326,33 @@ public final class UI {
         button.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_EXITED, e -> timeline.stop());
     }
 
+    /**
+     * A label that wraps onto more lines and makes its row taller, even inside a button graphic,
+     * a list cell or a TitledPane header. Those ask for the height with no width (-1), which a
+     * plain wrapping Label answers with one line, so long names ("Pregnancy Testing and Options
+     * Counselling") were cut to "Pregnancy Testing and Options ...". This one answers with the
+     * width it was last laid out at.
+     */
+    public static Label wrappingLabel(String text) {
+        Label l = new Label(text) {
+            @Override
+            protected double computePrefHeight(double width) {
+                return super.computePrefHeight(width < 0 && getWidth() > 0 ? getWidth() : width);
+            }
+
+            @Override
+            protected double computeMinHeight(double width) {
+                return computePrefHeight(width);
+            }
+        };
+        l.setWrapText(true);
+        l.setMinWidth(0);
+        l.widthProperty().addListener((o, was, now) -> {
+            if (was.doubleValue() != now.doubleValue() && l.getParent() != null) l.getParent().requestLayout();
+        });
+        return l;
+    }
+
     /** Muted/secondary text. */
     public static Label muted(String text) {
         Label l = new Label(text);

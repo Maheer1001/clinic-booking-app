@@ -115,7 +115,7 @@ public class Reschedule {
             DateTimeSelector sel = new DateTimeSelector(provider, slot -> rescheduleBtn.setDisable(false));
             sel.getTimeCombo().valueProperty().addListener((obs, o, n) -> rescheduleBtn.setDisable(n == null));
             selectorRef[0] = sel;
-            selectorBox.getChildren().setAll(UI.card(10, sectionHeading("Choose a new time"), sel));
+            selectorBox.getChildren().setAll(UI.card(10, sectionHeading("New time"), sel));
         };
 
         appointmentId.textProperty().addListener((obs, oldVal, newVal) -> loadAppointment.run());
@@ -169,7 +169,9 @@ public class Reschedule {
             nav.goToHome();
         });
 
-        VBox page = UI.page();
+        // Same top-of-page pattern as the booking steps: a heading and one line of help.
+        VBox page = UI.pageTop(new VBox(4, UI.pageHeading("Move your appointment"),
+                UI.intro("Pick a new date and time. We'll email you to confirm the change.")));
         if (!prefilled) {
             page.getChildren().addAll(idLabel, appointmentId);
         }
@@ -181,6 +183,9 @@ public class Reschedule {
         if (currentApt[0] == null && prefilled && result.getText().isEmpty()) {
             result.setText("No upcoming appointment with that ID was found.");
         }
-        return page;
+        ScrollPane sp = new ScrollPane(page);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        return sp;
     }
 }
