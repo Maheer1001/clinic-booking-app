@@ -112,16 +112,23 @@ public class AppointmentRemindersView {
         });
 
         saveBtn.setOnAction(e -> {
+            String problem = form.validationError();
+            if (problem != null) {
+                ReminderFeedback.invalid(saveConfirm, problem);
+                return;
+            }
             ReminderTemplateForm.Payload p = form.collectPayload();
             boolean saved = controller.saveAppointmentReminder(appt.getAppId(), p.notificationsEnabled(), p.scheduleJson(), p.templateOverridesJson());
-            ReminderFeedback.saveResult(saveConfirm, saved);
+            ReminderFeedback.saveResult(saveConfirm, saved, p.notificationsEnabled());
 
             if (saved && p.notificationsEnabled()) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
                 if (name == null || name.isBlank()) name = email;
-                controller.scheduleAppointmentReminderWithSchedule(appt, email, name, p.scheduleJson(), p.templateOverridesJson());
+                ReminderFeedback.scheduled(saveConfirm,
+                        controller.scheduleAppointmentReminderWithSchedule(appt, email, name, p.scheduleJson(), p.templateOverridesJson()),
+                        "Saved, but all of these reminder times have already passed.");
             }
         });
 

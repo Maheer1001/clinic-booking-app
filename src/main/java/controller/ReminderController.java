@@ -15,6 +15,7 @@ import model.PrescriptionReminder;
 import service.NotificationScheduler;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -122,17 +123,19 @@ public class ReminderController {
     /**
      * Schedule appointment reminders using the JSON schedule stored in custom_days.
      */
-    public void scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
-                                                        String scheduleRaw, String customMessage) {
-        notificationScheduler.scheduleAppointmentReminderWithSchedule(appt, email, name, scheduleRaw, customMessage);
+    /** @return when the first reminder email will be sent, or empty if none could be scheduled */
+    public Optional<LocalDateTime> scheduleAppointmentReminderWithSchedule(Appointment appt, String email, String name,
+                                                                           String scheduleRaw, String customMessage) {
+        return notificationScheduler.scheduleAppointmentReminderWithSchedule(appt, email, name, scheduleRaw, customMessage);
     }
 
     public void scheduleTreatmentReminder(Prescription rx, String email, String name, int intervalHours) {
         scheduleTreatmentReminder(rx, email, name, intervalHours, null);
     }
 
-    public void scheduleTreatmentReminder(Prescription rx, String email, String name, int intervalHours, String customMessage) {
-        notificationScheduler.scheduleTreatmentReminder(rx, email, name, intervalHours, customMessage);
+    /** @return when the first dose reminder will be sent, or empty if the course ends first */
+    public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String email, String name, int intervalHours, String customMessage) {
+        return notificationScheduler.scheduleTreatmentReminder(rx, email, name, intervalHours, customMessage);
     }
 
     public void scheduleBookingReminder(String email, String name, int daysSinceLast, LocalDate lastDate) {
@@ -141,6 +144,28 @@ public class ReminderController {
 
     public void scheduleBookingReminder(String email, String name, int daysSinceLast, LocalDate lastDate, String customMessage) {
         notificationScheduler.scheduleBookingReminder(email, name, daysSinceLast, lastDate, customMessage);
+    }
+
+    /**
+     * Schedules the "time to book" nudge for {@code daysSinceLast} days after the last visit. Nothing
+     * is scheduled before a first visit (it used to send "It has been 180 days since your last visit"
+     * 30 seconds later to people who had never been), and it is not sent while an appointment is
+     * already booked.
+     *
+     * @return when it will be sent, or empty if there is no previous visit to count from
+     */
+    public Optional<LocalDateTime> scheduleBookingReminder(String email, String name, int daysSinceLast, String customMessage) {
+        Optional<LocalDate> last = getLastAppointmentDate();
+        if (last.isEmpty()) {
+            notificationScheduler.cancelBookingReminders(email);
+            return Optional.empty();
+        }
+        return notificationScheduler.scheduleBookingReminder(email, name, daysSinceLast, last.get(), customMessage,
+                this::hasNoUpcomingAppointment);
+    }
+
+    private boolean hasNoUpcomingAppointment() {
+        return getUpcomingAppointments().isEmpty();
     }
 
     // ------------------------------------------------------------------ keeping the scheduler in step
@@ -223,8 +248,8 @@ public class ReminderController {
             Optional<LocalDate> last = getLastAppointmentDate();
             // Only a nudge that is still in the future; an overdue one would otherwise fire on every login.
             if (last.isPresent() && last.get().plusDays(r.getDaysSinceLast()).isAfter(LocalDate.now())) {
-                notificationScheduler.scheduleBookingReminder(
-                        email, displayName, r.getDaysSinceLast(), last.get(), r.getCustomMessage());
+                notificationScheduler.scheduleBookingReminder(email, displayName, r.getDaysSinceLast(), last.get(),
+                        r.getCustomMessage(), this::hasNoUpcomingAppointment);
                 restored++;
             }
         }

@@ -349,8 +349,9 @@ public class AppointmentDAO implements AppointmentRepository {
             SELECT MAX(t.date) AS last_date
             FROM "Appointment" a
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
-            WHERE a.user_id = ? AND t.date < CURRENT_DATE
+            WHERE a.user_id = ? AND t.date < CURRENT_DATE AND a.status <> 'CANCELLED'
             """;
+        // A cancelled appointment is not a visit, so it must not reset the "time to book" reminder.
         try (Connection c = DB.connect();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, userId);

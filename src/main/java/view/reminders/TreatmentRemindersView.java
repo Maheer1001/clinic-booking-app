@@ -110,6 +110,8 @@ public class TreatmentRemindersView {
         Spinner<Integer> intervalSpinner = new Spinner<>(1, 72,
                 existing != null ? existing.getIntervalBetweenDoses() : 12);
         UI.tuneIntSpinner(intervalSpinner);
+        // Choosing how often to be reminded switches reminders on (cards start as "Disabled").
+        intervalSpinner.valueProperty().addListener((o, a, b) -> ReminderNotifyChoice.applyEnabled(notifyChoice, true));
         HBox intervalSpinnerRow = new HBox(10, intervalSpinner);
         intervalSpinnerRow.setAlignment(Pos.CENTER_LEFT);
         VBox intervalBlock = new VBox(8, intervalLabel, intervalSpinnerRow);
@@ -215,14 +217,16 @@ public class TreatmentRemindersView {
             String customJson = toSave.toJson();
 
             boolean saved = controller.savePrescriptionReminder(rx.getPrescriptionId(), notify, interval, customJson);
-            ReminderFeedback.saveResult(saveConfirm, saved);
+            ReminderFeedback.saveResult(saveConfirm, saved, notify);
 
             if (saved && notify) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
                 if (name == null || name.isBlank()) name = email;
-                controller.scheduleTreatmentReminder(rx, email, name, interval, customJson);
+                ReminderFeedback.scheduled(saveConfirm,
+                        controller.scheduleTreatmentReminder(rx, email, name, interval, customJson),
+                        "Saved, but this prescription ends before the next dose is due.");
             }
         });
 
