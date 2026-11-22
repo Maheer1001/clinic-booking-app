@@ -48,7 +48,8 @@ class TrackingDAOTest {
             """);
             s.execute("""
                 CREATE TABLE "Test" (test_id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, clinic_id INT,
-                    test_type VARCHAR(50), test_date DATE, clinician_notes VARCHAR(200), treatment_instructions VARCHAR(200))
+                    test_type VARCHAR(50), test_date DATE, clinician_notes VARCHAR(200), treatment_instructions VARCHAR(200),
+                    released_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
             """);
             s.execute("CREATE TABLE \"TestResult\" (result_id INT AUTO_INCREMENT PRIMARY KEY, test_id INT, condition VARCHAR(50), result VARCHAR(20))");
             s.execute("CREATE TABLE \"Medicine\" (medicine_id INT PRIMARY KEY, name VARCHAR(50))");

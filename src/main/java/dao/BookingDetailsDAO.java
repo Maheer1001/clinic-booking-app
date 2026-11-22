@@ -22,7 +22,7 @@ import java.util.Optional;
  */
 public class BookingDetailsDAO implements BookingDetailsRepository {
 
-    private static final String COLUMNS =
+    static final String COLUMNS =
             "d.app_id, d.first_name, d.last_name, d.dob, d.phone_number, d.contact_email, d.gender, d.sexuality, "
             + "d.accessibility_needs";
 
@@ -111,7 +111,8 @@ public class BookingDetailsDAO implements BookingDetailsRepository {
         else ps.setDate(i, Date.valueOf(d));
     }
 
-    private static BookingDetails map(ResultSet rs) throws SQLException {
+    /** Maps the {@link #COLUMNS} of a row (also used by {@link StaffDAO}). */
+    static BookingDetails map(ResultSet rs) throws SQLException {
         Date dob = rs.getDate("dob");
         return new BookingDetails(
                 rs.getInt("app_id"),
