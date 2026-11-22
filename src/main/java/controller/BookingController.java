@@ -448,7 +448,9 @@ public class BookingController {
         Background.run(
                 () -> new ReminderController(userId).applyReminderForNewBookings(savedIds, reminderEmail, reminderName),
                 on -> blurbLabel.setText(on
-                        ? (hasEmail ? "We'll email you a reminder before your appointment. You can change or turn it off in Reminders."
+                        ? (hasEmail ? (savedIds.size() > 1
+                                        ? "We'll email you a reminder before each appointment. You can change or turn them off in Reminders."
+                                        : "We'll email you a reminder before your appointment. You can change or turn it off in Reminders.")
                                     : "Reminders are on, but you need an email address on your account to receive them.")
                         : "Reminders are off (your saved default). You can turn them on in Reminders."),
                 ex -> blurbLabel.setText("We couldn't set up a reminder automatically. You can set one in Reminders."));
@@ -496,7 +498,12 @@ public class BookingController {
         sub.setWrapText(true);
         prompt.getChildren().addAll(blurbLabel, buttonRow);
 
-        nav.goToPage(prompt, "Booking confirmed", true);
+        // Scrolls like the other booking steps. Without it, booking two services overflowed the window and the
+        // email result and reminder lines were cut to "We've emailed a confirmation to ...".
+        ScrollPane page = new ScrollPane(prompt);
+        page.setFitToWidth(true);
+        page.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        nav.goToPage(page, "Booking confirmed", true);
         return outcome;
     }
 

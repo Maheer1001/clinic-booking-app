@@ -6,6 +6,7 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import model.BookingCommunicationPreferences;
 import model.ReminderTemplateOverrides;
+import service.AsyncNotifier;
 import service.BookingCommunicationPrefs;
 import service.NotificationDispatcher;
 import service.email.CancellationEmail;
@@ -40,6 +41,8 @@ public class Cancel {
                     return;
                 }
                 model.UpcomingAppointmentDetails apt = aptOpt.get();
+                // Same confirmation as the other cancel buttons; this one cancelled on the first click.
+                if (!MainView.confirmCancel(apt)) return;
                 if (!controller.cancelAppointment(id)) {
                     result.setText("This appointment could not be cancelled. It may already be cancelled.");
                     return;
@@ -53,7 +56,9 @@ public class Cancel {
                     BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
                     boolean cancellationDiscreet = commPrefs.cancellationDiscreet();
                     ReminderTemplateOverrides cancellationTpl = commPrefs.cancellationTemplate();
-                    dispatcher.notifyUser(
+                    // In the background like the other cancel buttons, so SMTP retries don't freeze the window.
+                    AsyncNotifier.notifyUser(
+                            dispatcher,
                             userId,
                             new CancellationEmail(
                                     recipientEmail, recipientName, appointmentRef,

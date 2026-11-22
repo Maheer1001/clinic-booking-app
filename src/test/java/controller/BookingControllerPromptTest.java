@@ -147,7 +147,8 @@ class BookingControllerPromptTest {
         // Assert navigator now shows the prompt page
         assertNotNull(nav.lastPage);
         assertEquals("Booking confirmed", nav.lastTitle);
-        assertTrue(nav.lastPage instanceof VBox);
+        assertTrue(nav.lastPage instanceof javafx.scene.control.ScrollPane sp && sp.getContent() instanceof VBox,
+                "the confirmation scrolls, so a long result message is never cut short");
 
         // Root's center should also be the prompt node
         BorderPane root = nav.getRoot();
