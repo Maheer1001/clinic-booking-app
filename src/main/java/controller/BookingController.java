@@ -533,4 +533,31 @@ public class BookingController {
         return bookingService;
     }
 
+    private AccountController accountController;
+
+    private AccountController accountController() {
+        if (accountController == null) accountController = new AccountController();
+        return accountController;
+    }
+
+    /**
+     * True when the details step has a first and last name but the signed-in account has no name (or only
+     * half of one), so the flow can ask "Save this name to your account?". Ask before
+     * {@link #confirmBooking()}, which clears the booking. Reads the database: call off the FX thread.
+     */
+    public boolean shouldOfferSaveName(String firstName, String lastName) {
+        int userId = Data.getCurrentUserId();
+        if (userId < 0 || firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
+            return false;
+        }
+        return accountController().accountNameMissing(userId);
+    }
+
+    /** Saves the given name onto the signed-in account (after the user said yes). */
+    public service.AccountSecurityService.SaveNameResult saveNameToAccount(String firstName, String lastName) {
+        int userId = Data.getCurrentUserId();
+        if (userId < 0) return service.AccountSecurityService.SaveNameResult.USER_NOT_FOUND;
+        return accountController().saveNameToAccount(userId, firstName, lastName);
+    }
+
 }
