@@ -6,10 +6,12 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import model.SecurityQuestion;
 import service.AuthService;
 
 import java.util.concurrent.CompletableFuture;
@@ -122,6 +124,16 @@ class AuthScreensFxmlTest {
                 assertTrue(btn.isDisabled(), "terms not ticked yet");
                 ((CheckBox) root.lookup("#termsCheck")).setSelected(true);
                 ((CheckBox) root.lookup("#privacyCheck")).setSelected(true);
+                assertTrue(btn.isDisabled(), "no security question yet");
+
+                @SuppressWarnings("unchecked")
+                ComboBox<SecurityQuestion> question = (ComboBox<SecurityQuestion>) root.lookup("#questionBox");
+                assertEquals(SecurityQuestion.all(), question.getItems());
+                question.setValue(SecurityQuestion.FIRST_PET);
+                assertEquals("FIRST_PET", d.securityQuestionKey, "kept while reading the Terms");
+                assertTrue(btn.isDisabled(), "no answer yet");
+                TextField answer = (TextField) root.lookup("#answerField");
+                answer.setText("x");
                 assertFalse(btn.isDisabled());
                 return null;
             });
@@ -129,6 +141,7 @@ class AuthScreensFxmlTest {
             d.email = ""; d.password = ""; d.confirmPassword = "";
             d.termsAccepted = false; d.privacyAccepted = false;
             d.termsReadToEnd = false; d.privacyReadToEnd = false;
+            d.securityQuestionKey = null; d.securityAnswer = "";
         }
     }
 

@@ -138,8 +138,7 @@ public class TreatmentRemindersView {
         ChoiceBox<String> discreetChoice = DiscreetReminderChoice.create();
         DiscreetReminderChoice.applyFromOverride(discreetChoice, overrides.getDiscreetOverride());
 
-        HBox notifyDiscreetRow = new HBox(16, notifyChoice, discreetChoice);
-        notifyDiscreetRow.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.layout.FlowPane notifyDiscreetRow = ReminderNotifyChoice.row(notifyChoice, discreetChoice);
 
         Label timeIntro = UI.muted(
                 "Set how often we should remind you between doses (based on your dosing schedule).");

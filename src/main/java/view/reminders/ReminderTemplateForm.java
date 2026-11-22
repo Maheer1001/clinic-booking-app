@@ -300,10 +300,8 @@ public final class ReminderTemplateForm {
     }
 
     /** Compact left-aligned row: notification on/off + discreet mode. */
-    public HBox getNotifyAndDiscreetRow() {
-        HBox row = new HBox(16, notifyChoice, discreetChoice);
-        row.setAlignment(Pos.CENTER_LEFT);
-        return row;
+    public javafx.scene.layout.FlowPane getNotifyAndDiscreetRow() {
+        return ReminderNotifyChoice.row(notifyChoice, discreetChoice);
     }
 
     /** True when reminders are switched on in this form. */

@@ -296,7 +296,11 @@ public class MainView {
         VBox deleteBox = new VBox(delete);
         deleteBox.setAlignment(Pos.CENTER);
         deleteBox.setPadding(new Insets(6, 0, 4, 0));
-        VBox account = UI.card(5, accountLabel, accountSettings, deleteBox);
+        VBox account = UI.card(5, accountLabel, accountSettings);
+
+        Label securityLabel = sectionTitle("Sign-in and security");
+        Node securitySettings = new AccountSecurityView(Data.getCurrentUserId()).getPage();
+        VBox security = UI.card(5, securityLabel, securitySettings, deleteBox);
 
         Label accessibilityLabel = sectionTitle("Accessibility");
         Node accessibilitySettings = AccessibilitySettingsView.getPage();
@@ -306,7 +310,7 @@ public class MainView {
         Node reminderDefaultsSettings = new ReminderDefaultsView(new ReminderController(Data.getCurrentUserId())).getReminderDefaultsView();
         VBox reminderDefaults = UI.card(5, reminderDefaultsLabel, reminderDefaultsSettings);
 
-        VBox root = UI.pageTop(account, accessibility, reminderDefaults);
+        VBox root = UI.pageTop(account, security, accessibility, reminderDefaults);
         root.setMaxWidth(Double.MAX_VALUE);
         ScrollPane sp = new ScrollPane(root);
         sp.setFitToWidth(true);
@@ -318,7 +322,11 @@ public class MainView {
 
         // Let the settings list take the spare height so Log Out stays pinned at the bottom.
         VBox.setVgrow(sp, Priority.ALWAYS);
-        return new VBox(10, sp, logout);
+        VBox settings = new VBox(10, sp, logout);
+        // Navigator asks this before leaving Settings: "Discard your changes?" for unsaved account details.
+        Object guard = accountSettings.getProperties().get(AccountView.LEAVE_GUARD);
+        if (guard != null) settings.getProperties().put(AccountView.LEAVE_GUARD, guard);
+        return settings;
     }
 
 }

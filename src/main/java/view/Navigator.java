@@ -372,7 +372,10 @@ public class Navigator {
         if (isSettings.get()) {
             goBack();
         } else {
-            goToPage(view.getSettingsScene(), "Settings", false);
+            Node settings = view.getSettingsScene();
+            goToPage(settings, "Settings", false);
+            // "Discard your changes?" for unsaved account details (see AccountView.LEAVE_GUARD)
+            if (settings.getProperties().get(AccountView.LEAVE_GUARD) instanceof BooleanSupplier guard) setLeaveGuard(guard);
         }
     }
 }

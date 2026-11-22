@@ -55,7 +55,9 @@ public class MainController {
         }));
 
         //log out
+        // Unsaved Settings edits get a "Discard your changes?" first (Navigator's guard isn't asked on logout).
         view.getLogOutButton().setOnAction(e -> {
+            if (!nav.confirmLeave()) return;
             flushSettings();
             logOut(null);
         });
@@ -85,6 +87,7 @@ public class MainController {
         Data.setSettings(null);
         Data.getSignUpDraft().password = "";
         Data.getSignUpDraft().confirmPassword = "";
+        Data.getSignUpDraft().securityAnswer = "";
         Stage stage = (Stage) currScene.getWindow();
         FXMLLoader loader = new FXMLLoader(Main.class.getResource("/fxml/login.fxml"));
         try {
