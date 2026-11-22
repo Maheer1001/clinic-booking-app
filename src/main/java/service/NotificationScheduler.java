@@ -242,6 +242,19 @@ public class NotificationScheduler {
      */
     public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String recipientEmail, String recipientName,
                                                              int intervalHours, String customMessage) {
+        return scheduleTreatmentReminder(rx, recipientEmail, recipientName, intervalHours, customMessage, null);
+    }
+
+    /**
+     * Dose reminders on a fixed rhythm: due at {@code anchor + k * intervalHours}. The next send is
+     * the first of those ticks strictly after now, so restoring at login keeps the original rhythm
+     * (it used to restart at login + interval every time) and never re-sends a tick that has passed.
+     *
+     * @param anchor when the rhythm started (normally when the reminder was saved); null = now
+     * @return when the next reminder will go out, or empty if the course ends first
+     */
+    public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String recipientEmail, String recipientName,
+                                                             int intervalHours, String customMessage, LocalDateTime anchor) {
         if (intervalHours <= 0) {
             scheduleTreatmentReminder(rx, recipientEmail, recipientName, defaultDelaySeconds, customMessage);
             return Optional.of(now().plusSeconds(defaultDelaySeconds).toLocalDateTime());
@@ -249,7 +262,7 @@ public class NotificationScheduler {
         String key = prescriptionKey(rx.getPrescriptionId());
         cancel(key);
         Predicate<ZonedDateTime> withinCourse = treatmentCourse(rx);
-        ZonedDateTime first = now().plusHours(intervalHours);
+        ZonedDateTime first = nextDoseTick(anchor == null ? now() : zoned(anchor), intervalHours, now());
         // A course that has not started yet used to get dose reminders straight away.
         if (rx.getStartDate() != null) {
             ZonedDateTime courseStart = zoned(rx.getStartDate().atStartOfDay());
@@ -265,6 +278,21 @@ public class NotificationScheduler {
         startChain(key, first, t -> t.plusHours(intervalHours), UnaryOperator.identity(), withinCourse, () -> true,
                 t -> treatmentEmail(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
         return Optional.of(first.toLocalDateTime());
+    }
+
+    /**
+     * First tick {@code anchor + k * intervalHours} (k &gt;= 1) strictly after {@code now}. Whole hours
+     * of elapsed time, so the rhythm is not moved by daylight saving changes.
+     */
+    static ZonedDateTime nextDoseTick(ZonedDateTime anchor, int intervalHours, ZonedDateTime now) {
+        long periodSeconds = intervalHours * 3600L;
+        long elapsed = Duration.between(anchor, now).getSeconds();
+        long k = Math.max(1, Math.floorDiv(elapsed, periodSeconds) + 1);
+        ZonedDateTime tick = anchor.plusSeconds(k * periodSeconds);
+        while (!tick.isAfter(now)) {
+            tick = tick.plusSeconds(periodSeconds);
+        }
+        return tick;
     }
 
     /** Sends a single treatment reminder after delaySeconds, replacing any already scheduled for this prescription. */

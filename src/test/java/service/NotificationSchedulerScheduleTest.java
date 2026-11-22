@@ -218,6 +218,40 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
+    void doseReminder_restoredLater_keepsTheOriginalRhythm() {
+        ZonedDateTime now = ZonedDateTime.of(2026, 11, 22, 15, 0, 0, 0, ZoneId.of("Europe/London"));
+        scheduler = new NotificationScheduler(sender, 0, Clock.fixed(now.toInstant(), now.getZone()), (a, u) -> true);
+        Prescription rx = new Prescription(10, 1, "Doxycycline", "100mg", LocalDate.of(2026, 11, 1), null);
+        LocalDateTime savedAt = LocalDateTime.of(2026, 11, 21, 9, 0); // doses due 21:00, 09:00, 21:00 ...
+
+        var next = scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 12, null, savedAt);
+
+        assertEquals(java.util.Optional.of(LocalDateTime.of(2026, 11, 22, 21, 0)), next,
+                "next tick of the saved rhythm, not 15:00 + 12h");
+        assertEquals(1, scheduler.pendingCount("prescription:10"));
+    }
+
+    @Test
+    void doseReminder_tickExactlyNow_isNotResent() {
+        ZonedDateTime anchor = ZonedDateTime.of(2026, 11, 20, 8, 0, 0, 0, ZoneId.of("Europe/London"));
+        assertEquals(anchor.plusHours(60), NotificationScheduler.nextDoseTick(anchor, 12, anchor.plusHours(48)));
+        assertEquals(anchor.plusHours(12), NotificationScheduler.nextDoseTick(anchor, 12, anchor.plusMinutes(1)),
+                "just after saving, the first dose reminder is one interval later");
+        assertEquals(anchor.plusHours(12), NotificationScheduler.nextDoseTick(anchor, 12, anchor.minusHours(5)),
+                "an anchor in the future still starts one interval after it");
+    }
+
+    @Test
+    void doseReminder_withoutAnchor_startsOneIntervalFromNow() {
+        ZonedDateTime now = ZonedDateTime.of(2026, 11, 22, 15, 0, 0, 0, ZoneId.of("Europe/London"));
+        scheduler = new NotificationScheduler(sender, 0, Clock.fixed(now.toInstant(), now.getZone()), (a, u) -> true);
+        Prescription rx = new Prescription(11, 1, "PrEP", "1 tablet", LocalDate.of(2026, 11, 1), null);
+
+        assertEquals(java.util.Optional.of(LocalDateTime.of(2026, 11, 23, 3, 0)),
+                scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 12, null));
+    }
+
+    @Test
     void bookingReminder_rescheduleReplacesAndCancelWorks() {
         scheduler = new NotificationScheduler(sender, 3600);
         scheduler.scheduleBookingReminder("P@example.com", "Jane", 90, LocalDate.now(), null);

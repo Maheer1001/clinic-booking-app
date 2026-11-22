@@ -336,6 +336,8 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS updated TIMESTAMP");
             // ClinicDAO reads this column; older/fresh schemas created above do not have it.
             s.execute("ALTER TABLE \"Clinic\" ADD COLUMN IF NOT EXISTS disability_accessibility TEXT");
+            // Fixed dose-reminder rhythm across logins (docs/migrations/2026-11-22-prescription-reminder-anchor.sql).
+            s.execute("ALTER TABLE \"PrescriptionReminder\" ADD COLUMN IF NOT EXISTS schedule_anchor TIMESTAMP");
         }
     }
 }

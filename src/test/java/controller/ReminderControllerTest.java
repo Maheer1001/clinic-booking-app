@@ -54,6 +54,22 @@ class ReminderControllerTest {
             appointment.add(new AppointmentReminder(0, userId, appId, notify, days, message, "email"));
             return true;
         }
+
+        @Override
+        public boolean savePrescriptionReminder(int userId, int prescriptionId, boolean notify, int intervalHours,
+                                                String message, LocalDateTime anchor) {
+            prescription.removeIf(r -> r.getPrescriptionId() == prescriptionId);
+            prescription.add(new PrescriptionReminder(0, userId, prescriptionId, notify, intervalHours, message, "email", anchor));
+            return true;
+        }
+
+        @Override
+        public void setPrescriptionReminderAnchor(int userId, int prescriptionId, LocalDateTime anchor) {
+            PrescriptionReminder old = prescription.stream().filter(r -> r.getPrescriptionId() == prescriptionId).findFirst().orElseThrow();
+            prescription.remove(old);
+            prescription.add(new PrescriptionReminder(old.getPrRemId(), userId, prescriptionId, old.isNotify(),
+                    old.getIntervalBetweenDoses(), old.getCustomMessage(), "email", anchor));
+        }
     }
 
     static class FakeAppointmentDAO extends AppointmentDAO {
@@ -90,10 +106,13 @@ class ReminderControllerTest {
 
         @Override
         public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String email, String name,
-                                                                 int intervalHours, String message) {
+                                                                 int intervalHours, String message, LocalDateTime anchor) {
             calls.add("prescription " + rx.getPrescriptionId() + " every " + intervalHours);
+            lastDoseAnchor = anchor;
             return Optional.empty();
         }
+
+        LocalDateTime lastDoseAnchor;
 
         @Override
         public Optional<LocalDateTime> scheduleBookingReminder(String email, String name, int days, LocalDate last,
@@ -184,6 +203,55 @@ class ReminderControllerTest {
 
         assertEquals(2, controller.restoreScheduledReminders(EMAIL, "Pat"));
         assertEquals(List.of("appointment 11 1 ", "prescription 5 every 12"), scheduler.calls);
+    }
+
+    @Test
+    void restore_doseReminder_usesTheSavedRhythm() {
+        LocalDateTime savedAt = LocalDateTime.now().minusDays(3).withNano(0);
+        prescriptions.prescriptions.add(new Prescription(5, USER, "Doxycycline", "100mg", LocalDate.now(), null));
+        reminders.prescription.add(new PrescriptionReminder(1, USER, 5, true, 12, "", "email", savedAt));
+
+        controller.restoreScheduledReminders(EMAIL, "Pat");
+
+        assertEquals(savedAt, scheduler.lastDoseAnchor, "restoring must not re-base the rhythm to the login time");
+    }
+
+    @Test
+    void restore_doseReminderSavedBeforeAnchorsExisted_startsTheRhythmOnceAndKeepsIt() {
+        prescriptions.prescriptions.add(new Prescription(5, USER, "Doxycycline", "100mg", LocalDate.now(), null));
+        reminders.prescription.add(new PrescriptionReminder(1, USER, 5, true, 12, "", "email", null));
+
+        controller.restoreScheduledReminders(EMAIL, "Pat");
+        LocalDateTime first = scheduler.lastDoseAnchor;
+        assertNotNull(first);
+        assertEquals(first, reminders.prescription.getFirst().getScheduleAnchor(), "the new anchor is stored");
+
+        controller.restoreScheduledReminders(EMAIL, "Pat");
+        assertEquals(first, scheduler.lastDoseAnchor, "a second login keeps the same rhythm");
+    }
+
+    @Test
+    void savingDoseReminder_startsTheRhythmNow_butEditingOnlyTheWordingKeepsIt() {
+        Prescription rx = new Prescription(5, USER, "Doxycycline", "100mg", LocalDate.now(), null);
+        LocalDateTime before = LocalDateTime.now();
+
+        controller.savePrescriptionReminder(5, true, 12, "");
+        controller.scheduleTreatmentReminder(rx, EMAIL, "Pat", 12, "");
+        assertFalse(scheduler.lastDoseAnchor.isBefore(before), "a new reminder's rhythm starts when it is saved");
+
+        LocalDateTime threeDaysAgo = before.minusDays(3);
+        reminders.prescription.clear();
+        reminders.prescription.add(new PrescriptionReminder(1, USER, 5, true, 12, "", "email", threeDaysAgo));
+
+        controller.savePrescriptionReminder(5, true, 12, "{\"notifTitle\":\"Pills\"}");
+        assertEquals(threeDaysAgo, reminders.prescription.getFirst().getScheduleAnchor(), "same interval: rhythm kept");
+        new ReminderController(USER, reminders, appointments, prescriptions, scheduler, users)
+                .scheduleTreatmentReminder(rx, EMAIL, "Pat", 12, "");
+        assertEquals(threeDaysAgo, scheduler.lastDoseAnchor, "a fresh controller reads the saved anchor");
+
+        controller.savePrescriptionReminder(5, true, 8, "");
+        assertFalse(reminders.prescription.getFirst().getScheduleAnchor().isBefore(before),
+                "a new interval starts a new rhythm");
     }
 
     @Test
