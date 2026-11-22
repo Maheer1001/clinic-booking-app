@@ -101,15 +101,35 @@ public class TrackingController {
 
     private static void replaceBody(StackPane body, Node freshPage) {
         ScrollPane outer = enclosingScrollPane(body);
-        double outerScroll = outer == null ? 0 : outer.getVvalue();
+        double scrollTop = outer == null ? 0 : scrollTop(outer);
         TrackingPageState state = body.getChildren().isEmpty()
                 ? TrackingPageState.NONE : TrackingPageState.capture(body.getChildren().getFirst());
         body.getChildren().setAll(freshPage);
         state.applyTo(freshPage);
         if (outer != null) {
-            // after the new content is laid out, otherwise the old height decides where it lands
-            Platform.runLater(() -> outer.setVvalue(outerScroll));
+            // Lay the new list out now so the same distance from the top can be restored, and again
+            // after the next pulse, when wrapped text may have changed the height once more.
+            outer.applyCss();
+            outer.layout();
+            setScrollTop(outer, scrollTop);
+            Platform.runLater(() -> setScrollTop(outer, scrollTop));
         }
+    }
+
+    /** How far down the content is scrolled, in pixels (kept as pixels because new rows change the height). */
+    private static double scrollTop(ScrollPane sp) {
+        return sp.getVvalue() * scrollRange(sp);
+    }
+
+    private static void setScrollTop(ScrollPane sp, double px) {
+        double range = scrollRange(sp);
+        sp.setVvalue(range <= 0 ? 0 : Math.min(1, px / range));
+    }
+
+    private static double scrollRange(ScrollPane sp) {
+        Node content = sp.getContent();
+        if (content == null) return 0;
+        return Math.max(0, content.getLayoutBounds().getHeight() - sp.getViewportBounds().getHeight());
     }
 
     private static ScrollPane enclosingScrollPane(Node node) {
