@@ -88,15 +88,14 @@ public class TreatmentRemindersView {
 
     private static VBox createPrescriptionCard(Prescription rx, PrescriptionReminder existing, ReminderController controller,
                                               Optional<AppointmentReminderDefaults> defaults) {
-        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
         LocalDate end = rx.getEndDate();
         Label dateLabel;
         if (end == null) {
-            dateLabel = UI.body("From " + rx.getStartDate().format(dateFmt));
+            dateLabel = UI.body("From " + view.ui.Dates.medium(rx.getStartDate()));
         } else {
-            dateLabel = UI.body("From " + rx.getStartDate().format(dateFmt)
-                    + " to " + end.format(dateFmt));
+            dateLabel = UI.body("From " + view.ui.Dates.medium(rx.getStartDate())
+                    + " to " + view.ui.Dates.medium(end));
         }
         dateLabel.setWrapText(true);
         dateLabel.setMaxWidth(Double.MAX_VALUE);

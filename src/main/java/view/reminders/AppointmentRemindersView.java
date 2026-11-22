@@ -77,8 +77,8 @@ public class AppointmentRemindersView {
 
     private static VBox createAppointmentCard(Appointment appt, AppointmentReminder existing, ReminderController controller,
                                              Optional<AppointmentReminderDefaults> defaults) {
-        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("EEE d MMM, HH:mm", java.util.Locale.UK);
-        String dateStr = appt.getAppointmentDateTime().format(dateFmt);
+        String dateStr = view.ui.Dates.dateTime(appt.getAppointmentDateTime().toLocalDate(),
+                appt.getAppointmentDateTime().toLocalTime(), null);
 
         HBox headerRow = UI.reminderCardHeader(appt.getServiceName(), dateStr);
 

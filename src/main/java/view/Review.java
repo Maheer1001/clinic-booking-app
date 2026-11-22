@@ -21,9 +21,6 @@ import java.util.List;
 
 public class Review {
 
-    private static final DateTimeFormatter DOB_FMT = DateTimeFormatter.ofPattern("d MMMM yyyy", java.util.Locale.UK);
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     public static Node getPage(BookingController controller) {
         Book b = Data.getBooking();
@@ -52,7 +49,7 @@ public class Review {
         addIfPresent(clientInfo, "NAME", name);
         LocalDate dob = b.getDob();
         if (dob != null) {
-            addIfPresent(clientInfo, "DATE OF BIRTH", dob.format(DOB_FMT));
+            addIfPresent(clientInfo, "DATE OF BIRTH", view.ui.Dates.medium(dob));
         }
         addIfPresent(clientInfo, "EMAIL", b.getEmail());
         addIfPresent(clientInfo, "PHONE", b.getPhone());
@@ -107,11 +104,9 @@ public class Review {
     /** e.g. "Wed 25 Feb 2026, 10:30 – 11:00". */
     static String describeTime(Item item) {
         if (item.getDate() == null || item.getTime() == null) return "Not chosen";
-        String text = item.getDate().format(DATE_FMT) + ", " + item.getTime().format(TIME_FMT);
-        if (item.getService() != null && item.getService().getDurationMinutes() > 0) {
-            text += " – " + item.getTime().plusMinutes(item.getService().getDurationMinutes()).format(TIME_FMT);
-        }
-        return text;
+        java.time.LocalTime end = item.getService() != null && item.getService().getDurationMinutes() > 0
+                ? item.getTime().plusMinutes(item.getService().getDurationMinutes()) : null;
+        return view.ui.Dates.dateTime(item.getDate(), item.getTime(), end);
     }
 
     private static void addIfPresent(VBox box, String label, String value) {

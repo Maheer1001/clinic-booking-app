@@ -19,16 +19,12 @@ import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 public class Reschedule {
-
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yy");
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     public static Node getPageWithAppId(Navigator nav, int appId) {
         return buildPage(nav, String.valueOf(appId));
@@ -100,11 +96,9 @@ public class Reschedule {
             }
             UpcomingAppointmentDetails apt = aptOpt.get();
             currentApt[0] = apt;
-            java.time.LocalDate currentDate = Dates.parseStored(apt.date());
             currentBox.getChildren().setAll(
                     UI.detailTitle(apt.serviceName()),
-                    UI.detail("CURRENTLY", (currentDate != null ? Dates.full(currentDate) : apt.date())
-                            + ", " + Dates.timeRange(apt.startTime(), apt.endTime())),
+                    UI.detail("CURRENTLY", Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())),
                     UI.detail("CLINIC", apt.clinicName()));
 
             TimeslotProvider provider = new TimeslotProvider() {
@@ -143,7 +137,7 @@ public class Reschedule {
 
             rescheduleBtn.setDisable(true); // stop a double click from moving the appointment twice
             int id = apt.appId();
-            String oldDate = apt.date() + " " + apt.startTime() + " - " + apt.endTime();
+            String oldDate = Dates.dateTime(apt.date(), apt.startTime(), apt.endTime());
 
             if (!controller.rescheduleToSlot(id, slot)) {
                 result.setText("Sorry, that time is no longer available. Please choose another.");
@@ -153,9 +147,7 @@ public class Reschedule {
 
             String email = Data.getCurrentUserEmail();
             String name = Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "Patient";
-            String newDateStr = slot.date().format(DATE_FMT) + " "
-                    + slot.startTime().format(TIME_FMT) + " - "
-                    + slot.endTime().format(TIME_FMT);
+            String newDateStr = Dates.dateTime(slot.date(), slot.startTime(), slot.endTime());
 
             BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
             boolean rescheduleDiscreet = commPrefs.rescheduleDiscreet();

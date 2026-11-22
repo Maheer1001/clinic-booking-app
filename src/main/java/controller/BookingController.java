@@ -469,7 +469,8 @@ public class BookingController {
         for (BookingService.BookedAppointment appt : outcome.booked()) {
             String service = appt.service() != null ? appt.service().getName() : "Appointment";
             String when = appt.date() != null && appt.time() != null
-                    ? appt.date().format(CONFIRMED_DATE_FMT) + " at " + appt.time().format(CONFIRMED_TIME_FMT)
+                    ? view.ui.Dates.dateTime(appt.date(), appt.time(), appt.service() != null && appt.service().getDurationMinutes() > 0
+                            ? appt.time().plusMinutes(appt.service().getDurationMinutes()) : null)
                     : "";
             VBox row = new VBox(4, UI.detailTitle(service));
             if (!when.isEmpty()) row.getChildren().add(UI.detail("WHEN", when));
@@ -520,10 +521,6 @@ public class BookingController {
         return "Patient";
     }
 
-    private static final java.time.format.DateTimeFormatter CONFIRMED_DATE_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
-    private static final java.time.format.DateTimeFormatter CONFIRMED_TIME_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
     public void goToReview() {
         nav.goToPage(Review.getPage(this), "Review booking", false);

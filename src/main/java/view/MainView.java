@@ -153,7 +153,7 @@ public class MainView {
             card.getChildren().add(chip);
         }
         card.getChildren().addAll(
-                UI.detail("WHEN", (date != null ? Dates.full(date) : apt.date()) + ", " + Dates.timeRange(apt.startTime(), apt.endTime())),
+                UI.detail("WHEN", Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())),
                 UI.detail("CLINIC", apt.clinicName()));
         List<String> notes = apt.getNotesLines();
         if (!notes.isEmpty()) {
@@ -192,9 +192,7 @@ public class MainView {
             if (recipientEmail != null && !recipientEmail.isBlank()) {
 
                 String appointmentRef = "APP-" + appId;
-                String dateTimeStr = apt.date() + " " +
-                        apt.startTime() + " - " +
-                        apt.endTime();
+                String dateTimeStr = Dates.dateTime(apt.date(), apt.startTime(), apt.endTime());
 
                 BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(Data.getCurrentUserId());
                 boolean cancellationDiscreet = commPrefs.cancellationDiscreet();
@@ -240,7 +238,7 @@ public class MainView {
         alert.setTitle("Cancel appointment");
         alert.setHeaderText("Cancel your " + apt.serviceName() + "?");
         LocalDate date = Dates.parseStored(apt.date());
-        alert.setContentText((date != null ? Dates.full(date) : apt.date()) + " at " + apt.startTime()
+        alert.setContentText(Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())
                 + "\n" + apt.clinicName() + "\n\nThe time will be released and you will get a cancellation email.");
         UI.styleDialog(alert, Data.getScene());
         DialogPane pane = alert.getDialogPane();
