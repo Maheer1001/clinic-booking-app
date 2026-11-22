@@ -36,16 +36,16 @@ public class TrackingTestControllerTest {
         assertEquals("Test", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "", null, null, List.of()))));
         assertEquals("treatmentTreatment", test.removeWhitespace(TTController.getSearchableText(new model.Test("", "", "Treatment", null, List.of()))));
         assertEquals("notesNotes", test.removeWhitespace(TTController.getSearchableText(new model.Test("", "", null, "Notes", List.of()))));
-        assertEquals("STIPOSITIVE", test.removeWhitespace(TTController.getSearchableText(new model.Test("", "", null, null, List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
+        assertEquals("STIPositive", test.removeWhitespace(TTController.getSearchableText(new model.Test("", "", null, null, List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
     }
 
     @Test
     void testGetSearchableTextMultipleValues() {
-        assertEquals("TesttreatmentTreatmentnotesNotesSTIPOSITIVE", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", "Treatment", "Notes", List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
+        assertEquals("TesttreatmentTreatmentnotesNotesSTIPositive", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", "Treatment", "Notes", List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
         assertEquals("TesttreatmentTreatmentnotesNotes", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", "Treatment", "Notes", List.of()))));
-        assertEquals("TesttreatmentTreatmentSTIPOSITIVE", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", "Treatment", null, List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
-        assertEquals("TestnotesNotesSTIPOSITIVE", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", null, "Notes", List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
-        assertEquals("treatmentTreatmentnotesNotesSTIPOSITIVE", test.removeWhitespace(TTController.getSearchableText(new model.Test("", "21/04/26", "Treatment", "Notes", List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
+        assertEquals("TesttreatmentTreatmentSTIPositive", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", "Treatment", null, List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
+        assertEquals("TestnotesNotesSTIPositive", test.removeWhitespace(TTController.getSearchableText(new model.Test("Test", "21/04/26", null, "Notes", List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
+        assertEquals("treatmentTreatmentnotesNotesSTIPositive", test.removeWhitespace(TTController.getSearchableText(new model.Test("", "21/04/26", "Treatment", "Notes", List.of(new TestResult("STI", TestResultStatus.POSITIVE))))));
     }
 
     @Test

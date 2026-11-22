@@ -34,13 +34,13 @@ public class TrackingPrescriptionControllerTest {
 
     @Test
     void testGetSearchableTextHistory() {
-        assertEquals("Onceadayinactivepasthistory", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().minusDays(1).format(FORMATTER), "", false))));
+        assertEquals("Onceadayinactivepasthistoryfinished", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 1, 1, "01/01/01", LocalDate.now().minusDays(1).format(FORMATTER), "", false))));
     }
 
     @Test
     void testGetSearchableTextCourse() {
-        assertEquals("Twiceevery2daysactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 2, 2, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
-        assertEquals("3timesevery7daysactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 3, 7, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
+        assertEquals("Twiceaday,every2daysactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 2, 2, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
+        assertEquals("3timesaday,every7daysactivecurrent", test.removeWhitespace(TPController.getSearchableText(new PrescriptionSummary("", "", 3, 7, "01/01/01", LocalDate.now().plusDays(1).format(FORMATTER), "", true))));
     }
 
     @Test
@@ -142,5 +142,31 @@ public class TrackingPrescriptionControllerTest {
         assertEquals("Antibiotics", pres.getFirst().name());
         assertEquals("Cream", pres.get(1).name());
         assertEquals("PrEP", pres.get(2).name());
+    }
+
+    @Test
+    void endText_showsDateOngoingOrStoppedEarly() {
+        LocalDate today = LocalDate.of(2026, 11, 22);
+        // finished on its end date
+        assertEquals("20 Oct 2026", TrackingPrescriptionController.endText(
+                new PrescriptionSummary("Doxycycline", "100mg", 2, 0, "13/10/26", "20/10/26", "", false), today));
+        // current, no end date
+        assertEquals("Ongoing", TrackingPrescriptionController.endText(
+                new PrescriptionSummary("PrEP", "200mg", 1, 0, "02/11/26", "", "", true), today));
+        // current with an end date
+        assertEquals("28 Nov 2026", TrackingPrescriptionController.endText(
+                new PrescriptionSummary("Fluconazole", "150mg", 1, 0, "21/11/26", "28/11/26", "", true), today));
+        // stopped by the clinic before its end date: not "Finished" next to a future date
+        assertEquals("Stopped early", TrackingPrescriptionController.endText(
+                new PrescriptionSummary("Aciclovir", "400mg", 3, 0, "21/11/26", "22/12/26", "", false), today));
+    }
+
+    @Test
+    void searchingCurrentMatchesTheCurrentSection() {
+        // "current" now follows the record's active flag (the CURRENT / PAST split), not a separate date check.
+        PrescriptionSummary stopped = new PrescriptionSummary("Aciclovir", "400mg", 3, 0, "01/01/01",
+                LocalDate.now().plusDays(30).format(FORMATTER), "", false);
+        assertFalse(TPController.getPredicate("current", null, null).test(stopped));
+        assertTrue(TPController.getPredicate("finished", null, null).test(stopped));
     }
 }

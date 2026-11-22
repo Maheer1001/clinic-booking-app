@@ -8,9 +8,9 @@ import java.util.List;
 public record Test(String testType, String testDate, String treatment, String clinicianNotes,
                    List<TestResult> testResults) implements TrackingData {
 
-    /** True if treatment was recorded (non-null). */
-    public Boolean isTreatment() { return treatment != null; }
+    /** True if treatment was recorded (not null or blank; a blank value used to show an empty section). */
+    public Boolean isTreatment() { return treatment != null && !treatment.isBlank(); }
 
-    /** True if clinician notes were recorded (non-null). */
-    public Boolean isClinicianNotes() { return clinicianNotes != null; }
+    /** True if clinician notes were recorded (not null or blank). */
+    public Boolean isClinicianNotes() { return clinicianNotes != null && !clinicianNotes.isBlank(); }
 }

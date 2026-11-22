@@ -41,14 +41,29 @@ class PrescriptionSummaryTest {
     void getCourse_threeTimesEveryTwoDays() {
         PrescriptionSummary rx = new PrescriptionSummary("Med", "25mg", 3, 2,
                 "01/01/25", "21/01/25", "Space evenly", false);
-        assertEquals("3 times every 2 days", rx.getCourse());
+        assertEquals("3 times a day, every 2 days", rx.getCourse());
     }
 
     @Test
     void getCourse_fiveTimesEveryThreeDays() {
         PrescriptionSummary rx = new PrescriptionSummary("Med", "10mg", 5, 3,
                 "01/01/25", "30/01/25", "With meals", true);
-        assertEquals("5 times every 3 days", rx.getCourse());
+        assertEquals("5 times a day, every 3 days", rx.getCourse());
+    }
+
+    @Test
+    void getCourse_onceEveryWeek() {
+        PrescriptionSummary rx = new PrescriptionSummary("Med", "1g", 1, 7,
+                "01/01/25", "30/01/25", "", true);
+        assertEquals("Once every 7 days", rx.getCourse());
+    }
+
+    @Test
+    void getCourse_noDosesRecordedIsAsDirected() {
+        // A NULL doses_per_day reads as 0 and used to show "0 times a day".
+        PrescriptionSummary rx = new PrescriptionSummary("Med", "150mg", 0, 0,
+                "01/01/25", "07/01/25", "", true);
+        assertEquals("As directed", rx.getCourse());
     }
 
     @Test
