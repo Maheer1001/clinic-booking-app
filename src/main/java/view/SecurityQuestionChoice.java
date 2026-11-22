@@ -31,6 +31,8 @@ public final class SecurityQuestionChoice {
         box.setPromptText(PROMPT);
         box.setAccessibleText("Security question");
         box.setMaxWidth(Double.MAX_VALUE);
+        // the app stylesheet fixes dropdowns at 44px tall; this one grows when the question wraps
+        box.setStyle("-fx-pref-height: -1; -fx-min-height: 44px;");
         box.setVisibleRowCount(SecurityQuestion.all().size());
         box.setConverter(new StringConverter<>() {
             @Override public String toString(SecurityQuestion q) { return q == null ? "" : q.prompt(); }
@@ -48,12 +50,31 @@ public final class SecurityQuestionChoice {
                 // The button cell shows the prompt text while nothing is chosen.
                 setText(empty || q == null ? box.getPromptText() : q.prompt());
             }
+
+            // The dropdown asks its cell for a height without saying the width, which gives one
+            // line; measure at the width the text really gets so a long question wraps.
+            @Override
+            protected double computePrefHeight(double width) {
+                return super.computePrefHeight(width > 0 ? width : textWidth(box));
+            }
+
+            @Override
+            protected double computeMinHeight(double width) {
+                return computePrefHeight(width);
+            }
         };
         cell.setWrapText(true);
         cell.setMinHeight(Region.USE_PREF_SIZE);
-        // Wrap at the dropdown's width (less the arrow), not the text's natural one-line width.
-        cell.prefWidthProperty().bind(box.widthProperty().subtract(40));
+        box.widthProperty().addListener((o, a, b) -> {
+            cell.requestLayout();
+            box.requestLayout();
+        });
         return cell;
+    }
+
+    /** Room for the text inside the dropdown: its width less the arrow button and padding. */
+    private static double textWidth(ComboBox<?> box) {
+        return box.getWidth() > 0 ? box.getWidth() - 44 : -1;
     }
 
     /** Client-side answer check, matching the server ("" when fine). */
