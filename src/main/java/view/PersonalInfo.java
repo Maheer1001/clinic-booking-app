@@ -12,6 +12,8 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import model.Book;
 import service.AccountService;
+
+import java.time.LocalDate;
 import view.ui.UI;
 
 public class PersonalInfo {
@@ -86,10 +88,26 @@ public class PersonalInfo {
 
         Button next = UI.primaryButton("Next");
 
+        Label problem = UI.error("");
+        problem.setWrapText(true);
+        problem.managedProperty().bind(problem.textProperty().isNotEmpty());
+        problem.visibleProperty().bind(problem.textProperty().isNotEmpty());
+        first.textProperty().addListener((o, a, n) -> problem.setText(""));
+        last.textProperty().addListener((o, a, n) -> problem.setText(""));
+        phone.textProperty().addListener((o, a, n) -> problem.setText(""));
+        dob.valueProperty().addListener((o, a, n) -> problem.setText(""));
+
         next.setOnAction(e -> {
+            // Nothing was checked before, so a blank name, a birthday in the future or "abc" as a
+            // phone number went straight through to the review page.
+            String error = validate(first.getText(), last.getText(), dob.getValue(), phone.getText());
+            if (!error.isEmpty()) {
+                problem.setText(error);
+                return;
+            }
             var b = Data.getBooking();
-            b.setFirstName(first.getText());
-            b.setLastName(last.getText());
+            b.setFirstName(first.getText().strip());
+            b.setLastName(last.getText().strip());
             b.setDob(dob.getValue());
             b.setGender(gender.getText());
             b.setSexuality(sexuality.getText());
@@ -110,7 +128,17 @@ public class PersonalInfo {
         disabilities.setAccessibleText("Accessibility needs, optional");
         reason.setAccessibleText("Notes for your clinician, optional");
         dob.setMaxWidth(Double.MAX_VALUE);
-        dob.setPromptText("DD/MM/YYYY");
+        dob.setPromptText("Optional, choose a date");
+        // Picked from the calendar only (as on Account): typed text that didn't parse was silently ignored.
+        dob.setEditable(false);
+        dob.setDayCellFactory(p -> new DateCell() {
+            @Override
+            public void updateItem(LocalDate item, boolean empty) {
+                super.updateItem(item, empty);
+                setDisable(empty || item == null || !AccountService.isValidDob(item));
+            }
+        });
+        phone.setPromptText("Optional, 11 digits");
         disabilities.setPromptText("Optional, e.g. step-free access");
 
         HBox names = new HBox(10, field("First name", first), field("Last name", last));
@@ -127,12 +155,36 @@ public class PersonalInfo {
         Label l = UI.intro("Optional details help the clinic arrange any support you need. Only the clinic sees them.");
         next.setText("Review booking");
 
-        VBox page = UI.pageTop(UI.steps(4, 5, "Your details"), form, l, next);
+        VBox page = UI.pageTop(UI.steps(4, 5, "Your details"), form, l, problem, next);
         ScrollPane sp = new ScrollPane(page);
         sp.setFitToWidth(true);
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         return sp;
+    }
+
+    /**
+     * What is wrong with the details, or "" if they can be used. Names are required; date of birth and
+     * phone are optional but must be real (same rules as the Account page).
+     */
+    static String validate(String first, String last, LocalDate dob, String phone) {
+        boolean noFirst = first == null || first.isBlank();
+        boolean noLast = last == null || last.isBlank();
+        if (noFirst || noLast) {
+            return noFirst && noLast ? "Enter your first and last name."
+                    : noFirst ? "Enter your first name." : "Enter your last name.";
+        }
+        if (first.strip().length() > AccountService.MAX_NAME_LENGTH || last.strip().length() > AccountService.MAX_NAME_LENGTH) {
+            return "Names can be at most " + AccountService.MAX_NAME_LENGTH + " characters.";
+        }
+        if (dob != null && !AccountService.isValidDob(dob)) {
+            return "Enter a real date of birth. It can't be in the future.";
+        }
+        String digits = phone == null ? "" : phone.replaceAll("[\\s-]", "");
+        if (!digits.isEmpty() && !digits.matches("\\d{11}")) {
+            return "Phone number must be 11 digits, or leave it empty.";
+        }
+        return "";
     }
 
     /** A form field with its label above it. */

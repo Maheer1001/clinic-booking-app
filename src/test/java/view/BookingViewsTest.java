@@ -52,6 +52,20 @@ class BookingViewsTest {
     }
 
     @Test
+    void personalInfo_validate_rejectsMissingNameFutureBirthdayAndBadPhone() {
+        LocalDate adult = LocalDate.now().minusYears(30);
+        assertEquals("", PersonalInfo.validate("Sam", "Lee", adult, "07700 900123"));
+        assertEquals("", PersonalInfo.validate("Sam", "Lee", null, ""), "date of birth and phone are optional");
+        assertEquals("Enter your first and last name.", PersonalInfo.validate(" ", null, adult, ""));
+        assertEquals("Enter your first name.", PersonalInfo.validate("", "Lee", adult, ""));
+        assertEquals("Enter your last name.", PersonalInfo.validate("Sam", "  ", adult, ""));
+        assertTrue(PersonalInfo.validate("Sam", "x".repeat(51), adult, "").startsWith("Names can be at most"));
+        assertTrue(PersonalInfo.validate("Sam", "Lee", LocalDate.now().plusDays(1), "").contains("date of birth"));
+        assertTrue(PersonalInfo.validate("Sam", "Lee", adult, "not-a-phone").startsWith("Phone number"));
+        assertTrue(PersonalInfo.validate("Sam", "Lee", adult, "0770090012").startsWith("Phone number"), "10 digits");
+    }
+
+    @Test
     void selector_withNoDates_disablesPickersAndExplains() {
         DateTimeSelector selector = new DateTimeSelector(provider(Set.of(), List.of()), s -> {});
 
