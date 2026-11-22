@@ -6,23 +6,19 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.StackPane;
-import model.Test;
+import model.NewResults;
 import service.NotificationDispatcher;
+import service.ResultAlertService;
 import service.TrackingService;
-import service.email.TestResultEmail;
 import view.Navigator;
 import view.TrackingHubView;
 import view.TrackingView;
 import view.notification.TestResultNotification;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-
 /**
  * Handles the Tracking section: test results, prescriptions, and appointment history.
  * Performs set up tasks and passes over to dedicated section controllers when needed.
- * Also checks for newly added test results and notifies the user.
+ * Also checks the database for newly released test results and shows the patient an in-app alert.
  *
  * <p>Each time the user comes back to the Tracking tab the data is fetched again and the three lists
  * rebuilt in place, keeping the chosen sub-tab, search text, sort, dates and scroll position.
@@ -43,13 +39,24 @@ public class TrackingController {
     private Node hub;
     /** Bumped by each refresh, so only the latest one to finish is applied. */
     private int refreshGeneration;
+    private final ResultAlertService alerts;
+    private final NotificationDispatcher dispatcher;
+    /** True while a new-result check is running, so a quick tab return does not alert twice. */
+    private boolean checkingResults;
 
     public TrackingController(Navigator nav, TrackingService model) {
+        this(nav, model, new ResultAlertService(), new NotificationDispatcher());
+    }
+
+    /** With the new-result source and popup dispatcher given (package-private for tests). */
+    TrackingController(Navigator nav, TrackingService model, ResultAlertService alerts, NotificationDispatcher dispatcher) {
         this.nav = nav;
         this.model = model;
+        this.alerts = alerts;
+        this.dispatcher = dispatcher;
 
-        notifyForNewTestResults(model);
         useData(model);
+        checkForNewResults();
 
         view.getTestResultsButton().setOnAction(e -> nav.goToPage(tc.getMenuPage(), "Test Results", false));
         view.getPrescriptionsButton().setOnAction(e -> nav.goToPage(pc.getMenuPage(), "Prescription List", false));
@@ -79,6 +86,7 @@ public class TrackingController {
      * and checks for new results. The Navigator calls this whenever the user returns to Tracking.
      */
     public void refresh() {
+        checkForNewResults();
         int generation = ++refreshGeneration;
         int userId = Data.getCurrentUserId();
         Background.run(model::snapshot, fresh -> {
@@ -90,7 +98,6 @@ public class TrackingController {
 
     /** Rebuilds the lists from already fetched data (package-private for tests). */
     void applyRefresh(TrackingService fresh) {
-        notifyForNewTestResults(fresh);
         useData(fresh);
         if (hub != null) {
             replaceBody(appointmentsBody, ac.getMenuPage());
@@ -147,69 +154,39 @@ public class TrackingController {
     }
 
     /**
-     * The results to alert the user about: those added since they last looked, newest first. Also
-     * records that they have now seen them. The first call after login only sets the baseline.
-     *
-     * <p>TODO: once the DB-backed "results released since last seen" API (User.last_results_seen_at,
-     * released tests only) is merged, switch this method to it. It is the only place the alert
-     * decides what is new, so nothing else needs to change.
+     * Asks the database, in the background, for results released (or changed to a final result)
+     * since the patient last looked, shows the in-app alert for them and then records them as seen.
+     * Runs on the first Tracking visit after login and on every return to the tab, so results
+     * released while the patient was logged out are announced too. No email: staff release sends it.
      */
-    List<Test> newResultsSinceLastSeen(TrackingService model) {
-        List<Test> tests = model.getTestResults();
-        int currentCount = tests.size();
-        int lastCount = Data.getLastSeenTestCount();
-        Data.setLastSeenTestCount(currentCount);
-        if (lastCount < 0 || currentCount <= lastCount) {
-            return List.of();
-        }
-        // Tests come most recently added first (by id); treat the first ones as the new entries.
-        return tests.subList(0, currentCount - lastCount);
-    }
-
-    // Package-private for testing.
-    void notifyForNewTestResults(TrackingService model) {
-        notifyForNewTestResults(model, new NotificationDispatcher());
-    }
-
-    // Package-private for testing.
-    void notifyForNewTestResults(TrackingService model, NotificationDispatcher dispatcher) {
-        List<Test> newTests = newResultsSinceLastSeen(model);
+    void checkForNewResults() {
         int userId = Data.getCurrentUserId();
-        if (newTests.isEmpty() || userId < 0) {
-            return;
-        }
-
-        String recipientEmail = Data.getCurrentUserEmail();
-        String recipientName = Data.getCurrentUserName();
-        if (recipientName == null || recipientName.isBlank()) {
-            recipientName = recipientEmail != null ? recipientEmail : "";
-        }
-
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yy");
-
-        for (Test t : newTests) {
-            String testType = t.testType();
-            LocalDate date;
-            try {
-                date = LocalDate.parse(t.testDate(), fmt);
-            } catch (Exception e) {
-                date = null;
+        if (userId < 0 || checkingResults) return;
+        checkingResults = true;
+        Background.run(() -> alerts.newResults(userId), n -> {
+            checkingResults = false;
+            if (announceNewResults(userId, n)) {
+                // the watermark that came with these results, so one released meanwhile stays new
+                Background.run(() -> alerts.markSeen(userId, n.watermark()), ok -> {}, err -> {});
             }
-            String status = "Available";
+        }, err -> checkingResults = false);
+    }
 
-            TestResultEmail email = null;
-            if (recipientEmail != null && !recipientEmail.isBlank() && date != null) {
-                // Discreet: the test type (e.g. the infection tested for) is not put in the inbox.
-                email = new TestResultEmail(recipientEmail, recipientName, testType, date, status, true);
-            }
-
-            TestResultNotification notification = null;
-            if (date != null) {
-                notification = new TestResultNotification(recipientName, testType, date, status);
-            }
-
-            // Email goes out in the background so opening Tracking is not held up by SMTP.
-            dispatcher.notifyUserAsync(userId, email, notification, null);
+    /**
+     * Shows one discreet popup per new result (test type and date only, never the result).
+     * True if they were shown to the patient they belong to, i.e. they can now be marked seen.
+     * Package-private for tests.
+     */
+    boolean announceNewResults(int userId, NewResults n) {
+        if (n == null || n.isEmpty() || userId < 0 || Data.getCurrentUserId() != userId) return false;
+        String name = Data.getCurrentUserName();
+        if (name == null || name.isBlank()) {
+            String email = Data.getCurrentUserEmail();
+            name = email != null ? email : "";
         }
+        for (NewResults.Entry e : n.tests()) {
+            dispatcher.notifyUser(userId, null, new TestResultNotification(name, e.testType(), e.testDate(), e.resultUpdated()));
+        }
+        return true;
     }
 }

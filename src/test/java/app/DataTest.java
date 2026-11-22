@@ -22,7 +22,6 @@ class DataTest {
         Data.clearCurrentUser();
         assertNotSame(draft, Data.getBooking());
         assertEquals(-1, Data.getCurrentUserId());
-        assertEquals(-1, Data.getLastSeenTestCount());
     }
 
     @Test

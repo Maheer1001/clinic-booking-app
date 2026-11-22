@@ -9,9 +9,9 @@ boundary "Tracking Hub\n(TrackingHubView/TrackingView)" as TrackingUI
 control "TrackingController" as TrackingC
 control "TrackingService" as TrackingS
 entity "Test/Prescription/Appointment DAOs/DB" as TrackingDB
-entity "Data (lastSeen counters)" as Data
+control "ResultAlertService" as Alerts
+entity "TestDAO / UserDAO\n(User.last_results_seen_at)" as AlertDB
 control "NotificationDispatcher" as Dispatch
-entity "EmailSender" as Mail
 boundary "In-app Notification" as Notif
 
 == Open Tracking ==
@@ -25,25 +25,20 @@ TrackingS --> TrackingC: lists
 TrackingC --> TrackingUI: render entries
 
 == New test results notification logic ==
-TrackingUI -> TrackingC: notifyForNewTestResults(model)
-TrackingC -> Data: read lastSeenTestCount
-TrackingC -> TrackingS: getTestResults()
-TrackingS -> TrackingDB: query tests
-TrackingDB --> TrackingS: tests list (most recent first)
-TrackingS --> TrackingC: tests
+note over TrackingC: first Tracking visit after login,\nand every return to the tab (in the background)
+TrackingC -> Alerts: newResults(userId)
+Alerts -> AlertDB: released tests newer than last_results_seen_at,\nor changed to a final result since
+AlertDB --> Alerts: NewResults(entries, watermark)\n(no result values)
+Alerts --> TrackingC: NewResults
 
-alt first open (baseline)
-  TrackingC -> Data: set lastSeenTestCount = currentCount
+alt something new
+  TrackingC -> Dispatch: notifyUser(userId, no email,\nTestResultNotification per entry)\n("updated result" wording when resultUpdated)
+  Dispatch -> Notif: show popup(s)
+  TrackingC -> Alerts: markSeen(userId, watermark)
+  Alerts -> AlertDB: set last_results_seen_at = watermark
+else nothing new
   TrackingC --> TrackingUI: no notifications
-else subsequent open
-  alt new tests exist (currentCount > lastSeen)
-    TrackingC -> Dispatch: notifyUser(userId,\nTestResultEmail,\nTestResultNotification)\n(for new ones)
-    Dispatch -> Mail: send email (if configured)
-    Dispatch -> Notif: show popup notification(s)
-    TrackingC -> Data: update lastSeenTestCount
-  else no changes
-    TrackingC --> TrackingUI: no notifications
-  end
 end
+note right of Dispatch: no email here: staff release already emailed
 
 @enduml

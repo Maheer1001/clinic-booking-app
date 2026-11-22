@@ -15,9 +15,6 @@ public class Data {
     private static Book booking = new Book();
 
     private static Session currentSession = null;
-    // Last-seen counters for tracking notifications (per app session).
-    // -1 means "not initialised yet" (first time user opens tracking).
-    private static int lastSeenTestCount = -1;
 
     private static AccessibilitySettings settings;
     /** User id that {@link #settings} belongs to (-1 if none). */
@@ -99,18 +96,9 @@ public class Data {
      */
     public static void clearCurrentUser() {
         currentSession = null;
-        lastSeenTestCount = -1;
         booking = new Book();
         // Settings are kept until the next user signs in (see getSettings): a pending debounced
         // save from the user who just logged out still needs to read their own values.
-    }
-
-    public static int getLastSeenTestCount() {
-        return lastSeenTestCount;
-    }
-
-    public static void setLastSeenTestCount(int count) {
-        lastSeenTestCount = count;
     }
 
     /**
