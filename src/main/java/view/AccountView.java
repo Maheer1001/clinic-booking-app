@@ -58,13 +58,7 @@ public class AccountView {
         saveBox.setAlignment(Pos.CENTER);
 
         // Phone: digits-only + exactly 11 digits (UK).
-        phone.setTextFormatter(new TextFormatter<String>(change -> {
-            if (change.getText() == null || change.getText().isEmpty()) return change;
-            String next = change.getControlNewText();
-            if (next.length() > 11) return null;
-            if (!change.getText().matches("\\d+")) return null;
-            return change;
-        }));
+        phone.setTextFormatter(phoneDigits());
 
         AccountService.AccountInfo info = service.loadAccount(userId);
         final String immutableEmail;
@@ -199,6 +193,23 @@ public class AccountView {
             change.setText(added.substring(0, added.length() - overflow));
             // keep the caret/anchor inside the shortened text
             int end = change.getRangeStart() + change.getText().length();
+            change.selectRange(end, end);
+            return change;
+        });
+    }
+
+    /**
+     * Digits only, at most 11. Spaces, dashes and brackets in a pasted number such as "07700 900123"
+     * are dropped instead of the whole paste being refused (it used to do nothing at all).
+     */
+    static TextFormatter<String> phoneDigits() {
+        return new TextFormatter<>(change -> {
+            if (change.getText() == null || change.getText().isEmpty()) return change;
+            String digits = change.getText().replaceAll("\\D", "");
+            int newLength = change.getControlText().length() - (change.getRangeEnd() - change.getRangeStart()) + digits.length();
+            if (newLength > 11) return null;
+            change.setText(digits);
+            int end = change.getRangeStart() + digits.length();
             change.selectRange(end, end);
             return change;
         });
