@@ -363,5 +363,117 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_failed_attempts INTEGER");
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_locked_until TIMESTAMP");
         }
+        applyStaffLoginMigration(c);
+        StaffSeed.seedMissingStaffCodes(c);
+    }
+
+    /** Name recorded in "SchemaMigration" once existing tests have been marked released. */
+    public static final String RELEASE_BACKFILL = "2026-11-22-release-existing-tests";
+
+    /**
+     * docs/migrations/2026-11-22-staff-login.sql: roles, staff-clinic membership, hashed staff codes,
+     * draft/release of tests, appointment outcomes and the append-only audit log. Idempotent.
+     */
+    public static void applyStaffLoginMigration(Connection c) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'PATIENT'");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN DEFAULT FALSE");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS last_results_seen_at TIMESTAMP");
+            s.execute("UPDATE \"User\" SET role = 'PATIENT' WHERE role IS NULL");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "StaffClinic" (
+                    user_id INTEGER NOT NULL REFERENCES "User"(user_id),
+                    clinic_id INTEGER NOT NULL,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, clinic_id)
+                )
+                """);
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "ClinicStaffCode" (
+                    clinic_id INTEGER PRIMARY KEY,
+                    code_hash VARCHAR(255) NOT NULL,
+                    rotated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    rotated_by INTEGER
+                )
+                """);
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "StaffCodeAttempt" (
+                    attempt_id SERIAL PRIMARY KEY,
+                    email_hash VARCHAR(64) NOT NULL,
+                    attempted_at TIMESTAMP NOT NULL
+                )
+                """);
+            s.execute("CREATE INDEX IF NOT EXISTS staff_code_attempt_email_idx ON \"StaffCodeAttempt\" (email_hash, attempted_at)");
+            s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS staff_notes TEXT");
+            s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS attended_at TIMESTAMP");
+            s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS app_id INTEGER");
+            s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS clinician_id INTEGER");
+            s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS released_at TIMESTAMP");
+            s.execute("ALTER TABLE \"TestResult\" ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "AuditLog" (
+                    audit_id SERIAL PRIMARY KEY,
+                    staff_user_id INTEGER,
+                    clinic_id INTEGER,
+                    action VARCHAR(40) NOT NULL,
+                    entity VARCHAR(30),
+                    entity_id INTEGER,
+                    patient_user_id INTEGER,
+                    at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+            s.execute("CREATE INDEX IF NOT EXISTS audit_log_clinic_idx ON \"AuditLog\" (clinic_id, at)");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "SchemaMigration" (
+                    name VARCHAR(100) PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        }
+        runReleaseBackfillOnce(c);
+        if (isPostgres(c)) {
+            try (Statement s = c.createStatement()) {
+                s.execute("""
+                    CREATE OR REPLACE FUNCTION audit_log_append_only() RETURNS trigger AS $$
+                    BEGIN
+                        RAISE EXCEPTION 'AuditLog is append-only';
+                    END;
+                    $$ LANGUAGE plpgsql
+                    """);
+                s.execute("""
+                    CREATE OR REPLACE TRIGGER audit_log_append_only
+                        BEFORE UPDATE OR DELETE ON "AuditLog"
+                        FOR EACH ROW EXECUTE FUNCTION audit_log_append_only()
+                    """);
+            }
+        }
+    }
+
+    /**
+     * Once per database: tests from before draft/release become released (patients keep seeing them)
+     * and existing users count as having seen them (no flood of old "new result" alerts).
+     */
+    private static void runReleaseBackfillOnce(Connection c) throws SQLException {
+        String notDone = " AND NOT EXISTS (SELECT 1 FROM \"SchemaMigration\" WHERE name = '" + RELEASE_BACKFILL + "')";
+        boolean autoCommit = c.getAutoCommit();
+        c.setAutoCommit(false);
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE \"Test\" SET released_at = COALESCE(created_at, CURRENT_TIMESTAMP)"
+                    + " WHERE released_at IS NULL" + notDone);
+            s.executeUpdate("UPDATE \"User\" SET last_results_seen_at = CURRENT_TIMESTAMP"
+                    + " WHERE last_results_seen_at IS NULL" + notDone);
+            s.executeUpdate("INSERT INTO \"SchemaMigration\" (name) SELECT '" + RELEASE_BACKFILL + "'"
+                    + " WHERE NOT EXISTS (SELECT 1 FROM \"SchemaMigration\" WHERE name = '" + RELEASE_BACKFILL + "')");
+            c.commit();
+        } catch (SQLException e) {
+            c.rollback();
+            throw e;
+        } finally {
+            c.setAutoCommit(autoCommit);
+        }
+    }
+
+    private static boolean isPostgres(Connection c) throws SQLException {
+        return "PostgreSQL".equalsIgnoreCase(c.getMetaData().getDatabaseProductName());
     }
 }
