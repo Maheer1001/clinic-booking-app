@@ -1,12 +1,15 @@
 package service;
 
 import dao.AppointmentDAO;
+import dao.PrescriptionDAO;
 import model.Appointment;
 import model.Prescription;
+import model.PrescriptionState;
 import model.ReminderSchedule;
 import model.ReminderTemplateOverrides;
 import service.email.*;
 
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -60,6 +63,8 @@ public class NotificationScheduler {
     private final long defaultDelaySeconds;
     private final Clock clock;
     private final BiPredicate<Integer, Integer> appointmentStillBooked;
+    /** Re-reads a prescription before each dose reminder; null = no database check (tests). */
+    private final PrescriptionLookup prescriptionLookup;
     private final Map<String, List<Handle>> pending = new ConcurrentHashMap<>();
     private volatile Consumer<ReminderAlert> alertListener;
 
@@ -79,7 +84,14 @@ public class NotificationScheduler {
      * and checks the database before sending that the appointment is still booked.
      */
     public NotificationScheduler() {
-        this(new EmailSender(), 30, Clock.systemDefaultZone(), new AppointmentDAO()::isUpcomingAppointmentForUser);
+        this(new EmailSender(), 30, Clock.systemDefaultZone(), new AppointmentDAO()::isUpcomingAppointmentForUser,
+                new PrescriptionDAO()::findReminderState);
+    }
+
+    /** A prescription's current state by id; empty if it no longer exists. */
+    @FunctionalInterface
+    public interface PrescriptionLookup {
+        Optional<PrescriptionState> find(int prescriptionId) throws SQLException;
     }
 
     /**
@@ -94,6 +106,17 @@ public class NotificationScheduler {
      */
     public NotificationScheduler(EmailSender emailSender, long defaultDelaySeconds, Clock clock,
                                  BiPredicate<Integer, Integer> appointmentStillBooked) {
+        this(emailSender, defaultDelaySeconds, clock, appointmentStillBooked, null);
+    }
+
+    /**
+     * @param prescriptionLookup read just before each dose reminder is sent, so a course staff have
+     *                           stopped or shortened ends without a restart; null skips the check
+     */
+    public NotificationScheduler(EmailSender emailSender, long defaultDelaySeconds, Clock clock,
+                                 BiPredicate<Integer, Integer> appointmentStillBooked,
+                                 PrescriptionLookup prescriptionLookup) {
+        this.prescriptionLookup = prescriptionLookup;
         this.emailSender = emailSender;
         this.defaultDelaySeconds = defaultDelaySeconds;
         this.clock = clock;
@@ -279,7 +302,8 @@ public class NotificationScheduler {
             return Optional.empty();
         }
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
-        startChain(key, first, t -> t.plusHours(intervalHours), UnaryOperator.identity(), withinCourse, () -> true,
+        startChain(key, first, t -> t.plusHours(intervalHours), UnaryOperator.identity(), withinCourse,
+                () -> prescriptionStillWanted(rx),
                 t -> ReminderAlert.treatment(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
         return Optional.of(first.toLocalDateTime());
     }
@@ -305,7 +329,8 @@ public class NotificationScheduler {
         String key = prescriptionKey(rx.getPrescriptionId());
         cancel(key);
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
-        startChain(key, now().plusSeconds(Math.max(0, delaySeconds)), null, UnaryOperator.identity(), treatmentCourse(rx), () -> true,
+        startChain(key, now().plusSeconds(Math.max(0, delaySeconds)), null, UnaryOperator.identity(), treatmentCourse(rx),
+                () -> prescriptionStillWanted(rx),
                 t -> ReminderAlert.treatment(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
     }
 
@@ -543,6 +568,25 @@ public class NotificationScheduler {
         } catch (RuntimeException e) {
             logError("Could not check appointment " + appt.getAppId() + ": " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Re-reads the prescription (one query) right before a dose reminder goes out: false once staff
+     * have stopped it, its end date has been moved before today, or it has been deleted. If the
+     * database cannot be read the reminder is sent as scheduled, so a short outage does not end the
+     * course's reminders for good (a false here ends the chain).
+     */
+    private boolean prescriptionStillWanted(Prescription rx) {
+        if (prescriptionLookup == null) {
+            return true;
+        }
+        try {
+            Optional<PrescriptionState> state = prescriptionLookup.find(rx.getPrescriptionId());
+            return state.isPresent() && state.get().wantsRemindersOn(now().toLocalDate());
+        } catch (SQLException | RuntimeException e) {
+            logError("Could not check prescription " + rx.getPrescriptionId() + "; sending as scheduled");
+            return true;
         }
     }
 

@@ -24,24 +24,44 @@ public class TestResultNotification extends BaseNotification {
     private final String testType;
     private final LocalDate testDate;
     private final String resultStatus;
+    /** True when a result released earlier has changed (e.g. PENDING to a final result). */
+    private final boolean updated;
 
     public TestResultNotification(String patientName, String testType,
                                   LocalDate testDate, String resultStatus) {
+        this(patientName, testType, testDate, resultStatus, false);
+    }
+
+    /**
+     * The alert for a newly released result, or (updated) for one whose result has changed since.
+     * Says only that something is ready, never what the result is.
+     */
+    public TestResultNotification(String patientName, String testType, LocalDate testDate, boolean updated) {
+        this(patientName, testType, testDate, updated ? "Updated" : "Available", updated);
+    }
+
+    private TestResultNotification(String patientName, String testType, LocalDate testDate,
+                                   String resultStatus, boolean updated) {
         this.patientName = patientName;
         this.testType = testType;
         this.testDate = testDate;
         this.resultStatus = resultStatus;
+        this.updated = updated;
     }
 
     @Override
     public String getTitle() {
-        return "Test Results Ready";
+        return updated ? "Test Result Updated" : "Test Results Ready";
+    }
+
+    private String headline() {
+        return updated ? "You have an updated test result." : "Your test results are now available.";
     }
 
     @Override
     public String getMessage() {
         return "Hi " + patientName + ",\n\n"
-                + "Your test results are now available:\n\n"
+                + (updated ? "You have an updated test result:" : "Your test results are now available:") + "\n\n"
                 + NotificationLayout.detailsText(rows()) + "\n\n"
                 + FOOTNOTE;
     }
@@ -53,7 +73,7 @@ public class TestResultNotification extends BaseNotification {
 
     @Override
     protected Node buildPreviewContent() {
-        return NotificationLayout.page(getTitle(), patientName, "Your test results are now available.",
+        return NotificationLayout.page(getTitle(), patientName, headline(),
                 NotificationLayout.detailsCard(rows()), FOOTNOTE);
     }
 

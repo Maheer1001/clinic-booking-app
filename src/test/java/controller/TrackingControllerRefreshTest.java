@@ -55,13 +55,11 @@ class TrackingControllerRefreshTest {
     @BeforeEach
     void setUp() {
         Data.clearCurrentUser();
-        Data.setLastSeenTestCount(-1);
     }
 
     @AfterEach
     void tearDown() {
         Data.clearCurrentUser();
-        Data.setLastSeenTestCount(-1);
     }
 
     private static model.Test test(String type, String date) {
@@ -142,18 +140,6 @@ class TrackingControllerRefreshTest {
         Node hub = controller.getTrackingMainScene();
         controller.applyRefresh(new FakeTrackingService(List.of(test("First result", "05/03/26"))));
         assertTrue(visibleEntryTitles(hub).contains("First result"));
-    }
-
-    @Test
-    void newResultsSinceLastSeenCountsOnlyWhatArrivedSinceTheLastLook() {
-        TrackingController controller = new TrackingController(new Navigator(new MainView()), new FakeTrackingService(List.of()));
-        // the constructor's look set the baseline at 0 results
-        assertEquals(0, Data.getLastSeenTestCount());
-        List<model.Test> two = List.of(test("New", "05/03/26"), test("Old", "01/03/26"));
-        assertEquals(List.of(two.getFirst()), controller.newResultsSinceLastSeen(new FakeTrackingService(two.subList(0, 1))));
-        assertEquals(List.of(), controller.newResultsSinceLastSeen(new FakeTrackingService(two.subList(0, 1))),
-                "already seen");
-        assertEquals(1, controller.newResultsSinceLastSeen(new FakeTrackingService(two)).size());
     }
 
     @Test

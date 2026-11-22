@@ -3,6 +3,7 @@ package dao;
 import app.DB;
 import model.Appointment;
 import model.AppointmentDetails;
+import model.AppointmentStatus;
 import model.AvailableTimeslot;
 import model.Book;
 import model.BookingDetails;
@@ -244,20 +245,21 @@ public class AppointmentDAO implements AppointmentRepository {
     }
 
     /**
-     * Appointments that have started, newest first: ones the clinic marked COMPLETED, and booked
-     * (CONFIRMED) ones whose time has passed. Nothing in the app moves a booking to COMPLETED, so
+     * Appointments that have started, newest first: ones the clinic marked COMPLETED or NO_SHOW
+     * (listed as missed), and booked (CONFIRMED) ones whose time has passed. Never CANCELLED. Nothing in the app moves a booking to COMPLETED, so
      * counting only those left the patient's own past bookings out of their history; and the old
      * "date before today" check (on the database server's clock) hid visits from earlier today.
      */
     @Override
     public List<AppointmentDetails> getPastAppointmentDetailsByUserId(int userId) {
         String sql = """
-            SELECT t.date, t.start_time, t.end_time, s.name AS service_name, c.name AS clinic_name, a.notes, a.app_id
+            SELECT t.date, t.start_time, t.end_time, s.name AS service_name, c.name AS clinic_name, a.notes, a.app_id,
+                   a.status
             FROM "Appointment" a
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
             JOIN "Service" s ON t.service_id = s.service_id
             JOIN "Clinic" c ON t.clinic_id = c.clinic_id
-            WHERE a.user_id = ? AND a.status IN ('COMPLETED', 'CONFIRMED') AND NOT
+            WHERE a.user_id = ? AND a.status IN ('COMPLETED', 'CONFIRMED', 'NO_SHOW') AND NOT
             """ + NOT_STARTED + """
 
             ORDER BY t.date DESC, t.start_time DESC
@@ -373,7 +375,8 @@ public class AppointmentDAO implements AppointmentRepository {
                 dateStr, startStr, endStr,
                 rs.getString("service_name"),
                 rs.getString("clinic_name"),
-                rs.getString("notes"));
+                rs.getString("notes"),
+                AppointmentStatus.fromDb(rs.getString("status")));
     }
 
     @Override
@@ -382,9 +385,9 @@ public class AppointmentDAO implements AppointmentRepository {
             SELECT MAX(t.date) AS last_date
             FROM "Appointment" a
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
-            WHERE a.user_id = ? AND t.date < CURRENT_DATE AND a.status <> 'CANCELLED'
+            WHERE a.user_id = ? AND t.date < CURRENT_DATE AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
             """;
-        // A cancelled appointment is not a visit, so it must not reset the "time to book" reminder.
+        // A cancelled or missed appointment is not a visit, so it must not reset the "time to book" reminder.
         try (Connection c = DB.connect();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, userId);

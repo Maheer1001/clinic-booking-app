@@ -467,8 +467,6 @@ package "Model Layer" as ML #EBE3E3 {
         + {static} setCurrentUser(int, String, String): void
         + {static} setCurrentSession(Session): void
         + {static} clearCurrentUser(): void
-        + {static} getLastSeenTestCount(): int
-        + {static} setLastSeenTestCount(int): void
     }
 
     ' Row 2 - Reminders and DTOs

@@ -55,6 +55,17 @@ public abstract class TrackingSectionController {
         return label;
     }
 
+    /**
+     * The coloured status pill used across Tracking (test results, prescriptions, missed visits).
+     * {@code variant} picks the colours: style class {@code tracking-status-<variant>} in tracking.css.
+     */
+    static Label statusPill(String text, String variant) {
+        Label label = new Label(text);
+        label.getStyleClass().addAll("tracking-status", "tracking-status-" + variant);
+        label.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        return label;
+    }
+
     /** Adds the tracking stylesheet to a page root. */
     protected static <T extends Parent> T withTrackingStyles(T root) {
         if (TRACKING_CSS != null) {

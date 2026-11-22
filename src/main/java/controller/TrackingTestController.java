@@ -254,9 +254,6 @@ public class TrackingTestController extends TrackingSectionController {
 
     static Label statusLabel(TestResultStatus status) {
         TestResultStatus s = status != null ? status : TestResultStatus.PENDING;
-        Label label = new Label(s.label());
-        label.getStyleClass().addAll("tracking-status", "tracking-status-" + s.name().toLowerCase());
-        label.setMinWidth(Region.USE_PREF_SIZE);
-        return label;
+        return statusPill(s.label(), s.name().toLowerCase());
     }
 }
