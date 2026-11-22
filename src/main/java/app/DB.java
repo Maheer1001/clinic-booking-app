@@ -364,8 +364,20 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_locked_until TIMESTAMP");
         }
         applyStaffLoginMigration(c);
-        StaffSeed.seedMissingStaffCodes(c);
+        // Demo only (DEMO_STAFF_CODES=true): clinics with no code get clinic<id>. Never overwrites a code.
+        if (demoStaffCodesEnabled()) StaffSeed.seedMissingStaffCodes(c);
     }
+
+    private static Boolean demoStaffCodes = null;
+
+    /** DEMO_STAFF_CODES from the environment / .env; anything but "true" means off. */
+    public static boolean demoStaffCodesEnabled() {
+        if (demoStaffCodes != null) return demoStaffCodes;
+        return "true".equalsIgnoreCase(String.valueOf(dotenv.get("DEMO_STAFF_CODES")).strip());
+    }
+
+    /** Tests: force the demo-code flag on or off (null = read the environment again). */
+    public static void setDemoStaffCodes(Boolean enabled) { demoStaffCodes = enabled; }
 
     /** Name recorded in "SchemaMigration" once existing tests have been marked released. */
     public static final String RELEASE_BACKFILL = "2026-11-22-release-existing-tests";
@@ -396,6 +408,10 @@ public class DB {
                     rotated_by INTEGER
                 )
                 """);
+            // TRUE for a seeded demo code (clinic<id>): the admin screen asks for it to be rotated.
+            s.execute("ALTER TABLE \"ClinicStaffCode\" ADD COLUMN IF NOT EXISTS code_is_demo BOOLEAN DEFAULT FALSE");
+            // Codes seeded before the column existed: only an admin-set code has rotated_by.
+            s.execute("UPDATE \"ClinicStaffCode\" SET code_is_demo = TRUE WHERE rotated_by IS NULL AND code_is_demo = FALSE");
             s.execute("""
                 CREATE TABLE IF NOT EXISTS "StaffCodeAttempt" (
                     attempt_id SERIAL PRIMARY KEY,

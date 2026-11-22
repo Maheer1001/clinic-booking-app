@@ -98,6 +98,10 @@ public interface StaffRepository {
     /** Only changes a staff account that is a member of the clinic. */
     boolean setRole(int clinicId, int staffUserId, StaffRole role, AuditEntry audit) throws SQLException;
 
+    /** Empty if the clinic has no staff code; otherwise whether it is still the seeded demo code. */
+    Optional<Boolean> staffCodeIsDemo(int clinicId) throws SQLException;
+
+    /** Stores a new code (clears the demo flag). */
     void setStaffCodeHash(int clinicId, String codeHash, int byUserId, LocalDateTime now, AuditEntry audit)
             throws SQLException;
 

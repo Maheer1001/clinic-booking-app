@@ -4,10 +4,12 @@
 -- database gets them too. The append-only trigger at the end is PostgreSQL only.
 --
 -- Staff codes are NOT in this file: they are hashed with service.PasswordHasher, so they are
--- seeded from Java. app.StaffSeed.seedMissingStaffCodes runs from DB.initTables and gives every
--- clinic without a code the demo code clinic<clinic_id> (clinic1, clinic2, ...). The first
--- CLINIC_ADMIN of a clinic is created with the dev main app.StaffSeed (password from an
--- environment variable, never in SQL or on the command line).
+-- seeded from Java. Only when DEMO_STAFF_CODES=true (demo only), app.StaffSeed.seedMissingStaffCodes
+-- runs from DB.initTables and gives every clinic WITHOUT a code the demo code clinic<clinic_id>
+-- (clinic1, clinic2, ...), marked code_is_demo. Existing or rotated codes are never overwritten.
+-- The first CLINIC_ADMIN of a clinic is created with the dev main app.StaffSeed as a NEW account
+-- (must_reset_password; an existing email is refused, never promoted). The password comes from an
+-- environment variable, never SQL or the command line.
 
 -- Roles: PATIENT (default) | CLINICIAN | CLINIC_ADMIN. Same email/password login as patients.
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'PATIENT';
@@ -32,6 +34,10 @@ CREATE TABLE IF NOT EXISTS "ClinicStaffCode" (
     rotated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     rotated_by INTEGER
 );
+-- TRUE for a seeded demo code (clinic<id>): the admin screen asks for it to be rotated.
+ALTER TABLE "ClinicStaffCode" ADD COLUMN IF NOT EXISTS code_is_demo BOOLEAN DEFAULT FALSE;
+-- Codes seeded before the column existed: only an admin-set code has rotated_by.
+UPDATE "ClinicStaffCode" SET code_is_demo = TRUE WHERE rotated_by IS NULL AND code_is_demo = FALSE;
 
 -- Wrong staff codes at sign-up, keyed by a SHA-256 of the normalised email (no plaintext email).
 -- Counted in the database so the attempt limit survives restarting the app.

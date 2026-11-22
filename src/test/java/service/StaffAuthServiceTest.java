@@ -111,6 +111,15 @@ class StaffAuthServiceTest {
     }
 
     @Test
+    void noStaffCodesAtAll_failsClosed() {
+        repo.codes.clear();
+        StaffAuthService.StaffSignUpResult r = service.signUpStaff("a@b.test", PASSWORD, true, "clinic1", QUESTION, "Rover");
+        assertEquals(StaffAuthService.Status.STAFF_SIGN_UP_UNAVAILABLE, r.status());
+        assertEquals("Staff sign-up isn't open yet. Ask your clinic admin to set up a staff code.", r.message());
+        assertTrue(repo.created.isEmpty());
+    }
+
+    @Test
     void databaseDown_isReported() {
         repo.down = true;
         assertEquals(StaffAuthService.Status.DB_ERROR,

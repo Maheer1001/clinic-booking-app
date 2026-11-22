@@ -720,7 +720,8 @@ public class StaffDAO implements StaffRepository {
         inTransaction(c -> {
             int updated;
             try (PreparedStatement ps = c.prepareStatement(
-                    "UPDATE \"ClinicStaffCode\" SET code_hash = ?, rotated_at = ?, rotated_by = ? WHERE clinic_id = ?")) {
+                    "UPDATE \"ClinicStaffCode\" SET code_hash = ?, rotated_at = ?, rotated_by = ?, code_is_demo = FALSE"
+                            + " WHERE clinic_id = ?")) {
                 ps.setString(1, codeHash);
                 ps.setTimestamp(2, Timestamp.valueOf(now));
                 ps.setInt(3, byUserId);
@@ -729,7 +730,8 @@ public class StaffDAO implements StaffRepository {
             }
             if (updated == 0) {
                 try (PreparedStatement ps = c.prepareStatement(
-                        "INSERT INTO \"ClinicStaffCode\" (clinic_id, code_hash, rotated_at, rotated_by) VALUES (?, ?, ?, ?)")) {
+                        "INSERT INTO \"ClinicStaffCode\" (clinic_id, code_hash, rotated_at, rotated_by, code_is_demo)"
+                                + " VALUES (?, ?, ?, ?, FALSE)")) {
                     ps.setInt(1, clinicId);
                     ps.setString(2, codeHash);
                     ps.setTimestamp(3, Timestamp.valueOf(now));
@@ -740,6 +742,19 @@ public class StaffDAO implements StaffRepository {
             AuditLogDAO.insert(c, audit);
             return null;
         });
+    }
+
+    @Override
+    public Optional<Boolean> staffCodeIsDemo(int clinicId) throws SQLException {
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT code_is_demo FROM \"ClinicStaffCode\" WHERE clinic_id = ?")) {
+            ps.setInt(1, clinicId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                return Optional.of(rs.getBoolean(1));
+            }
+        }
     }
 
     private static final String TIMESLOT_SELECT = """

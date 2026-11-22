@@ -237,7 +237,12 @@ class FakeStaffRepository implements StaffRepository {
     @Override
     public boolean removeStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException {
         boolean removed = staff.getOrDefault(clinicId, new ArrayList<>()).removeIf(m -> m.userId() == staffUserId);
-        if (removed) write(audit);
+        if (removed) {
+            StaffAccess a = access.get(staffUserId);
+            access.put(staffUserId, new StaffAccess(staffUserId, a.role(),
+                    a.clinicIds().stream().filter(c -> c != clinicId).toList(), false));
+            write(audit);
+        }
         return removed;
     }
 
@@ -257,10 +262,19 @@ class FakeStaffRepository implements StaffRepository {
         return false;
     }
 
+    final java.util.Set<Integer> demoCodes = new java.util.HashSet<>();
+
+    @Override
+    public Optional<Boolean> staffCodeIsDemo(int clinicId) {
+        if (!codeHashes.containsKey(clinicId)) return Optional.empty();
+        return Optional.of(demoCodes.contains(clinicId));
+    }
+
     @Override
     public void setStaffCodeHash(int clinicId, String codeHash, int byUserId, LocalDateTime now, AuditEntry audit)
             throws SQLException {
         codeHashes.put(clinicId, codeHash);
+        demoCodes.remove(clinicId);
         write(audit);
     }
 

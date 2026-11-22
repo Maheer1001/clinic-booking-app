@@ -449,6 +449,27 @@ public class StaffService {
         });
     }
 
+    /** @param hasCode false: nobody can sign up as staff here yet; demo: still the seeded clinic&lt;id&gt; code */
+    public record StaffCodeStatus(boolean hasCode, boolean demo) {}
+
+    /**
+     * Whether the clinic has a staff code and whether it is still the seeded demo code. The message
+     * (non-null when action is needed) is the nag to show the admin.
+     */
+    public StaffResult<StaffCodeStatus> staffCodeStatus(int staffUserId, int clinicId) {
+        return run(staffUserId, clinicId, true, a -> {
+            Optional<Boolean> demo = repo.staffCodeIsDemo(clinicId);
+            if (demo.isEmpty()) {
+                return StaffResult.ok(new StaffCodeStatus(false, false),
+                        "This clinic has no staff code, so staff can't sign up. Create one to invite staff.");
+            }
+            return demo.get()
+                    ? StaffResult.ok(new StaffCodeStatus(true, true),
+                        "This clinic still uses the demo staff code. Rotate it before real use.")
+                    : StaffResult.ok(new StaffCodeStatus(true, false));
+        });
+    }
+
     /** Any staff member can view the clinic's slots; only admins change them. */
     public StaffResult<List<StaffTimeslot>> timeslots(int staffUserId, int clinicId, LocalDate date) {
         if (date == null) return StaffResult.invalid("Choose a date.");

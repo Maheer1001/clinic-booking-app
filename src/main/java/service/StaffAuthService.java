@@ -41,6 +41,8 @@ public class StaffAuthService {
                 + SecurityQuestionService.MAX_ANSWER_LENGTH + " characters."),
         MISSING_STAFF_CODE("Enter the staff code your clinic gave you."),
         INVALID_STAFF_CODE("That staff code isn't valid. Check it with your clinic admin."),
+        /** No clinic has a staff code yet (demo codes off and no admin has set one): fails closed. */
+        STAFF_SIGN_UP_UNAVAILABLE("Staff sign-up isn't open yet. Ask your clinic admin to set up a staff code."),
         TOO_MANY_ATTEMPTS("Too many wrong staff codes. Try again in " + WINDOW_MINUTES + " minutes."),
         EMAIL_ALREADY_USED("An account with this email already exists. Try logging in or resetting your password."),
         DB_ERROR("We couldn't reach the server. Please try again.");
@@ -110,7 +112,10 @@ public class StaffAuthService {
                 return StaffSignUpResult.of(Status.TOO_MANY_ATTEMPTS);
             }
 
-            Integer clinicId = matchClinic(code, repository.allStaffCodeHashes());
+            List<StaffAccountRepository.ClinicCodeHash> hashes = repository.allStaffCodeHashes();
+            if (hashes.isEmpty()) return StaffSignUpResult.of(Status.STAFF_SIGN_UP_UNAVAILABLE);
+            // A clinic with no code simply never matches (INVALID_STAFF_CODE).
+            Integer clinicId = matchClinic(code, hashes);
             if (clinicId == null) {
                 repository.recordFailedCodeAttempt(emailHash, now);
                 return StaffSignUpResult.of(Status.INVALID_STAFF_CODE);

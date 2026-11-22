@@ -384,6 +384,36 @@ class StaffServiceTest {
     }
 
     @Test
+    void adminCanRemoveAClinician_whoThenLosesAccess() {
+        assertTrue(service.dayList(CLINICIAN, CLINIC_1, TODAY).ok());
+        StaffResult<?> removed = service.removeStaff(ADMIN, CLINIC_1, CLINICIAN);
+        assertTrue(removed.ok());
+        assertEquals("Removed from this clinic.", removed.message());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(CLINICIAN, CLINIC_1, TODAY).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.patientRecord(CLINICIAN, CLINIC_1, PATIENT_HERE).status());
+    }
+
+    @Test
+    void staffCodeStatus_nagsForMissingOrDemoCode_andIsAdminOnly() {
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.staffCodeStatus(CLINICIAN, CLINIC_1).status());
+        StaffResult<StaffService.StaffCodeStatus> none = service.staffCodeStatus(ADMIN, CLINIC_1);
+        assertFalse(none.value().hasCode());
+        assertNotNull(none.message());
+
+        repo.codeHashes.put(CLINIC_1, PasswordHasher.hash("clinic1"));
+        repo.demoCodes.add(CLINIC_1);
+        StaffResult<StaffService.StaffCodeStatus> demo = service.staffCodeStatus(ADMIN, CLINIC_1);
+        assertTrue(demo.value().demo());
+        assertEquals("This clinic still uses the demo staff code. Rotate it before real use.", demo.message());
+
+        service.rotateStaffCode(ADMIN, CLINIC_1);
+        StaffResult<StaffService.StaffCodeStatus> rotated = service.staffCodeStatus(ADMIN, CLINIC_1);
+        assertTrue(rotated.value().hasCode());
+        assertFalse(rotated.value().demo());
+        assertNull(rotated.message());
+    }
+
+    @Test
     void rotateStaffCode_returnsCodeOnce_andStoresOnlyAHash() {
         StaffResult<String> r = service.rotateStaffCode(ADMIN, CLINIC_1);
         assertTrue(r.ok());
