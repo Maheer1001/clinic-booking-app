@@ -82,6 +82,7 @@
 
 .app-reminder-tab {
     -fx-font-size: 16px; /* +2 */
+    -fx-padding: 8px 4px; /* narrower sides: with bold text the three tabs were cut to "Appointme..." at 420px */
 }
 
 .app-reminder-titled-pane > .title {
