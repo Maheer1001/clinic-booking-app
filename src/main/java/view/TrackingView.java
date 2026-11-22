@@ -67,6 +67,7 @@ public class TrackingView {
         button.setGraphic(hbox);
         button.setMaxWidth(Double.MAX_VALUE);
         button.setAlignment(Pos.CENTER_LEFT);
+        UI.growWithGraphic(button);
         hbox.prefWidthProperty().bind(button.widthProperty().subtract(34));
         button.setAccessibleText(left + ", " + right);
         return button;

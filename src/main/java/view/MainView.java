@@ -93,6 +93,7 @@ public class MainView {
                 btn.getStyleClass().add("appointment-card");
                 btn.setMaxWidth(Double.MAX_VALUE);
                 btn.setAlignment(Pos.CENTER_LEFT);
+                UI.growWithGraphic(btn);
                 // Sized to the card so a long service name wraps and the card grows instead of cutting it off.
                 details.prefWidthProperty().bind(btn.widthProperty().subtract(34));
                 btn.setAccessibleText(apt.serviceName() + ", " + Dates.full(Dates.parseStored(apt.date()))

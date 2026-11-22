@@ -359,6 +359,8 @@ public final class UI {
                 javafx.application.Platform.runLater(l::requestLayout);
             }
         });
+        // Switching text size, bold or high contrast changes the font without changing the width.
+        l.fontProperty().addListener((o, was, now) -> javafx.application.Platform.runLater(l::requestLayout));
         return l;
     }
 
@@ -377,6 +379,18 @@ public final class UI {
                     () -> sp.getViewportBounds().getHeight(), sp.viewportBoundsProperty()));
         }
         return sp;
+    }
+
+    /**
+     * For a button whose content is a graphic holding a {@link #wrappingLabel} (list rows, appointment
+     * cards): the button is measured at its real width, so the row grows when the name wraps.
+     * As a plain labelled button it measured the graphic with no width and stayed one line tall
+     * at large text sizes.
+     */
+    public static void growWithGraphic(Labeled button) {
+        button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        button.setWrapText(true);
+        button.setMinHeight(Region.USE_PREF_SIZE);
     }
 
     /** Muted/secondary text. */
