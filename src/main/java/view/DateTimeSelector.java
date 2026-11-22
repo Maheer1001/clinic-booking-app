@@ -22,12 +22,18 @@ public class DateTimeSelector extends VBox {
 
     public DateTimeSelector(TimeslotProvider provider,
                             Consumer<AvailableTimeslot> onSelect) {
+        this(provider, onSelect, null);
+    }
+
+    /**
+     * @param preferred the date to open on when it still has free times (e.g. the date picked before the
+     *                  slot was taken), otherwise the first free date is shown
+     */
+    public DateTimeSelector(TimeslotProvider provider,
+                            Consumer<AvailableTimeslot> onSelect, LocalDate preferred) {
         setSpacing(10);
         Set<LocalDate> availableDates = provider.getAvailableDates();
-        LocalDate first = availableDates.stream()
-                .sorted()
-                .findFirst()
-                .orElse(null);
+        LocalDate first = initialDate(availableDates, preferred, LocalDate.now());
 
         datePicker.setShowWeekNumbers(false);
         datePicker.setConverter(new StringConverter<>() {
@@ -101,8 +107,14 @@ public class DateTimeSelector extends VBox {
             message.setText("No appointments are available in the next "
                     + (SlotSchedule.BOOKING_WINDOW_DAYS / 7) + " weeks. Please try another clinic or check back later.");
         } else {
-            datePicker.setValue(first); // fires the listener, which loads the first day's slots
+            datePicker.setValue(first); // fires the listener, which loads that day's slots
         }
+    }
+
+    /** The preferred date if it is still bookable, else the earliest free date from today, else null. */
+    static LocalDate initialDate(Set<LocalDate> available, LocalDate preferred, LocalDate today) {
+        if (preferred != null && !preferred.isBefore(today) && available.contains(preferred)) return preferred;
+        return available.stream().filter(d -> !d.isBefore(today)).sorted().findFirst().orElse(null);
     }
 
     private void showSlots(TimeslotProvider provider, LocalDate date) {

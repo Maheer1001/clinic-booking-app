@@ -88,6 +88,26 @@ class BookingViewsTest {
         assertEquals(List.of(slots.get(1)), selected);
     }
 
+    @Test
+    void selector_reopensOnThePatientsDateWhenItStillHasTimes() {
+        List<AvailableTimeslot> slots = List.of(slot(9, 0, 30));
+        DateTimeSelector selector = new DateTimeSelector(
+                provider(Set.of(DAY, DAY.plusDays(2)), slots), s -> {}, DAY.plusDays(2));
+
+        assertEquals(DAY.plusDays(2), selector.getSelectedDate(), "not the first free date");
+    }
+
+    @Test
+    void initialDate_fallsBackToTheFirstFreeDate() {
+        LocalDate today = DAY.minusDays(1);
+        Set<LocalDate> free = Set.of(DAY.plusDays(3), DAY, today.minusDays(2));
+        assertEquals(DAY.plusDays(3), DateTimeSelector.initialDate(free, DAY.plusDays(3), today));
+        assertEquals(DAY, DateTimeSelector.initialDate(free, DAY.plusDays(1), today), "picked date has no times left");
+        assertEquals(DAY, DateTimeSelector.initialDate(free, today.minusDays(2), today), "picked date is in the past");
+        assertEquals(DAY, DateTimeSelector.initialDate(free, null, today));
+        assertNull(DateTimeSelector.initialDate(Set.of(), DAY, today));
+    }
+
     private static TimeslotProvider provider(Set<LocalDate> dates, List<AvailableTimeslot> slots) {
         return new TimeslotProvider() {
             @Override public Set<LocalDate> getAvailableDates() { return dates; }

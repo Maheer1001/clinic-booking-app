@@ -112,4 +112,8 @@ public final class Dates {
         if (days < 14) return "in " + days + " days";
         return "in " + (days / 7) + " weeks";
     }
+    /** How long a service takes, worded the same on every booking step, e.g. "About 30 minutes". */
+    public static String duration(int minutes) {
+        return "About " + minutes + (minutes == 1 ? " minute" : " minutes");
+    }
 }
