@@ -90,7 +90,7 @@ public class ReminderDefaultsView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {

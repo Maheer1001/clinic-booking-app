@@ -16,6 +16,16 @@ final class ReminderFeedback {
 
     private ReminderFeedback() {}
 
+    /** The same styled dialog on every card when a test email can't be sent for lack of an address. */
+    static void noEmailAlert() {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
+        alert.setTitle("No email address");
+        alert.setHeaderText("No email address");
+        alert.setContentText("Add an email address to your account to send a test email.");
+        UI.styleDialog(alert, app.Data.getScene());
+        alert.showAndWait();
+    }
+
     static void sending(Label label) {
         clearError(label);
         label.setText(SENDING);

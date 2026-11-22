@@ -1716,3 +1716,14 @@
     -fx-font-size: 14px;
     -fx-font-weight: 700;
 }
+
+/* One reminder rule in the appointment reminder schedule: a divider above every rule but the first. */
+.reminder-rule {
+    -fx-border-color: #E4DAF0 transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 10 0 0 0;
+}
+.reminder-rule.first {
+    -fx-border-color: transparent;
+    -fx-padding: 0;
+}

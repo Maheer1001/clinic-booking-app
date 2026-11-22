@@ -136,13 +136,7 @@ public class AppointmentRemindersView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.");
-                DialogPane dialogPane = alert.getDialogPane();
-                dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-                Stage stage = (Stage) dialogPane.getScene().getWindow();
-                stage.getIcons().add(new Image(AppointmentRemindersView.class.getResource("/icons/safe.png").toExternalForm()));
-                dialogPane.setGraphic(null);
-                alert.showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {

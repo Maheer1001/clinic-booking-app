@@ -82,14 +82,14 @@ public class BookingRemindersView {
                 existing != null ? existing.getCustomMessage() : null
         );
 
-        TextField emailFromNameField = new TextField(overrides.getEmailFromName());
+        TextField emailFromNameField = UI.textField(overrides.getEmailFromName());
         emailFromNameField.setPromptText("Email sender name (optional)");
-        TextField emailSubjectField = new TextField(overrides.getEmailSubject());
+        TextField emailSubjectField = UI.textField(overrides.getEmailSubject());
         emailSubjectField.setPromptText("Email subject (optional)");
 
-        TextField notifTitleField = new TextField(overrides.getNotificationTitle());
+        TextField notifTitleField = UI.textField(overrides.getNotificationTitle());
         notifTitleField.setPromptText("Notification title (optional)");
-        TextField notifPreviewField = new TextField(overrides.getNotificationPreview());
+        TextField notifPreviewField = UI.textField(overrides.getNotificationPreview());
         notifPreviewField.setPromptText("Notification preview line (optional)");
         TextArea notifBodyField = new TextArea(overrides.getNotificationBody());
         notifBodyField.setPromptText("Notification full body (optional)");
@@ -130,7 +130,7 @@ public class BookingRemindersView {
                         daysSpinner,
                         saveConfirmReminder),
                 transactionalSection(
-                        "Confirmation emails &\nnotifications",
+                        "Booking confirmations",
                         "Applies when you complete a booking (confirmation email and in-app message).",
                         confirmationCommChoice,
                         confirmationFields,
@@ -145,7 +145,7 @@ public class BookingRemindersView {
                         lbl -> sendConfirmationTest(confirmationFields, confirmationCommChoice, lbl),
                         () -> showConfirmationTestNotif(confirmationFields, confirmationCommChoice)),
                 transactionalSection(
-                        "Reschedule emails &\nnotifications",
+                        "Reschedule messages",
                         "Applies when you reschedule an appointment.",
                         rescheduleCommChoice,
                         rescheduleFields,
@@ -160,7 +160,7 @@ public class BookingRemindersView {
                         lbl -> sendRescheduleTest(rescheduleFields, rescheduleCommChoice, lbl),
                         () -> showRescheduleTestNotif(rescheduleFields, rescheduleCommChoice)),
                 transactionalSection(
-                        "Cancellation emails &\nnotifications",
+                        "Cancellation messages",
                         "Applies when you cancel an appointment.",
                         cancellationCommChoice,
                         cancellationFields,
@@ -261,7 +261,7 @@ public class BookingRemindersView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {
@@ -325,7 +325,7 @@ public class BookingRemindersView {
         saveBlock.setMaxWidth(Double.MAX_VALUE);
 
         return UI.card(12,
-                UI.titleSmWrapping("Reminder emails &\nnotifications"),
+                UI.titleSmWrapping("Check-up reminders"),
                 explanation,
                 notifyDiscreetRow,
                 timePane,
@@ -396,7 +396,7 @@ public class BookingRemindersView {
         String recipientEmail = Data.getCurrentUserEmail();
         String recipientName = Data.getCurrentUserName();
         if (recipientEmail == null || recipientEmail.isBlank()) {
-            new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+            ReminderFeedback.noEmailAlert();
             return;
         }
         if (recipientName == null || recipientName.isBlank()) {
@@ -424,12 +424,18 @@ public class BookingRemindersView {
         ).show();
     }
 
+    /** A realistic date for previews and test emails, written like every other date in the app. */
+    private static String sampleWhen(int daysFromNow) {
+        return view.ui.Dates.dateTime(java.time.LocalDate.now().plusDays(daysFromNow),
+                java.time.LocalTime.of(10, 0), java.time.LocalTime.of(10, 30));
+    }
+
     private static void sendRescheduleTest(BookingCommTemplateFields fields, ChoiceBox<String> discreetChoice,
                                            Label testEmailFeedback) {
         String recipientEmail = Data.getCurrentUserEmail();
         String recipientName = Data.getCurrentUserName();
         if (recipientEmail == null || recipientEmail.isBlank()) {
-            new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+            ReminderFeedback.noEmailAlert();
             return;
         }
         if (recipientName == null || recipientName.isBlank()) {
@@ -441,7 +447,7 @@ public class BookingRemindersView {
                 new RescheduleConfirmationEmail(
                         recipientEmail, recipientName,
                         "APP-999", "Example service", "Example clinic",
-                        "Previous date/time example", "New date/time example",
+                        sampleWhen(7), sampleWhen(9),
                         disc, ov),
                 null, testEmailFeedback);
     }
@@ -452,7 +458,7 @@ public class BookingRemindersView {
         ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
         new RescheduleConfirmationNotification(
                 name, "APP-999", "Example service", "Example clinic",
-                "Previous date/time example", "New date/time example",
+                sampleWhen(7), sampleWhen(9),
                 disc, ov
         ).show();
     }
@@ -462,7 +468,7 @@ public class BookingRemindersView {
         String recipientEmail = Data.getCurrentUserEmail();
         String recipientName = Data.getCurrentUserName();
         if (recipientEmail == null || recipientEmail.isBlank()) {
-            new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+            ReminderFeedback.noEmailAlert();
             return;
         }
         if (recipientName == null || recipientName.isBlank()) {
@@ -474,7 +480,7 @@ public class BookingRemindersView {
                 new CancellationEmail(
                         recipientEmail, recipientName,
                         "APP-999", "Example service", "Example clinic",
-                        "Example date/time",
+                        sampleWhen(7),
                         disc, ov),
                 null, testEmailFeedback);
     }
@@ -499,7 +505,7 @@ public class BookingRemindersView {
         ReminderTemplateOverrides ov = fields.collectOverridesForPreview();
         new CancellationNotification(
                 name, "APP-999", "Example service", "Example clinic",
-                "Example date/time",
+                sampleWhen(7),
                 disc, ov
         ).show();
     }

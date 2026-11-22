@@ -122,14 +122,14 @@ public class TreatmentRemindersView {
                 existing != null ? existing.getCustomMessage() : null
         );
 
-        TextField emailFromNameField = new TextField(overrides.getEmailFromName());
+        TextField emailFromNameField = UI.textField(overrides.getEmailFromName());
         emailFromNameField.setPromptText("Email sender name (optional)");
-        TextField emailSubjectField = new TextField(overrides.getEmailSubject());
+        TextField emailSubjectField = UI.textField(overrides.getEmailSubject());
         emailSubjectField.setPromptText("Email subject (optional)");
 
-        TextField notifTitleField = new TextField(overrides.getNotificationTitle());
+        TextField notifTitleField = UI.textField(overrides.getNotificationTitle());
         notifTitleField.setPromptText("Notification title (optional)");
-        TextField notifPreviewField = new TextField(overrides.getNotificationPreview());
+        TextField notifPreviewField = UI.textField(overrides.getNotificationPreview());
         notifPreviewField.setPromptText("Notification preview line (optional)");
         TextArea notifBodyField = new TextArea(overrides.getNotificationBody());
         notifBodyField.setPromptText("Notification full body (optional)");
@@ -235,13 +235,7 @@ public class TreatmentRemindersView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.");
-                DialogPane dialogPane = alert.getDialogPane();
-                dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-                Stage stage = (Stage) dialogPane.getScene().getWindow();
-                stage.getIcons().add(new Image(TreatmentRemindersView.class.getResource("/icons/safe.png").toExternalForm()));
-                dialogPane.setGraphic(null);
-                alert.showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {

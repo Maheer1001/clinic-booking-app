@@ -138,7 +138,7 @@ public abstract class BaseNotification implements Notification {
         }
 
         buttonRow.setAlignment(Pos.CENTER_RIGHT);
-        buttonRow.getChildren().forEach(b -> HBox.setHgrow(b, Priority.ALWAYS));
+        UI.equalSpacing(buttonRow);
 
         root = new VBox(12, scroll, buttonRow);
         root.getStyleClass().add(UI.NOTIFICATION);

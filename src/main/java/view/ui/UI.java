@@ -510,11 +510,16 @@ public final class UI {
         leftLabel.setWrapText(true);
         leftLabel.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(leftLabel, Priority.ALWAYS);
+        // The date or dose goes under the name: beside it, "Wed 25 Nov 2026, 15:00" was squeezed onto three lines.
         Label rightLabel = new Label(right);
-        HBox.setHgrow(rightLabel, Priority.ALWAYS);
+        rightLabel.getStyleClass().add("detail-value");
         rightLabel.setWrapText(true);
-        rightLabel.setMinWidth(80);
-        HBox row = new HBox(12, leftLabel, rightLabel);
+        rightLabel.setMaxWidth(Double.MAX_VALUE);
+        VBox text = new VBox(2, leftLabel);
+        if (right != null && !right.isBlank()) text.getChildren().add(rightLabel);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        text.setMaxWidth(Double.MAX_VALUE);
+        HBox row = new HBox(12, text);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setMaxWidth(Double.MAX_VALUE);
         row.getStyleClass().add(REMINDER_CARD_HEADER);

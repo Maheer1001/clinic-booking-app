@@ -541,3 +541,10 @@
 .scroll-bar .thumb {
     -fx-background-color: #555555;
 }
+
+.reminder-rule {
+    -fx-border-color: #000000 transparent transparent transparent;
+}
+.reminder-rule.first {
+    -fx-border-color: transparent;
+}
