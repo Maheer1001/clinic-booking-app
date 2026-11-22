@@ -204,7 +204,7 @@ public class NotificationScheduler {
         }
 
         if (missedOne && catchUpMissed) {
-            log("Some reminder times for appointment " + appt.getAppId() + " have passed; sending one reminder in " + defaultDelaySeconds + "s");
+            log("Some reminder times for appointment " + appt.getAppId() + " have passed or fall after it; sending one reminder in " + defaultDelaySeconds + "s");
             ZonedDateTime catchUp = now.plusSeconds(defaultDelaySeconds);
             startChain(key, catchUp, null, UnaryOperator.identity(), t -> true, stillWanted, email);
             firstSend = earlier(firstSend, catchUp);
