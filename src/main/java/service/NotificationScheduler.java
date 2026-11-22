@@ -174,7 +174,9 @@ public class NotificationScheduler {
         ReminderSchedule schedule = ReminderSchedule.fromString(scheduleRaw, 2);
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
         UnaryOperator<ZonedDateTime> quietHours = t -> zoned(schedule.applyQuietHours(t.toLocalDateTime()));
-        Predicate<ZonedDateTime> beforeAppointment = t -> t.isBefore(apptAt);
+        // Judged on the real send time: quiet hours or a time of day can push a reminder to or past the
+        // appointment, and such a reminder used to be reported as scheduled but was never sent.
+        Predicate<ZonedDateTime> beforeAppointment = t -> quietHours.apply(t).isBefore(apptAt);
         BooleanSupplier stillWanted = () -> appointmentStillWanted(appt);
         Function<ZonedDateTime, Email> email = t -> appointmentEmail(appt, recipientEmail, recipientName, overrides);
 
@@ -186,14 +188,14 @@ public class NotificationScheduler {
 
             if (next != null) {
                 // Skip occurrences that have already passed rather than firing them all at once.
-                while (!quietHours.apply(first).isAfter(now) && first.isBefore(apptAt)) {
+                while (!quietHours.apply(first).isAfter(now) && beforeAppointment.test(first)) {
                     first = next.apply(first);
                 }
-                if (!first.isBefore(apptAt)) {
+                if (!beforeAppointment.test(first)) {
                     missedOne = true;
                     continue;
                 }
-            } else if (!quietHours.apply(first).isAfter(now)) {
+            } else if (!quietHours.apply(first).isAfter(now) || !beforeAppointment.test(first)) {
                 missedOne = true;
                 continue;
             }
@@ -251,6 +253,13 @@ public class NotificationScheduler {
         cancel(key);
         Predicate<ZonedDateTime> withinCourse = treatmentCourse(rx);
         ZonedDateTime first = now().plusHours(intervalHours);
+        // A course that has not started yet used to get dose reminders straight away.
+        if (rx.getStartDate() != null) {
+            ZonedDateTime courseStart = zoned(rx.getStartDate().atStartOfDay());
+            while (first.isBefore(courseStart)) {
+                first = first.plusHours(intervalHours);
+            }
+        }
         if (!withinCourse.test(first)) {
             log("Prescription " + rx.getPrescriptionId() + " ends before the next dose; no reminder scheduled");
             return Optional.empty();

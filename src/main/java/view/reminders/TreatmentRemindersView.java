@@ -80,8 +80,10 @@ public class TreatmentRemindersView {
      * Date of the next dose reminder, as the scheduler will send it. (The end date used before was
      * null for ongoing prescriptions, which crashed the preview, and was not the next due date anyway.)
      */
-    private static LocalDate nextDoseDate(int intervalHours) {
-        return java.time.LocalDateTime.now().plusHours(intervalHours).toLocalDate();
+    private static LocalDate nextDoseDate(Prescription rx, int intervalHours) {
+        LocalDate next = java.time.LocalDateTime.now().plusHours(intervalHours).toLocalDate();
+        // Reminders for a course that has not started yet begin on its start date.
+        return rx.getStartDate() != null && next.isBefore(rx.getStartDate()) ? rx.getStartDate() : next;
     }
 
     private static VBox createPrescriptionCard(Prescription rx, PrescriptionReminder existing, ReminderController controller,
@@ -265,7 +267,7 @@ public class TreatmentRemindersView {
                     Data.getCurrentUserId(),
                     new TreatmentReminderEmail(
                             recipientEmail, recipientName,
-                            rx.getMedicineName(), rx.getDosage(), nextDoseDate(intervalSpinner.getValue()),
+                            rx.getMedicineName(), rx.getDosage(), nextDoseDate(rx, intervalSpinner.getValue()),
                             current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
                             DiscreetReminderChoice.isDiscreet(current)
                     ),
@@ -294,7 +296,7 @@ public class TreatmentRemindersView {
                     Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "",
                     rx.getMedicineName(),
                     rx.getDosage(),
-                    nextDoseDate(intervalSpinner.getValue()),
+                    nextDoseDate(rx, intervalSpinner.getValue()),
                     current.getNotificationTitle(),
                     current.getNotificationPreview(),
                     current.getNotificationBody(),

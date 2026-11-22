@@ -180,6 +180,19 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
+    void treatmentReminder_forCourseStartingLater_waitsForTheStartDate() {
+        scheduler = new NotificationScheduler(sender, 0);
+        LocalDate start = LocalDate.now().plusDays(5);
+        Prescription rx = new Prescription(8, 1, "Doxycycline", "100mg", start, start.plusDays(7));
+
+        var first = scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 12, null);
+
+        assertTrue(first.isPresent());
+        assertFalse(first.get().toLocalDate().isBefore(start), "No dose reminder before the course starts: " + first.get());
+        assertTrue(first.get().isBefore(start.atStartOfDay().plusHours(12)), "First one on the start day: " + first.get());
+    }
+
+    @Test
     void bookingReminder_rescheduleReplacesAndCancelWorks() {
         scheduler = new NotificationScheduler(sender, 3600);
         scheduler.scheduleBookingReminder("P@example.com", "Jane", 90, LocalDate.now(), null);
@@ -248,6 +261,35 @@ class NotificationSchedulerScheduleTest {
 
         assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(2)), first);
         assertEquals(2, scheduler.pendingCount("appointment:5"));
+    }
+
+    @Test
+    void reminderPushedPastAppointmentByQuietHours_isNotReportedForAfterTheAppointment() {
+        scheduler = new NotificationScheduler(sender, 30);
+        Appointment appt = new Appointment(6, 1, "STI Screening", "Clinic 1", "Dr. Smith",
+                LocalDateTime.now().plusDays(3).withHour(7).withMinute(0).withSecond(0).withNano(0));
+        String rules = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(1, "hour", null, null)),
+                new ReminderSchedule.QuietHours("22:00", "08:00")).toJson();
+
+        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
+
+        assertTrue(first.isPresent());
+        assertTrue(first.get().isBefore(appt.getAppointmentDateTime()),
+                "06:00 moved to 08:00 by quiet hours is after the 07:00 appointment, so it must not be the reported send time");
+        assertEquals(1, scheduler.pendingCount("appointment:6"), "One catch-up reminder instead");
+    }
+
+    @Test
+    void timeOfDayAfterTheAppointment_isNotReportedAsScheduled() {
+        scheduler = new NotificationScheduler(sender, 30);
+        Appointment appt = new Appointment(7, 1, "STI Screening", "Clinic 1", "Dr. Smith",
+                LocalDateTime.now().plusDays(3).withHour(10).withMinute(0).withSecond(0).withNano(0));
+        String rules = new ReminderSchedule(List.of(new ReminderSchedule.ReminderRule(1, "hour", "18:00", null)), null).toJson();
+
+        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides(), false);
+
+        assertTrue(first.isEmpty(), "18:00 on the day of a 10:00 appointment can never be sent");
+        assertEquals(0, scheduler.pendingCount("appointment:7"));
     }
 
     @Test
