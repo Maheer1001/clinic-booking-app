@@ -37,6 +37,9 @@ public class PrescriptionDAO implements PrescriptionRepository {
             FROM "Prescription" p
             JOIN "Medicine" m ON p.medicine_id = m.medicine_id
             WHERE p.user_id = ?
+              -- one made from a draft test would give the result away before it is released
+              AND (p.test_id IS NULL OR EXISTS (
+                    SELECT 1 FROM "Test" t WHERE t.test_id = p.test_id AND t.released_at IS NOT NULL))
             ORDER BY p.start_date DESC
             """;
         return getPrescriptionSummariesFromQuery(sql, userId, false);
