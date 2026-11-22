@@ -158,6 +158,19 @@ class TrackingDAOTest {
     }
 
     @Test
+    void reminderState_readsStopAndEndDate_nullTakingCountsAsTaking() throws Exception {
+        LocalDate end = LocalDate.of(2026, 12, 1);
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("INSERT INTO \"Prescription\" (prescription_id, user_id, end_date, actively_taking) VALUES (901, 5, DATE '2026-12-01', FALSE)");
+            s.execute("INSERT INTO \"Prescription\" (prescription_id, user_id, end_date, actively_taking) VALUES (902, 5, NULL, NULL)");
+        }
+        PrescriptionDAO dao = new PrescriptionDAO();
+        assertEquals(java.util.Optional.of(new model.PrescriptionState(false, end)), dao.findReminderState(901));
+        assertEquals(java.util.Optional.of(new model.PrescriptionState(true, null)), dao.findReminderState(902));
+        assertTrue(dao.findReminderState(999).isEmpty());
+    }
+
+    @Test
     void tests_comeMostRecentlyAddedFirst_soTheNewResultIsTheOneAnnounced() throws Exception {
         try (Connection c = DB.connect(); Statement s = c.createStatement()) {
             s.execute("INSERT INTO \"Test\" (user_id, test_type, test_date) VALUES (5, 'Older', DATE '2026-10-01')");

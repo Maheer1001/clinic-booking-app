@@ -248,6 +248,59 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
+    void doseReminder_stoppedByStaffAfterScheduling_isNotSentAndTheChainEnds() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<model.PrescriptionState> db =
+                new java.util.concurrent.atomic.AtomicReference<>(new model.PrescriptionState(true, null));
+        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+        scheduler = new NotificationScheduler(sender, 0, Clock.systemDefaultZone(), (a, u) -> true,
+                id -> { reads.incrementAndGet(); return java.util.Optional.ofNullable(db.get()); });
+        Prescription rx = new Prescription(7, 1, "PrEP", "1 tablet", LocalDate.now().minusDays(3), null);
+
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 1L, null);
+        db.set(new model.PrescriptionState(false, null)); // staff stop it before the reminder fires
+
+        Thread.sleep(1500);
+        assertEquals(0, sender.sent.size());
+        assertEquals(0, scheduler.pendingCount(), "a stopped course's chain ends");
+        assertEquals(1, reads.get(), "one query per send");
+    }
+
+    @Test
+    void doseReminder_reReadsTheEndDate_andSendsWhileStillTaking() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<model.PrescriptionState> db = new java.util.concurrent.atomic.AtomicReference<>(
+                new model.PrescriptionState(true, LocalDate.now()));
+        scheduler = new NotificationScheduler(sender, 0, Clock.systemDefaultZone(), (a, u) -> true,
+                id -> java.util.Optional.ofNullable(db.get()));
+        Prescription rx = new Prescription(8, 1, "Doxycycline", "100mg", LocalDate.now().minusDays(3), LocalDate.now().plusDays(5));
+
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 0L, null);
+        waitForSends(1, 2000);
+        assertEquals(1, sender.sent.size(), "last day of the course still reminds");
+
+        db.set(new model.PrescriptionState(true, LocalDate.now().minusDays(1))); // end date moved back
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 0L, null);
+        Thread.sleep(500);
+        assertEquals(1, sender.sent.size(), "a course whose end date has passed is not reminded");
+
+        db.set(null); // prescription deleted
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 0L, null);
+        Thread.sleep(500);
+        assertEquals(1, sender.sent.size());
+    }
+
+    @Test
+    void doseReminder_databaseUnreadable_sendsAsScheduled() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0, Clock.systemDefaultZone(), (a, u) -> true,
+                id -> { throw new java.sql.SQLException("down"); });
+        Prescription rx = new Prescription(9, 1, "PrEP", "1 tablet", LocalDate.now().minusDays(3), null);
+
+        scheduler.scheduleTreatmentReminder(rx, "p@example.com", "Jane", 0L, null);
+
+        waitForSends(1, 2000);
+        assertEquals(1, sender.sent.size());
+    }
+
+    @Test
     void treatmentReminder_afterCourseEnded_isNotScheduled() {
         scheduler = new NotificationScheduler(sender, 0);
         Prescription rx = new Prescription(6, 1, "Doxycycline", "100mg", LocalDate.now().minusDays(7), LocalDate.now().minusDays(1));

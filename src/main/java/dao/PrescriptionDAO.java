@@ -2,6 +2,7 @@ package dao;
 
 import app.DB;
 import model.Prescription;
+import model.PrescriptionState;
 import model.PrescriptionSummary;
 
 import java.sql.Connection;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class PrescriptionDAO implements PrescriptionRepository {
 
@@ -115,6 +117,24 @@ public class PrescriptionDAO implements PrescriptionRepository {
             return false;
         }
         return endDate == null || !endDate.isBefore(today);
+    }
+
+    /**
+     * Whether the prescription is still being taken and when it ends, in one small query; empty if
+     * it no longer exists. Read before each dose reminder is sent.
+     */
+    public Optional<PrescriptionState> findReminderState(int prescriptionId) throws SQLException {
+        String sql = "SELECT actively_taking, end_date FROM \"Prescription\" WHERE prescription_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, prescriptionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                Boolean taking = (Boolean) rs.getObject("actively_taking");
+                return Optional.of(new PrescriptionState(!Boolean.FALSE.equals(taking),
+                        rs.getObject("end_date", LocalDate.class)));
+            }
+        }
     }
 
     @Override
