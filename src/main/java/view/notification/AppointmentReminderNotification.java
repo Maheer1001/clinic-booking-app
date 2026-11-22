@@ -3,6 +3,7 @@ package view.notification;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDateTime;
@@ -81,37 +82,27 @@ public class AppointmentReminderNotification extends BaseNotification {
 
     @Override
     protected Node buildPreviewContent() {
-        String date = appointmentDateTime.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
-        String time = appointmentDateTime.format(DateTimeFormatter.ofPattern("HH:mm"));
-
-        Label dateLabel = UI.body("Date: " + date);
-        Label timeLabel = UI.body("Time: " + time);
-
-        VBox card = UI.card(4, dateLabel, timeLabel);
-        return new VBox(8, UI.titleSm(getTitle()), card);
+        return NotificationLayout.page(getTitle(), patientName, overridePreview,
+                NotificationLayout.detailsCard("Date", date(), "Time", time()), null);
     }
 
     @Override
     protected Node buildFullContent() {
         if (overrideBody != null) {
-            Label body = new Label(overrideBody);
-            body.setWrapText(true);
-            return new VBox(8, UI.titleSm(getTitle()), body);
+            return NotificationLayout.custom(getTitle(), overrideBody);
         }
+        return NotificationLayout.page(getTitle(), patientName, null,
+                NotificationLayout.detailsCard("Type", appointmentType, "Date", date(), "Time", time(),
+                        "Location", clinicLocation, "Clinician", doctorName),
+                "Please arrive 10 minutes early.");
+    }
 
-        String date = appointmentDateTime.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
-        String time = appointmentDateTime.format(DateTimeFormatter.ofPattern("HH:mm"));
+    private String date() {
+        return Dates.full(appointmentDateTime.toLocalDate());
+    }
 
-        Label dateLabel = UI.body("Date: " + date);
-        Label timeLabel = UI.body("Time: " + time);
-        Label typeLabel = UI.body("Type: " + appointmentType);
-        Label locationLabel = UI.body("Location: " + clinicLocation);
-        Label clinicianLabel = UI.body("Clinician: " + doctorName);
-
-        VBox detailsCard = UI.card(4, dateLabel, timeLabel, typeLabel, locationLabel, clinicianLabel);
-        Label cta = UI.muted("⚠ Arrive 10 minutes early.");
-
-        return new VBox(8, UI.titleSm(getTitle()), detailsCard, cta);
+    private String time() {
+        return Dates.time(appointmentDateTime.toLocalTime());
     }
 
     @Override

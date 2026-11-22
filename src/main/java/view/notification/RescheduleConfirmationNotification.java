@@ -86,26 +86,19 @@ public class RescheduleConfirmationNotification extends BaseNotification {
     protected Node buildPreviewContent() {
         String custom = overrideNotificationText();
         if (custom != null) {
-            Label body = new Label(custom);
-            body.setWrapText(true);
-            return new VBox(10, UI.titleSm(getTitle()), UI.card(10, body));
+            return NotificationLayout.custom(getTitle(), custom);
         }
 
-        Label heading = UI.titleSm(getTitle());
-        Label hi = UI.body("Hi " + patientName + ",");
         if (discreet) {
-            Label msg = UI.body("Your appointment has been rescheduled.");
-            Label hint = UI.muted("Open the app for full details.");
-            return new VBox(10, heading, hi, msg, UI.card(8, hint));
+            return NotificationLayout.page(getTitle(), patientName, "Your appointment has been rescheduled.",
+                    null, "Open the app for full details.");
         }
-
-        VBox card = UI.card(8,
-                NotificationLayout.detailRow("Reference", appointmentRef),
-                NotificationLayout.detailRow("Service", serviceName),
-                NotificationLayout.detailRow("Location", clinicName),
-                NotificationLayout.detailRow("Previous date", oldDate),
-                NotificationLayout.detailRow("New date", newDate)
-        );
-        return new VBox(10, heading, hi, card);
+        return NotificationLayout.page(getTitle(), patientName, null, NotificationLayout.detailsCard(
+                "Reference", appointmentRef,
+                "Service", serviceName,
+                "Location", clinicName,
+                "Previous date", oldDate,
+                "New date", newDate
+        ), null);
     }
 }

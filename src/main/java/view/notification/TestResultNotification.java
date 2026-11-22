@@ -3,6 +3,7 @@ package view.notification;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDate;
@@ -41,10 +42,8 @@ public class TestResultNotification extends BaseNotification {
     public String getMessage() {
         return "Hi " + patientName + ",\n\n"
                 + "Your test results are now available:\n\n"
-                + "Test: " + testType + "\n"
-                + "Date Taken: " + testDate.format(DateTimeFormatter.ofPattern("dd MMMM yyyy")) + "\n"
-                + "Status: " + resultStatus + "\n\n"
-                + "Please log in to view your results securely.";
+                + NotificationLayout.detailsText(rows()) + "\n\n"
+                + FOOTNOTE;
     }
 
     @Override
@@ -54,16 +53,14 @@ public class TestResultNotification extends BaseNotification {
 
     @Override
     protected Node buildPreviewContent() {
-        String dateStr = testDate.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"));
-        Label heading = UI.titleSm(getTitle());
-        Label hi = UI.body("Hi " + patientName + ",");
-        Label lead = UI.body("Your test results are now available.");
-        VBox details = UI.card(8,
-                NotificationLayout.detailRow("Test", testType),
-                NotificationLayout.detailRow("Date taken", dateStr),
-                NotificationLayout.detailRow("Status", resultStatus)
-        );
-        Label foot = UI.muted("Please log in to view your results securely.");
-        return new VBox(12, heading, hi, lead, details, foot);
+        return NotificationLayout.page(getTitle(), patientName, "Your test results are now available.",
+                NotificationLayout.detailsCard(rows()), FOOTNOTE);
+    }
+
+    /** Shown while logged in, so it points to where the results are rather than asking to log in. */
+    static final String FOOTNOTE = "Open Tracking > Test Results to see them.";
+
+    private String[] rows() {
+        return new String[]{"Test", testType, "Date taken", Dates.medium(testDate), "Status", resultStatus};
     }
 }
