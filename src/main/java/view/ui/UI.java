@@ -337,7 +337,11 @@ public final class UI {
         Label l = new Label(text) {
             @Override
             protected double computePrefHeight(double width) {
-                return super.computePrefHeight(width < 0 && getWidth() > 0 ? getWidth() : width);
+                // Rows often ask with no width, or with the label's one-line width; both would
+                // give one line, so the width it actually has is used instead.
+                double laidOut = getWidth();
+                boolean useLaidOut = laidOut > 0 && (width < 0 || width > laidOut);
+                return super.computePrefHeight(useLaidOut ? laidOut : width);
             }
 
             @Override
@@ -347,10 +351,32 @@ public final class UI {
         };
         l.setWrapText(true);
         l.setMinWidth(0);
+        // The width arrives during a layout pass, where a new layout request would be dropped, so the
+        // row is asked to re-measure on the next pulse.
         l.widthProperty().addListener((o, was, now) -> {
-            if (was.doubleValue() != now.doubleValue() && l.getParent() != null) l.getParent().requestLayout();
+            if (was.doubleValue() != now.doubleValue()) {
+                // requestLayout on the label itself clears its cached height and then its parents'.
+                javafx.application.Platform.runLater(l::requestLayout);
+            }
         });
         return l;
+    }
+
+    /**
+     * Wraps a login / sign-up / password-reset screen so it scrolls when it is taller than the window
+     * (the reset card alone is about 728px, and large text makes every auth screen taller). The page
+     * still fills the window when it is shorter, so its background reaches the bottom.
+     */
+    public static ScrollPane authPage(javafx.scene.Parent content) {
+        ScrollPane sp = new ScrollPane(content);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        sp.getStyleClass().add("auth-scroll");
+        if (content instanceof Region r) {
+            r.minHeightProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                    () -> sp.getViewportBounds().getHeight(), sp.viewportBoundsProperty()));
+        }
+        return sp;
     }
 
     /** Muted/secondary text. */
