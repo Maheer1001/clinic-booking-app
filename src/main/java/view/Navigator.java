@@ -25,6 +25,7 @@ import view.ui.UI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Stack;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -43,6 +44,14 @@ public class Navigator {
     private final BooleanProperty isHome = new SimpleBooleanProperty(true);
     private final Map<String, Supplier<Page>> homePages = new HashMap<>();
     private final BooleanProperty isSettings = new SimpleBooleanProperty(false);
+
+    /**
+     * Leave guard hook. A page can put a {@code Predicate<Runnable>} in its {@link Node#getProperties()}
+     * under this key; it is asked before Back, the Settings gear, a tab click or log out takes the user
+     * off that page. It returns true to leave now, or false to stay (e.g. it asked "Discard your
+     * changes?"), and may later run the Runnable it was given to repeat the navigation (after a save).
+     */
+    public static final String LEAVE_GUARD = "navigator.leaveGuard";
 
     private static final String HEADER_BTN = "app-header-btn";
     private static final PseudoClass ACTIVE = PseudoClass.getPseudoClass("active");
@@ -157,6 +166,10 @@ public class Navigator {
     public BorderPane getRoot() { return root; }
 
     public void handleTabClick(String tab) {
+        if (!mayLeave(() -> handleTabClick(tab))) {
+            selectTabButton(currentTab.get()); // the clicked tab had already lit up
+            return;
+        }
         if (currentTab.get().equals(tab)) {
             tabHistory.get(tab).clear();
             Supplier<Page> factory = homePages.get(tab);
@@ -240,6 +253,7 @@ public class Navigator {
 
     /** Pops the previous page from the stack and displays it (bound to the Back button). */
     public void goBack() {
+        if (!mayLeave(this::goBack)) return;
         Stack<Page> stack = tabHistory.get(currentTab.get());
         if (!stack.isEmpty()) {
             Page previousPage = stack.pop();
@@ -296,6 +310,17 @@ public class Navigator {
         } else {
             goToPage(view.getSettingsScene(), "Settings", false);
         }
+    }
+
+    /**
+     * Asks the page on screen whether it may be left (see {@link #LEAVE_GUARD}). True means go ahead
+     * now; false means stay, and the page may call {@code retry} later to repeat the navigation.
+     */
+    @SuppressWarnings("unchecked")
+    public boolean mayLeave(Runnable retry) {
+        Node page = currentPage.get();
+        if (page == null || !(page.getProperties().get(LEAVE_GUARD) instanceof Predicate<?> guard)) return true;
+        return ((Predicate<Runnable>) guard).test(retry);
     }
 
     public void exit() { Platform.exit(); }

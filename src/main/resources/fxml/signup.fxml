@@ -26,6 +26,12 @@
                        accessibleText="Confirm password" styleClass="input"/>
         <Label fx:id="confirmErrorLabel" styleClass="auth-field-error"/>
 
+        <Label text="Security question" styleClass="auth-field-label"/>
+        <ComboBox fx:id="questionBox" maxWidth="Infinity" styleClass="input"/>
+        <Label fx:id="questionHintLabel" styleClass="auth-hint" wrapText="true" minHeight="-Infinity"/>
+        <TextField fx:id="answerField" promptText="Your answer" accessibleText="Security answer" styleClass="input"/>
+        <Label fx:id="answerErrorLabel" styleClass="auth-field-error"/>
+
         <VBox styleClass="auth-check-group">
             <HBox spacing="4" alignment="BASELINE_LEFT">
                 <CheckBox fx:id="termsCheck" text="I agree to the" styleClass="auth-check"/>

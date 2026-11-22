@@ -53,9 +53,13 @@ public class MainController {
         }));
 
         //log out
-        view.getLogOutButton().setOnAction(e -> {
+        Runnable logOutNow = () -> {
             flushSettings();
             logOut(null);
+        };
+        // Unsaved Settings edits get a "Discard your changes?" first (Save logs out once saved).
+        view.getLogOutButton().setOnAction(e -> {
+            if (nav.mayLeave(logOutNow)) logOutNow.run();
         });
 
         //new booking - maybe move to more appropriate class?
@@ -81,6 +85,7 @@ public class MainController {
         Data.setSettings(null);
         Data.getSignUpDraft().password = "";
         Data.getSignUpDraft().confirmPassword = "";
+        Data.getSignUpDraft().securityAnswer = "";
         Stage stage = (Stage) currScene.getWindow();
         FXMLLoader loader = new FXMLLoader(Main.class.getResource("/fxml/login.fxml"));
         try {

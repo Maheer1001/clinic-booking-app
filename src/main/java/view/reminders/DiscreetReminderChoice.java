@@ -16,6 +16,8 @@ public final class DiscreetReminderChoice {
     public static ChoiceBox<String> create() {
         ChoiceBox<String> cb = new ChoiceBox<>();
         cb.getItems().addAll(DISCREET_MODE, FULL_DETAILS);
+        // keep the whole "Discreet (minimal detail)" instead of "Discreet (mi..." at large text
+        cb.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
         return cb;
     }
 

@@ -97,6 +97,8 @@ public class LoginController {
                     restoreReminders(data.userId(), email, data.name());
                     Stage stage = (Stage) emailField.getScene().getWindow();
                     createNavigator(stage, data.userId());
+                    // accounts from before security questions: ask once now ("Later" is allowed)
+                    view.SecurityQuestionPrompt.offerIfMissing(data.userId());
                 }
                 case INVALID_INPUT -> showError("Enter a valid email address and your password.");
                 case USER_NOT_FOUND, WRONG_PASSWORD -> showBadCredentials();

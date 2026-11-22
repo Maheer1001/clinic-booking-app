@@ -1,25 +1,44 @@
 package view;
 
 import app.Data;
-import javafx.scene.layout.*;
-import service.AccountService;
+import controller.AccountController;
+import controller.Background;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.layout.*;
 import javafx.scene.text.TextAlignment;
+import service.AccountService;
 import view.ui.UI;
 
 import java.time.LocalDate;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 public class AccountView {
 
+    /** The choices in the "Discard your changes?" dialog. */
+    enum LeaveChoice { SAVE, DISCARD, KEEP_EDITING }
+
+    /** Shows the dialog; replaced in tests. */
+    static Supplier<LeaveChoice> askDiscard = AccountView::askDiscard;
+
+    /**
+     * Name, phone and date of birth. The returned node carries a {@link Navigator#LEAVE_GUARD} that asks
+     * "Discard your changes?" when the user leaves Settings with unsaved edits. The email is not edited
+     * here (see {@link AccountSecurityView}); Save always sends back the email stored in the database.
+     */
     public static Node getPage(int userId) {
-        AccountService service = new AccountService();
+        AccountController controller = new AccountController();
 
         Label msg = new Label();
         msg.setMaxWidth(Double.MAX_VALUE);
         msg.setAlignment(Pos.CENTER);
         msg.setTextAlignment(TextAlignment.CENTER);
+        msg.setWrapText(true);
 
         TextField first = UI.textField("");
         TextField last = UI.textField("");
@@ -35,7 +54,8 @@ public class AccountView {
         DatePicker dob = new DatePicker();
         dob.setShowWeekNumbers(false);
         dob.setAccessibleText("Date of birth");
-        dob.setPromptText("Choose a date");
+        dob.setPromptText("Optional");
+        dob.setMaxWidth(Double.MAX_VALUE);
         // Force DOB to be a real date (picker only) to avoid typed junk.
         dob.setEditable(false);
         // Grey out days that can't be a date of birth.
@@ -46,12 +66,21 @@ public class AccountView {
                 setDisable(empty || item == null || !AccountService.isValidDob(item));
             }
         });
+        // Date of birth is optional, and the picker can't be emptied by typing, so offer Clear.
+        Button clearDob = UI.backButton("Clear");
+        clearDob.setAccessibleText("Clear date of birth");
+        clearDob.setMinWidth(Region.USE_PREF_SIZE);
+        clearDob.setOnAction(e -> dob.setValue(null));
+        clearDob.visibleProperty().bind(dob.valueProperty().isNotNull());
+        clearDob.managedProperty().bind(clearDob.visibleProperty());
+        HBox.setHgrow(dob, Priority.ALWAYS);
+        HBox dobRow = new HBox(8, dob, clearDob);
+        dobRow.setAlignment(Pos.CENTER_LEFT);
+
         Label formHint = UI.muted("");
         formHint.setWrapText(true);
         formHint.managedProperty().bind(formHint.textProperty().isNotEmpty());
         formHint.visibleProperty().bind(formHint.textProperty().isNotEmpty());
-        Label emailValue = UI.body("");
-        emailValue.setMaxWidth(Double.MAX_VALUE);
 
         Button save = UI.primaryButton("Save");
         VBox saveBox = new VBox(save);
@@ -60,46 +89,43 @@ public class AccountView {
         // Phone: digits-only + exactly 11 digits (UK).
         phone.setTextFormatter(phoneDigits());
 
-        AccountService.AccountInfo info = service.loadAccount(userId);
-        final String immutableEmail;
+        AccountService.AccountInfo info = controller.loadAccount(userId);
+        // What is in the database: the baseline for "is anything unsaved?".
+        AccountFormState[] saved = new AccountFormState[1];
         if (info == null) {
             msg.getStyleClass().setAll(UI.ERROR);
             msg.setText("Could not load account.");
-            immutableEmail = "";
+            saved[0] = new AccountFormState("", "", "", null);
         } else {
             first.setText(nullToEmpty(info.firstName));
             last.setText(nullToEmpty(info.lastName));
             // the field only accepts digits, so a number saved as "07700 900123" would otherwise vanish
             phone.setText(nullToEmpty(info.phone).replaceAll("[^0-9]", ""));
             dob.setValue(info.dob);
-            immutableEmail = nullToEmpty(info.email);
-            emailValue.setText(immutableEmail);
+            saved[0] = new AccountFormState(first.getText(), last.getText(), phone.getText(), dob.getValue());
         }
+        Supplier<AccountFormState> current = () ->
+                new AccountFormState(first.getText(), last.getText(), phone.getText(), dob.getValue());
 
+        BooleanProperty saving = new SimpleBooleanProperty(false);
         Runnable updateValidity = () -> {
-            String p = phone.getText() != null ? phone.getText().trim() : "";
-            int len = p.length();
+            AccountFormState s = current.get();
+            int len = s.phone().length();
             phoneCount.setText(len == 0 ? "" : (len + "/11"));
-
-            boolean phoneOk = p.isEmpty() || p.matches("\\d{11}");
-            boolean dobOk = AccountService.isValidDob(dob.getValue());
 
             phone.getStyleClass().remove("input-invalid");
             dob.getStyleClass().remove("input-invalid");
-            if (!phoneOk) phone.getStyleClass().add("input-invalid");
-            if (!dobOk) dob.getStyleClass().add("input-invalid");
+            if (!s.phoneOk()) phone.getStyleClass().add("input-invalid");
+            if (!s.dobOk()) dob.getStyleClass().add("input-invalid");
 
             // Say why Save is disabled instead of leaving the user guessing.
-            if (!dobOk && !phoneOk) formHint.setText("Add your date of birth and an 11-digit phone number (or leave phone empty) to save.");
-            else if (!dobOk) formHint.setText("Add your date of birth to save changes.");
-            else if (!phoneOk) formHint.setText("Phone number must be 11 digits, or leave it empty.");
-            else formHint.setText("");
-
-            save.setDisable(!(phoneOk && dobOk));
+            formHint.setText(s.hint());
+            save.setDisable(saving.get() || !s.canSave());
         };
 
         phone.textProperty().addListener((obs, o, n) -> updateValidity.run());
         dob.valueProperty().addListener((obs, o, n) -> updateValidity.run());
+        saving.addListener((obs, o, n) -> updateValidity.run());
         updateValidity.run();
 
         // A stale "saved" or error message shouldn't linger once the user edits again.
@@ -108,52 +134,45 @@ public class AccountView {
         phone.textProperty().addListener((obs, o, n) -> msg.setText(""));
         dob.valueProperty().addListener((obs, o, n) -> msg.setText(""));
 
-        save.setOnAction(e -> {
-            String f = trimToNull(first.getText());
-            String l = trimToNull(last.getText());
-            String p = trimToNull(phone.getText());
-            var d = dob.getValue();
-
-            AccountService.SaveResult r = service.saveAccount(userId, f, l, p, d, immutableEmail);
-            switch (r) {
-                case SUCCESS -> {
+        // Saves, then runs `after` (the navigation the leave guard held back) if it worked.
+        Consumer<Runnable> doSave = after -> {
+            AccountFormState s = current.get();
+            if (!s.canSave() || saving.get()) return;
+            String f = trimToNull(s.firstName());
+            String l = trimToNull(s.lastName());
+            String p = trimToNull(s.phone());
+            LocalDate d = s.dob();
+            saving.set(true);
+            save.setText("Saving…");
+            Background.run(() -> {
+                // The email is never edited here: send back exactly what is stored now (it may have
+                // been changed through "Change email" since this page was built).
+                AccountService.AccountInfo now = controller.loadAccount(userId);
+                if (now == null || now.email == null) return AccountService.SaveResult.DB_ERROR;
+                return controller.saveAccount(userId, f, l, p, d, now.email);
+            }, r -> {
+                saving.set(false);
+                save.setText("Save");
+                if (r == AccountService.SaveResult.SUCCESS) {
                     // show exactly what was stored (names are saved trimmed)
                     first.setText(nullToEmpty(f));
                     last.setText(nullToEmpty(l));
+                    saved[0] = current.get();
                     msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
                     UI.showSaveConfirmation(msg, "Your details are up to date.");
-                    // keep the logged-in user's display name (used in emails) in step with the edit
-                    if (Data.getCurrentUserId() == userId) {
-                        String name = ((f != null ? f : "") + " " + (l != null ? l : "")).trim();
-                        Data.setCurrentUser(userId, immutableEmail, name);
-                    }
-                }
-                case INVALID_NAME -> {
+                    if (after != null) after.run();
+                } else {
                     msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Names can be at most " + AccountService.MAX_NAME_LENGTH + " characters.");
+                    msg.setText(saveError(r));
                 }
-                case INVALID_EMAIL -> {
-                    msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Invalid email.");
-                }
-                case EMAIL_ALREADY_USED -> {
-                    msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Email already used.");
-                }
-                case INVALID_PHONE -> {
-                    msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Phone number must be exactly 11 digits.");
-                }
-                case INVALID_DOB -> {
-                    msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Please choose a valid date of birth (not in the future).");
-                }
-                case DB_ERROR -> {
-                    msg.getStyleClass().setAll(UI.ERROR);
-                    msg.setText("Database error.");
-                }
-            }
-        });
+            }, ex -> {
+                saving.set(false);
+                save.setText("Save");
+                msg.getStyleClass().setAll(UI.ERROR);
+                msg.setText(saveError(AccountService.SaveResult.DB_ERROR));
+            });
+        };
+        save.setOnAction(e -> doSave.accept(null));
         msg.visibleProperty().bind(msg.textProperty().isNotEmpty());
         msg.managedProperty().bind(msg.visibleProperty());
 
@@ -171,10 +190,7 @@ public class AccountView {
         phoneCount.visibleProperty().bind(phoneCount.managedProperty());
         g.addRow(r++, formLabel("Phone"), phone);
         g.add(phoneCount, 1, r++);
-        g.addRow(r++, formLabel("Date of birth"), dob);
-        // Full width under its label: in the narrow value column a long address broke mid-word ("…@gma / il.com").
-        VBox emailBox = new VBox(4, formLabel("Email"), emailValue);
-        g.add(emailBox, 0, r, 2, 1);
+        g.addRow(r, formLabel("Date of birth"), dobRow);
         g.setMaxWidth(Double.MAX_VALUE);
 
         ColumnConstraints col1 = new ColumnConstraints();
@@ -185,7 +201,71 @@ public class AccountView {
 
         g.getColumnConstraints().addAll(col1, col2);
 
-        return new VBox(10, g, formHint, saveBox, msg);
+        VBox page = new VBox(10, g, formHint, saveBox, msg);
+
+        Predicate<Runnable> leaveGuard = retry -> {
+            AccountFormState s = current.get();
+            if (!s.differsFrom(saved[0])) return true;
+            switch (askDiscard.get()) {
+                case DISCARD -> {
+                    AccountFormState back = saved[0];
+                    first.setText(back.firstName());
+                    last.setText(back.lastName());
+                    phone.setText(back.phone());
+                    dob.setValue(back.dob());
+                    msg.setText("");
+                    return true;
+                }
+                case SAVE -> {
+                    if (s.canSave()) {
+                        doSave.accept(retry);
+                    } else {
+                        // stay so the user can fix it; the hint under the form says what is wrong
+                        updateValidity.run();
+                        (s.phoneOk() ? dob : phone).requestFocus();
+                    }
+                    return false;
+                }
+                default -> {
+                    return false;
+                }
+            }
+        };
+        page.getProperties().put(Navigator.LEAVE_GUARD, leaveGuard);
+        return page;
+    }
+
+    /** "Discard your changes?" with Save / Discard / Keep editing (closing the dialog keeps editing). */
+    static LeaveChoice askDiscard() {
+        ButtonType saveType = new ButtonType("Save", ButtonBar.ButtonData.YES);
+        ButtonType discardType = new ButtonType("Discard", ButtonBar.ButtonData.NO);
+        ButtonType keepType = new ButtonType("Keep editing", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "", saveType, discardType, keepType);
+        alert.setTitle("Unsaved changes");
+        alert.setHeaderText("Discard your changes?");
+        alert.setContentText("You changed your account details but haven't saved them.");
+        UI.styleDialog(alert, Data.getScene());
+        DialogPane pane = alert.getDialogPane();
+        pane.lookupButton(saveType).getStyleClass().add(UI.ALERT_AGREE);
+        pane.lookupButton(discardType).getStyleClass().add(UI.BTN_DANGER);
+        pane.lookupButton(keepType).getStyleClass().add(UI.ALERT_IGNORE);
+        ((Button) pane.lookupButton(saveType)).setDefaultButton(true);
+        ButtonType chosen = alert.showAndWait().orElse(keepType);
+        if (chosen == saveType) return LeaveChoice.SAVE;
+        if (chosen == discardType) return LeaveChoice.DISCARD;
+        return LeaveChoice.KEEP_EDITING;
+    }
+
+    static String saveError(AccountService.SaveResult r) {
+        return switch (r) {
+            case SUCCESS -> "";
+            case INVALID_NAME -> "Names can be at most " + AccountService.MAX_NAME_LENGTH + " characters.";
+            case INVALID_EMAIL -> "Invalid email.";
+            case EMAIL_ALREADY_USED -> "Email already used.";
+            case INVALID_PHONE -> "Phone number must be exactly 11 digits.";
+            case INVALID_DOB -> "Please choose a valid date of birth (not in the future).";
+            case DB_ERROR -> "We couldn't reach the server. Please try again.";
+        };
     }
 
     /** Caps the text length; an over-long paste is cut to fit instead of being dropped entirely. */
@@ -220,7 +300,7 @@ public class AccountView {
         });
     }
 
-    private static String nullToEmpty(String s) {
+    static String nullToEmpty(String s) {
         return s == null ? "" : s;
     }
 
@@ -230,7 +310,7 @@ public class AccountView {
         return t.isEmpty() ? null : t;
     }
 
-    private static Label formLabel(String text) {
+    static Label formLabel(String text) {
         Label l = new Label(text);
         l.getStyleClass().add("form-label");
         l.setMinWidth(Region.USE_PREF_SIZE);

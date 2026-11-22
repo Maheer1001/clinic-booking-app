@@ -37,6 +37,9 @@ public class Data {
         public boolean privacyAccepted = false;
         public boolean termsReadToEnd = false;
         public boolean privacyReadToEnd = false;
+        /** {@link model.SecurityQuestion} key, or null when none is chosen yet. */
+        public String securityQuestionKey = null;
+        public String securityAnswer = "";
     }
 
     private static final SignUpDraft signUpDraft = new SignUpDraft();

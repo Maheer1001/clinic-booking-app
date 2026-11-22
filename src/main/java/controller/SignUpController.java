@@ -10,10 +10,13 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
+import model.SecurityQuestion;
+import view.SecurityQuestionChoice;
 import view.ui.UI;
 
 public class SignUpController {
@@ -24,6 +27,10 @@ public class SignUpController {
     @FXML private Label passwordRulesLabel;
     @FXML private PasswordField confirmPasswordField;
     @FXML private Label confirmErrorLabel;
+    @FXML private ComboBox<SecurityQuestion> questionBox;
+    @FXML private Label questionHintLabel;
+    @FXML private TextField answerField;
+    @FXML private Label answerErrorLabel;
     @FXML private CheckBox termsCheck;
     @FXML private CheckBox privacyCheck;
     @FXML private Label termsHintLabel;
@@ -39,12 +46,18 @@ public class SignUpController {
         hideWhenEmpty(messageLabel);
         hideWhenEmpty(emailErrorLabel);
         hideWhenEmpty(confirmErrorLabel);
+        hideWhenEmpty(answerErrorLabel);
         passwordRulesLabel.setText(AuthService.PASSWORD_RULES);
+        SecurityQuestionChoice.configure(questionBox);
+        questionHintLabel.setText(SecurityQuestionChoice.WHY);
 
         var draft = Data.getSignUpDraft();
         if (draft.email != null) emailField.setText(draft.email);
         if (draft.password != null) passwordField.setText(draft.password);
         if (draft.confirmPassword != null) confirmPasswordField.setText(draft.confirmPassword);
+        // kept while the user reads the Terms / Privacy screens, like the other fields
+        SecurityQuestion.fromKey(draft.securityQuestionKey).ifPresent(questionBox::setValue);
+        if (draft.securityAnswer != null) answerField.setText(draft.securityAnswer);
         termsCheck.setDisable(!draft.termsReadToEnd);
         privacyCheck.setDisable(!draft.privacyReadToEnd);
         termsCheck.setSelected(draft.termsAccepted && draft.termsReadToEnd);
@@ -56,6 +69,19 @@ public class SignUpController {
         emailField.textProperty().addListener((obs, o, n) -> draft.email = n);
         passwordField.textProperty().addListener((obs, o, n) -> draft.password = n);
         confirmPasswordField.textProperty().addListener((obs, o, n) -> draft.confirmPassword = n);
+        questionBox.valueProperty().addListener((obs, o, n) -> {
+            draft.securityQuestionKey = n == null ? null : n.key();
+            messageLabel.setText("");
+        });
+        answerField.textProperty().addListener((obs, o, n) -> {
+            draft.securityAnswer = n;
+            messageLabel.setText("");
+            // clear a "too short" note as soon as the answer is long enough
+            if (!answerErrorLabel.getText().isEmpty()) updateAnswerError();
+        });
+        answerField.focusedProperty().addListener((obs, was, focused) -> {
+            if (!focused && !answerField.getText().isEmpty()) updateAnswerError();
+        });
         termsCheck.selectedProperty().addListener((obs, o, n) -> {
             if (!draft.termsReadToEnd) {
                 termsCheck.setSelected(false);
@@ -77,6 +103,8 @@ public class SignUpController {
                 .or(emailField.textProperty().isEmpty())
                 .or(passwordField.textProperty().isEmpty())
                 .or(confirmPasswordField.textProperty().isEmpty())
+                .or(questionBox.valueProperty().isNull())
+                .or(answerField.textProperty().isEmpty())
                 .or(termsCheck.selectedProperty().not())
                 .or(privacyCheck.selectedProperty().not()));
 
@@ -129,6 +157,13 @@ public class SignUpController {
         passwordRulesLabel.getStyleClass().setAll("label", ok ? "auth-hint" : "auth-field-error");
     }
 
+    private void updateAnswerError() {
+        String problem = SecurityQuestionChoice.answerProblem(answerField.getText());
+        answerErrorLabel.setText(problem);
+        answerField.getStyleClass().remove("input-invalid");
+        if (!problem.isEmpty()) answerField.getStyleClass().add("input-invalid");
+    }
+
     private void updateConfirmError() {
         String p1 = passwordField.getText();
         String p2 = confirmPasswordField.getText();
@@ -143,6 +178,8 @@ public class SignUpController {
         String password = passwordField.getText();
         String confirm = confirmPasswordField.getText();
         boolean accepted = termsCheck.isSelected() && privacyCheck.isSelected();
+        String questionKey = questionBox.getValue() == null ? null : questionBox.getValue().key();
+        String answer = answerField.getText();
 
         if (password == null || !password.equals(confirm)) {
             showError("Passwords don't match.");
@@ -150,7 +187,7 @@ public class SignUpController {
         }
 
         busy.set(true);
-        Background.run(() -> authService.signUp(email, password, accepted), result -> {
+        Background.run(() -> authService.signUp(email, password, accepted, questionKey, answer), result -> {
             busy.set(false);
             switch (result) {
                 case SUCCESS -> {
@@ -159,6 +196,8 @@ public class SignUpController {
                     d.email = "";
                     d.password = "";
                     d.confirmPassword = "";
+                    d.securityQuestionKey = null;
+                    d.securityAnswer = "";
                     d.termsAccepted = false;
                     d.privacyAccepted = false;
                     d.termsReadToEnd = false;
@@ -173,6 +212,14 @@ public class SignUpController {
                 case WEAK_PASSWORD -> showError("Password is too weak. " + AuthService.PASSWORD_RULES);
                 case EMAIL_ALREADY_USED -> showError("An account with this email already exists. Try logging in or resetting your password.");
                 case DB_ERROR -> showError("We couldn't reach the server. Please try again.");
+                case INVALID_SECURITY_QUESTION -> {
+                    showError("Choose a security question from the list.");
+                    questionBox.requestFocus();
+                }
+                case INVALID_SECURITY_ANSWER -> {
+                    updateAnswerError();
+                    answerField.requestFocus();
+                }
             }
         }, ex -> {
             busy.set(false);

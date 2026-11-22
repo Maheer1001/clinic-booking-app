@@ -197,8 +197,7 @@ public class BookingRemindersView {
                 "Get reminded to book an appointment if it has been a while since your last visit.");
         explanation.setWrapText(true);
 
-        HBox notifyDiscreetRow = new HBox(16, notifyChoice, discreetChoice);
-        notifyDiscreetRow.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.layout.FlowPane notifyDiscreetRow = ReminderNotifyChoice.row(notifyChoice, discreetChoice);
 
         Label timeIntro = UI.muted(
                 "How long to wait before we nudge you to book again.");
