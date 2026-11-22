@@ -5,6 +5,7 @@ import model.Appointment;
 import model.AppointmentDetails;
 import model.AvailableTimeslot;
 import model.Book;
+import model.BookingDetails;
 import model.UpcomingAppointmentDetails;
 
 import java.sql.Connection;
@@ -35,27 +36,50 @@ public class AppointmentDAO implements AppointmentRepository {
         this.timeslotDAO = timeslotDAO;
     }
 
+    /**
+     * Inserts the appointment and, when the booking carries personal details (first/last name, date of
+     * birth, phone, email, gender, sexuality, accessibility needs), a "BookingDetails" row for it, in one
+     * transaction: if the details cannot be saved the appointment is not saved either.
+     */
     @Override
     public Optional<Integer> save(Book b, int userId, int timeslotId) {
+        Optional<BookingDetails> details = BookingDetails.fromBook(b);
         try (Connection c = DB.connect()) {
             String insert = """
                 INSERT INTO "Appointment" (user_id, timeslot_id, notes, status)
                 VALUES (?, ?, ?, ?)
                 """;
-            try (PreparedStatement ps = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
-                ps.setInt(1, userId);
-                ps.setInt(2, timeslotId);
-                ps.setString(3, b.getReason());
-                ps.setString(4, "CONFIRMED");
-                ps.executeUpdate();
-                try (ResultSet keys = ps.getGeneratedKeys()) {
-                    if (keys.next()) {
-                        return Optional.of(keys.getInt(1));
+            c.setAutoCommit(false);
+            try {
+                Optional<Integer> appId = Optional.empty();
+                try (PreparedStatement ps = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setInt(1, userId);
+                    ps.setInt(2, timeslotId);
+                    ps.setString(3, b.getReason());
+                    ps.setString(4, "CONFIRMED");
+                    ps.executeUpdate();
+                    try (ResultSet keys = ps.getGeneratedKeys()) {
+                        if (keys.next()) {
+                            appId = Optional.of(keys.getInt(1));
+                        }
                     }
                 }
+                if (appId.isPresent() && details.isPresent()) {
+                    BookingDetailsDAO.insert(c, details.get().withAppId(appId.get()));
+                }
+                if (appId.isPresent()) {
+                    c.commit();
+                } else {
+                    c.rollback();
+                }
+                return appId;
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            // Only the SQL state: driver messages can quote the row, which holds personal details.
+            System.err.println("[AppointmentDAO] Could not save appointment (SQLState " + e.getSQLState() + ")");
         }
         return Optional.empty();
     }

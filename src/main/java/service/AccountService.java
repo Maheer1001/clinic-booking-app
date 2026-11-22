@@ -71,7 +71,8 @@ public class AccountService {
             return SaveResult.INVALID_NAME;
         }
 
-        if (!isValidDob(dob)) {
+        // Date of birth is optional (saved as NULL); one that is given must be plausible.
+        if (dob != null && !isValidDob(dob)) {
             return SaveResult.INVALID_DOB;
         }
 

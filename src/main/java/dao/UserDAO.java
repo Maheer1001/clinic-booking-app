@@ -15,7 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 
-public class UserDAO implements UserRepository {
+public class UserDAO implements UserRepository, AccountRepository {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -221,6 +221,7 @@ public class UserDAO implements UserRepository {
                         WHERE user_id = ? OR test_id IN (SELECT test_id FROM "Test" WHERE user_id = ?))
                 """,
                 "DELETE FROM \"BookingReminder\" WHERE user_id = ?",
+                "DELETE FROM \"BookingDetails\" WHERE app_id IN (SELECT app_id FROM \"Appointment\" WHERE user_id = ?)",
                 "DELETE FROM \"Appointment\" WHERE user_id = ?",
                 """
                 DELETE FROM "Prescription"
@@ -254,6 +255,43 @@ public class UserDAO implements UserRepository {
         }
     }
 
+    @Override
+    public String getPasswordHashByUserId(int userId) throws SQLException {
+        String sql = "SELECT password_hash FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString("password_hash") : null;
+            }
+        }
+    }
+
+    @Override
+    public boolean updatePasswordHashByUserId(int userId, String passwordHash) throws SQLException {
+        String sql = "UPDATE \"User\" SET password_hash = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, passwordHash);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public boolean emailTakenByOtherUser(int userId, String email) throws SQLException {
+        String sql = "SELECT 1 FROM \"User\" WHERE LOWER(email) = LOWER(?) AND user_id <> ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, email == null ? null : email.trim());
+            ps.setInt(2, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    @Override
     public boolean updateName(int userId, String firstName, String lastName) throws SQLException {
         String sql = "UPDATE \"User\" SET first_name = ?, last_name = ? WHERE user_id = ?";
         try (Connection c = DB.connect();
@@ -265,6 +303,7 @@ public class UserDAO implements UserRepository {
         }
     }
 
+    @Override
     public boolean updateEmail(int userId, String newEmail) throws SQLException {
         String sql = "UPDATE \"User\" SET email = ? WHERE user_id = ?";
         try (Connection c = DB.connect();
@@ -276,6 +315,7 @@ public class UserDAO implements UserRepository {
     }
 
 
+    @Override
     public service.AccountService.AccountInfo getAccountInfo(int userId) throws SQLException {
         String sql = """
         SELECT first_name, last_name, phone_number, dob, email
