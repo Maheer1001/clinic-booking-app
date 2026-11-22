@@ -43,6 +43,24 @@ class DatesTest {
     }
 
     @Test
+    void dateTime_isOneFormatEverywhere() {
+        java.time.LocalTime nine = java.time.LocalTime.of(9, 0);
+        assertEquals("Mon 23 Nov 2026, 09:00 – 09:45",
+                Dates.dateTime(LocalDate.of(2026, 11, 23), nine, nine.plusMinutes(45)));
+        assertEquals("Mon 23 Nov 2026, 09:00", Dates.dateTime(LocalDate.of(2026, 11, 23), nine, null));
+        assertEquals("Wed 25 Nov 2026, 15:00 – 15:30", Dates.dateTime("25/11/26", "15:00", "15:30"),
+                "stored strings (emails, cancel/reschedule) read the same as the screens");
+        assertEquals("09:00 – 09:45", Dates.timeRange(nine, nine.plusMinutes(45)));
+    }
+
+    @Test
+    void monthsAreThreeLetters() {
+        // Locale.UK writes "Sept"; every other month is three letters.
+        assertEquals("Wed 23 Sep 2026", Dates.full(LocalDate.of(2026, 9, 23)));
+        assertEquals("1 Jan 1990", Dates.medium(LocalDate.of(1990, 1, 1)));
+    }
+
+    @Test
     void countdown() {
         assertEquals("today", Dates.countdown(TODAY, TODAY));
         assertEquals("tomorrow", Dates.countdown(TODAY.plusDays(1), TODAY));

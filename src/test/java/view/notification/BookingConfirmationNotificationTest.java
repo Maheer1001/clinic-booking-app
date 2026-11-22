@@ -54,7 +54,7 @@ class BookingConfirmationNotificationTest {
 
     @Test
     void getMessageShouldContainFormattedDate() {
-        assertTrue(notification.getMessage().contains("Friday, 20 February 2026"));
+        assertTrue(notification.getMessage().contains("Fri 20 Feb 2026"));
     }
 
     @Test

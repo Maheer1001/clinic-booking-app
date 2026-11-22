@@ -16,6 +16,16 @@ final class ReminderFeedback {
 
     private ReminderFeedback() {}
 
+    /** The same styled dialog on every card when a test email can't be sent for lack of an address. */
+    static void noEmailAlert() {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
+        alert.setTitle("No email address");
+        alert.setHeaderText("No email address");
+        alert.setContentText("Add an email address to your account to send a test email.");
+        UI.styleDialog(alert, app.Data.getScene());
+        alert.showAndWait();
+    }
+
     static void sending(Label label) {
         clearError(label);
         label.setText(SENDING);
@@ -31,9 +41,14 @@ final class ReminderFeedback {
     }
 
     static void saveResult(Label label, boolean saved) {
+        saveResult(label, saved, (String) null);
+    }
+
+    /** "Saved. {detail}" on success (same wording on every reminder card and the defaults). */
+    static void saveResult(Label label, boolean saved, String detail) {
         if (saved) {
             clearError(label);
-            UI.showSaveConfirmation(label);
+            UI.showSaveConfirmation(label, detail);
         } else {
             showError(label, SAVE_FAILED);
         }
@@ -52,8 +67,6 @@ final class ReminderFeedback {
         }
     }
 
-    private static final java.time.format.DateTimeFormatter WHEN =
-            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM 'at' HH:mm", java.util.Locale.UK);
 
     /**
      * After saving with reminders on: says when the first email will actually go out, so the user can
@@ -62,7 +75,7 @@ final class ReminderFeedback {
     static void scheduled(Label label, java.util.Optional<java.time.LocalDateTime> firstSend, String whenNone) {
         clearError(label);
         label.setText(firstSend
-                .map(t -> "Saved. Your next reminder will be emailed on " + t.format(WHEN) + ".")
+                .map(t -> "Saved. Your next reminder will be emailed on " + view.ui.Dates.full(t.toLocalDate()) + " at " + view.ui.Dates.time(t.toLocalTime()) + ".")
                 .orElse(whenNone));
     }
 

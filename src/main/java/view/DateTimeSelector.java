@@ -5,18 +5,16 @@ import javafx.scene.layout.VBox;
 import javafx.util.StringConverter;
 import model.AvailableTimeslot;
 import service.SlotSchedule;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
 public class DateTimeSelector extends VBox {
 
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("EEEE d MMMM", java.util.Locale.UK);
 
     private final DatePicker datePicker = new DatePicker();
     private final ComboBox<AvailableTimeslot> timeCombo = new ComboBox<>();
@@ -33,10 +31,9 @@ public class DateTimeSelector extends VBox {
 
         datePicker.setShowWeekNumbers(false);
         datePicker.setConverter(new StringConverter<>() {
-            private final DateTimeFormatter shown = DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
             @Override
             public String toString(LocalDate date) {
-                return date == null ? "" : date.format(shown);
+                return Dates.full(date);
             }
 
             @Override
@@ -69,9 +66,7 @@ public class DateTimeSelector extends VBox {
             @Override
             public String toString(AvailableTimeslot slot) {
                 if (slot == null) return "";
-                return slot.startTime().format(TIME_FMT)
-                        + " – "
-                        + slot.endTime().format(TIME_FMT);
+                return Dates.timeRange(slot.startTime(), slot.endTime());
             }
 
             @Override
@@ -82,10 +77,7 @@ public class DateTimeSelector extends VBox {
 
         timeCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
-                message.setText(newVal.date().format(DATE_FMT) + ", "
-                        + newVal.startTime().format(TIME_FMT)
-                        + " – "
-                        + newVal.endTime().format(TIME_FMT));
+                message.setText(Dates.dateTime(newVal.date(), newVal.startTime(), newVal.endTime()));
                 message.getStyleClass().setAll("label", "detail-value-strong");
 
                 onSelect.accept(newVal);
@@ -123,7 +115,7 @@ public class DateTimeSelector extends VBox {
         List<AvailableTimeslot> slots = provider.getTimeslots(date);
         if (slots.isEmpty()) {
             timeCombo.setDisable(true);
-            message.setText("No times left on " + date.format(DATE_FMT) + ". Please choose another date.");
+            message.setText("No times left on " + Dates.full(date) + ". Please choose another date.");
         } else {
             timeCombo.setDisable(false);
             timeCombo.getItems().addAll(slots);

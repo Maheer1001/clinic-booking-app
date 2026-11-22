@@ -3,6 +3,7 @@ package view.notification;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDate;
@@ -77,30 +78,20 @@ public class TreatmentReminderNotification extends BaseNotification {
 
     @Override
     protected Node buildPreviewContent() {
-        String date = nextDueDate.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
-        Label nextDueLabel = UI.body("Next Due: " + date);
-        VBox card = UI.card(4, nextDueLabel);
-        return new VBox(8, UI.titleSm(getTitle()), card);
+        return NotificationLayout.page(getTitle(), patientName, overridePreview,
+                NotificationLayout.detailsCard("Next due", Dates.full(nextDueDate)), null);
     }
 
     @Override
     protected Node buildFullContent() {
         if (overrideBody != null) {
-            Label body = new Label(overrideBody);
-            body.setWrapText(true);
-            return new VBox(8, UI.titleSm(getTitle()), body);
+            return NotificationLayout.custom(getTitle(), overrideBody);
         }
-
-        String date = nextDueDate.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
-
-        Label treatmentLabel = UI.body("Treatment: " + treatmentName);
-        Label instructionsLabel = UI.body("Instructions: " + treatmentInstructions);
-        Label nextDueLabel = UI.body("Next Due: " + date);
-
-        VBox detailsCard = UI.card(4, treatmentLabel, instructionsLabel, nextDueLabel);
-        Label cta = UI.muted("⚠ Please complete your full course as prescribed.");
-
-        return new VBox(8, UI.titleSm(getTitle()), detailsCard, cta);
+        // The "instructions" passed in are the dose (e.g. "400mg"), so they are labelled as such.
+        return NotificationLayout.page(getTitle(), patientName, null,
+                NotificationLayout.detailsCard("Treatment", treatmentName, "Dose", treatmentInstructions,
+                        "Next due", Dates.full(nextDueDate)),
+                "Please complete your full course as prescribed.");
     }
 
     @Override

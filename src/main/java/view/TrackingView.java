@@ -48,25 +48,26 @@ public class TrackingView {
 
     /** Returns a list-style button with left/right labels (e.g. test type and date). */
     public Button getEntryButton(String left, String right) {
-        Label leftLabel = new Label(left);
+        Label leftLabel = UI.wrappingLabel(left);
         leftLabel.setAlignment(Pos.CENTER_LEFT);
         leftLabel.getStyleClass().add("entry-title");
-        leftLabel.setMinWidth(0);
+        leftLabel.setMaxWidth(Double.MAX_VALUE);
+        // The name takes the spare width (pushing the date right) and wraps, making the row taller,
+        // when it does not fit beside the date.
+        HBox.setHgrow(leftLabel, Priority.ALWAYS);
         Label rightLabel = new Label(right);
         rightLabel.setAlignment(Pos.CENTER_RIGHT);
         rightLabel.getStyleClass().add("entry-meta");
         rightLabel.setMinWidth(Region.USE_PREF_SIZE);
 
-        Region space = new Region();
-        HBox.setHgrow(space, Priority.ALWAYS);
-
-        HBox hbox = new HBox(10, leftLabel, space, rightLabel);
+        HBox hbox = new HBox(10, leftLabel, rightLabel);
         hbox.setAlignment(Pos.CENTER);
 
         Button button = UI.listButton();
         button.setGraphic(hbox);
         button.setMaxWidth(Double.MAX_VALUE);
         button.setAlignment(Pos.CENTER_LEFT);
+        UI.growWithGraphic(button);
         hbox.prefWidthProperty().bind(button.widthProperty().subtract(34));
         button.setAccessibleText(left + ", " + right);
         return button;

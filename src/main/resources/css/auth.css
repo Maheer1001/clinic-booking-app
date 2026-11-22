@@ -40,3 +40,8 @@
 .error {
     -fx-wrap-text: true;
 }
+
+/* Headings are centred, so a subtitle that wraps onto two lines is centred too (it was left-aligned). */
+.auth-heading .label {
+    -fx-text-alignment: center;
+}

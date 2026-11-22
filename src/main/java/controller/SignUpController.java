@@ -194,7 +194,7 @@ public class SignUpController {
         try {
             Stage stage = (Stage) emailField.getScene().getWindow();
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/login.fxml"));
-            Scene scene = new Scene(loader.load(), 420, 720);
+            Scene scene = new Scene(UI.authPage(loader.load()), 420, 720);
             scene.getStylesheets().add(UI.STYLE);
             if (infoMessage != null) {
                 LoginController login = loader.getController();

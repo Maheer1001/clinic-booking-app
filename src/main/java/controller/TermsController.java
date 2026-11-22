@@ -46,7 +46,7 @@ public class TermsController {
         try {
             Stage stage = (Stage) scrollPane.getScene().getWindow();
             FXMLLoader loader = new FXMLLoader(getClass().getResource(fxmlPath));
-            Scene scene = new Scene(loader.load(), 420, 720);
+            Scene scene = new Scene(UI.authPage(loader.load()), 420, 720);
             scene.getStylesheets().add(UI.STYLE);
             stage.setScene(scene);
         } catch (Exception ignored) {

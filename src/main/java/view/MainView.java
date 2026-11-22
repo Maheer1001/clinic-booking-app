@@ -32,7 +32,7 @@ public class MainView {
     private final ToggleButton trackingButton = UI.navButton("Tracking");
     private final ToggleButton remindersButton = UI.navButton("Reminders");
     /** Entry point for per-user default appointment reminder configuration (behaviour can be moved later). */
-    private final Button deleteUser = UI.dangerButton("Delete account");
+    private final Button deleteUser = UI.destructiveButton("Delete account");
     private final Button logOutButton = UI.menuButton("Log Out");
 
     public ToggleButton getBookingButton() {return bookingButton;}
@@ -80,7 +80,7 @@ public class MainView {
         } else {
             for (UpcomingAppointmentDetails apt : appointments) {
 
-                Label service = new Label(apt.serviceName());
+                Label service = UI.wrappingLabel(apt.serviceName());
                 service.getStyleClass().add("appointment-title");
                 Label when = new Label(Dates.upcoming(apt.date(), today) + "  ·  " + Dates.timeRange(apt.startTime(), apt.endTime()));
                 when.getStyleClass().add("appointment-meta");
@@ -93,6 +93,9 @@ public class MainView {
                 btn.getStyleClass().add("appointment-card");
                 btn.setMaxWidth(Double.MAX_VALUE);
                 btn.setAlignment(Pos.CENTER_LEFT);
+                UI.growWithGraphic(btn);
+                // Sized to the card so a long service name wraps and the card grows instead of cutting it off.
+                details.prefWidthProperty().bind(btn.widthProperty().subtract(34));
                 btn.setAccessibleText(apt.serviceName() + ", " + Dates.full(Dates.parseStored(apt.date()))
                         + " at " + apt.startTime() + ", " + apt.clinicName() + ". Open details");
 
@@ -153,7 +156,7 @@ public class MainView {
             card.getChildren().add(chip);
         }
         card.getChildren().addAll(
-                UI.detail("WHEN", (date != null ? Dates.full(date) : apt.date()) + ", " + Dates.timeRange(apt.startTime(), apt.endTime())),
+                UI.detail("WHEN", Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())),
                 UI.detail("CLINIC", apt.clinicName()));
         List<String> notes = apt.getNotesLines();
         if (!notes.isEmpty()) {
@@ -171,7 +174,7 @@ public class MainView {
 
         reschedule.setMaxWidth(Double.MAX_VALUE);
         // Destructive, so styled as such and confirmed: one stray click used to cancel the appointment.
-        Button cancel = UI.dangerButton("Cancel appointment");
+        Button cancel = UI.destructiveButton("Cancel appointment");
         cancel.setMaxWidth(Double.MAX_VALUE);
 
         cancel.setOnAction(e -> {
@@ -192,9 +195,7 @@ public class MainView {
             if (recipientEmail != null && !recipientEmail.isBlank()) {
 
                 String appointmentRef = "APP-" + appId;
-                String dateTimeStr = apt.date() + " " +
-                        apt.startTime() + " - " +
-                        apt.endTime();
+                String dateTimeStr = Dates.dateTime(apt.date(), apt.startTime(), apt.endTime());
 
                 BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(Data.getCurrentUserId());
                 boolean cancellationDiscreet = commPrefs.cancellationDiscreet();
@@ -240,7 +241,7 @@ public class MainView {
         alert.setTitle("Cancel appointment");
         alert.setHeaderText("Cancel your " + apt.serviceName() + "?");
         LocalDate date = Dates.parseStored(apt.date());
-        alert.setContentText((date != null ? Dates.full(date) : apt.date()) + " at " + apt.startTime()
+        alert.setContentText(Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())
                 + "\n" + apt.clinicName() + "\n\nThe time will be released and you will get a cancellation email.");
         UI.styleDialog(alert, Data.getScene());
         DialogPane pane = alert.getDialogPane();

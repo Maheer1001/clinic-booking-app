@@ -44,7 +44,7 @@ class TestResultNotificationTest {
 
     @Test
     void getMessageShouldContainFormattedDate() {
-        assertTrue(notification.getMessage().contains("05 February 2026"));
+        assertTrue(notification.getMessage().contains("5 Feb 2026"));
     }
 
     @Test
@@ -53,8 +53,8 @@ class TestResultNotificationTest {
     }
 
     @Test
-    void getMessageShouldContainSecurityInstruction() {
-        assertTrue(notification.getMessage().contains("log in"));
+    void getMessageShouldSayWhereToSeeResults() {
+        assertTrue(notification.getMessage().contains("Tracking"));
     }
 
     @Test

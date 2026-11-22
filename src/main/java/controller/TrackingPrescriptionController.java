@@ -267,7 +267,13 @@ public class TrackingPrescriptionController extends TrackingSectionController {
     public Node getDetailsPage(TrackingData td) {
         PrescriptionSummary prescription = (PrescriptionSummary) td;
 
-        HBox graphic = view.getEntryHeader(prescription.name(), prescription.active() ? "Current" : "Finished");
+        HBox graphic = view.getEntryHeader(prescription.name(), "");
+        // Same coloured pill as a test result's status (it was plain text here).
+        Label status = new Label(prescription.active() ? "Current" : "Finished");
+        status.getStyleClass().addAll("tracking-status", prescription.active() ? "tracking-status-current" : "tracking-status-finished");
+        status.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        graphic.getChildren().set(graphic.getChildren().size() - 1, status);
+        graphic.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         HBox doseRow = new HBox(16, UI.detail("DOSE", prescription.dosage()), UI.detail("HOW OFTEN", prescription.getCourse()));
         HBox dateRow = new HBox(16, UI.detail("STARTED", TrackingDates.display(prescription.startDate())),
@@ -302,9 +308,9 @@ public class TrackingPrescriptionController extends TrackingSectionController {
             bookingReminderButton.setOnAction(e -> nav.goToPageNewTab("reminders", new RemindersView(Data.getCurrentUserId()).getRemindersScene("prescriptions"), "Reminders", true));
             HBox reminder = UI.callout("A reminder makes it easier to take every dose on time.", bookingReminderButton);
 
-            return UI.page(UI.card(12, graphic, info), reminder);
+            return withTrackingStyles(UI.page(UI.card(12, graphic, info), reminder));
         } else {
-            return UI.page(UI.card(12, graphic, info));
+            return withTrackingStyles(UI.page(UI.card(12, graphic, info)));
         }
     }
 }

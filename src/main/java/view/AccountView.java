@@ -121,7 +121,7 @@ public class AccountView {
                     first.setText(nullToEmpty(f));
                     last.setText(nullToEmpty(l));
                     msg.getStyleClass().setAll(UI.INLINE_SAVE_CONFIRM);
-                    UI.showSaveConfirmation(msg);
+                    UI.showSaveConfirmation(msg, "Your details are up to date.");
                     // keep the logged-in user's display name (used in emails) in step with the edit
                     if (Data.getCurrentUserId() == userId) {
                         String name = ((f != null ? f : "") + " " + (l != null ? l : "")).trim();
@@ -163,13 +163,18 @@ public class AccountView {
         int r = 0;
         g.addRow(r++, formLabel("First name"), first);
         g.addRow(r++, formLabel("Last name"), last);
-        VBox phoneBox = new VBox(4, phone, phoneCount);
-        phoneBox.setAlignment(Pos.TOP_LEFT);
+        // The "7/11" counter gets its own row under the field, so the Phone label stays level with
+        // the field like the other labels (it sat lower while the counter shared the row).
         phoneCount.setMaxWidth(Double.MAX_VALUE);
         phoneCount.setAlignment(Pos.CENTER_RIGHT);
-        g.addRow(r++, formLabel("Phone"), phoneBox);
+        phoneCount.managedProperty().bind(phoneCount.textProperty().isNotEmpty());
+        phoneCount.visibleProperty().bind(phoneCount.managedProperty());
+        g.addRow(r++, formLabel("Phone"), phone);
+        g.add(phoneCount, 1, r++);
         g.addRow(r++, formLabel("Date of birth"), dob);
-        g.addRow(r, formLabel("Email"), emailValue);
+        // Full width under its label: in the narrow value column a long address broke mid-word ("…@gma / il.com").
+        VBox emailBox = new VBox(4, formLabel("Email"), emailValue);
+        g.add(emailBox, 0, r, 2, 1);
         g.setMaxWidth(Double.MAX_VALUE);
 
         ColumnConstraints col1 = new ColumnConstraints();

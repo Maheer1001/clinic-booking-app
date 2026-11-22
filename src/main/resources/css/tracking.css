@@ -26,3 +26,16 @@
     -fx-border-color: #6b6b78;
     -fx-text-fill: #3d3d47;
 }
+
+/* Prescription status on its detail card: same pill as a test result. */
+.tracking-status-current {
+    -fx-background-color: #e3f4e8;
+    -fx-border-color: #2e7d4f;
+    -fx-text-fill: #1d5235;
+}
+
+.tracking-status-finished {
+    -fx-background-color: #f1f1f4;
+    -fx-border-color: #6b6b78;
+    -fx-text-fill: #3d3d47;
+}

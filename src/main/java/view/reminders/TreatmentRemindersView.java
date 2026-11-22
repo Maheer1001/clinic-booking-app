@@ -88,15 +88,14 @@ public class TreatmentRemindersView {
 
     private static VBox createPrescriptionCard(Prescription rx, PrescriptionReminder existing, ReminderController controller,
                                               Optional<AppointmentReminderDefaults> defaults) {
-        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
         LocalDate end = rx.getEndDate();
         Label dateLabel;
         if (end == null) {
-            dateLabel = UI.body("From " + rx.getStartDate().format(dateFmt));
+            dateLabel = UI.body("From " + view.ui.Dates.medium(rx.getStartDate()));
         } else {
-            dateLabel = UI.body("From " + rx.getStartDate().format(dateFmt)
-                    + " to " + end.format(dateFmt));
+            dateLabel = UI.body("From " + view.ui.Dates.medium(rx.getStartDate())
+                    + " to " + view.ui.Dates.medium(end));
         }
         dateLabel.setWrapText(true);
         dateLabel.setMaxWidth(Double.MAX_VALUE);
@@ -123,14 +122,14 @@ public class TreatmentRemindersView {
                 existing != null ? existing.getCustomMessage() : null
         );
 
-        TextField emailFromNameField = new TextField(overrides.getEmailFromName());
+        TextField emailFromNameField = UI.textField(overrides.getEmailFromName());
         emailFromNameField.setPromptText("Email sender name (optional)");
-        TextField emailSubjectField = new TextField(overrides.getEmailSubject());
+        TextField emailSubjectField = UI.textField(overrides.getEmailSubject());
         emailSubjectField.setPromptText("Email subject (optional)");
 
-        TextField notifTitleField = new TextField(overrides.getNotificationTitle());
+        TextField notifTitleField = UI.textField(overrides.getNotificationTitle());
         notifTitleField.setPromptText("Notification title (optional)");
-        TextField notifPreviewField = new TextField(overrides.getNotificationPreview());
+        TextField notifPreviewField = UI.textField(overrides.getNotificationPreview());
         notifPreviewField.setPromptText("Notification preview line (optional)");
         TextArea notifBodyField = new TextArea(overrides.getNotificationBody());
         notifBodyField.setPromptText("Notification full body (optional)");
@@ -168,10 +167,10 @@ public class TreatmentRemindersView {
             p.setExpanded(false);
         }
 
-        Button saveBtn = UI.primaryButton("Save reminder");
-        Button testEmailBtn = UI.backButton("Send test email");
-        Button testNotifBtn = UI.backButton("Preview notification");
-        Button resetBtn = UI.backButton("Reset to default");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button testNotifBtn = UI.secondaryButton("Preview notification");
+        Button resetBtn = UI.secondaryButton("Reset to default");
         Label saveConfirm = UI.inlineSaveConfirmation();
 
         boolean canReset = defaults != null && defaults.isPresent() && rx.getDosesPerDay() != null && rx.getDosesPerDay() > 0;
@@ -236,13 +235,7 @@ public class TreatmentRemindersView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.");
-                DialogPane dialogPane = alert.getDialogPane();
-                dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-                Stage stage = (Stage) dialogPane.getScene().getWindow();
-                stage.getIcons().add(new Image(TreatmentRemindersView.class.getResource("/icons/safe.png").toExternalForm()));
-                dialogPane.setGraphic(null);
-                alert.showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {

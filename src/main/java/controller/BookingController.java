@@ -261,7 +261,10 @@ public class BookingController {
         });
         clinicMap.show(clinics, null);
 
-        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"), hbox, messageLabel, clinicMap.node(), list);
+        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"),
+                new VBox(4, UI.pageHeading("Where would you like to go?"),
+                        UI.intro("Search by postcode to see the nearest clinics, or pick one on the map.")),
+                hbox, messageLabel, clinicMap.node(), list);
         page.setSpacing(12);
         if (clinics.isEmpty()) {
             page.getChildren().add(UI.emptyState(UI.ICON_SEARCH, "No clinics yet",
@@ -455,7 +458,7 @@ public class BookingController {
                         : "Reminders are off (your saved default). You can turn them on in Reminders."),
                 ex -> blurbLabel.setText("We couldn't set up a reminder automatically. You can set one in Reminders."));
 
-        Button setupRemindersBtn = UI.backButton("Change reminder");
+        Button setupRemindersBtn = UI.secondaryButton("Change reminder");
         Button skipBtn = UI.primaryButton("Done");
 
         setupRemindersBtn.setOnAction(e -> {nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});
@@ -469,7 +472,8 @@ public class BookingController {
         for (BookingService.BookedAppointment appt : outcome.booked()) {
             String service = appt.service() != null ? appt.service().getName() : "Appointment";
             String when = appt.date() != null && appt.time() != null
-                    ? appt.date().format(CONFIRMED_DATE_FMT) + " at " + appt.time().format(CONFIRMED_TIME_FMT)
+                    ? view.ui.Dates.dateTime(appt.date(), appt.time(), appt.service() != null && appt.service().getDurationMinutes() > 0
+                            ? appt.time().plusMinutes(appt.service().getDurationMinutes()) : null)
                     : "";
             VBox row = new VBox(4, UI.detailTitle(service));
             if (!when.isEmpty()) row.getChildren().add(UI.detail("WHEN", when));
@@ -520,10 +524,6 @@ public class BookingController {
         return "Patient";
     }
 
-    private static final java.time.format.DateTimeFormatter CONFIRMED_DATE_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
-    private static final java.time.format.DateTimeFormatter CONFIRMED_TIME_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
     public void goToReview() {
         nav.goToPage(Review.getPage(this), "Review booking", false);
