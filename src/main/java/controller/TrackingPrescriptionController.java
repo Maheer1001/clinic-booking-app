@@ -100,14 +100,10 @@ public class TrackingPrescriptionController extends TrackingSectionController {
             listHistory.getChildren().add(button);
         }
 
-        filteredCurrent.addListener((ListChangeListener<PrescriptionSummary>) c ->
-                listCurrent.getChildren().setAll(filteredCurrent.stream().map(buttonCurrent::get).toList()));
-
+        // Redraw from the sorted views only: each wraps its filtered list, so it also fires when the search
+        // or dates change. Redrawing from the filtered lists as well undid the chosen sort order.
         sortedCurrent.addListener((ListChangeListener<PrescriptionSummary>) c ->
                 listCurrent.getChildren().setAll(sortedCurrent.stream().map(buttonCurrent::get).toList()));
-
-        filteredHistory.addListener((ListChangeListener<PrescriptionSummary>) c ->
-                listHistory.getChildren().setAll(filteredHistory.stream().map(buttonHistory::get).toList()));
 
         sortedHistory.addListener((ListChangeListener<PrescriptionSummary>) c ->
                 listHistory.getChildren().setAll(sortedHistory.stream().map(buttonHistory::get).toList()));
