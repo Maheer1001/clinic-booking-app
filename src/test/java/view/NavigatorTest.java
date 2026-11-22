@@ -3,7 +3,13 @@ package view;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import view.ui.UI;
+
+import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -127,6 +133,56 @@ public class NavigatorTest {
         for (var b : buttons) {
             assertNotNull(((javafx.scene.control.Button) b).getAccessibleText());
             assertNotNull(((javafx.scene.control.Button) b).getTooltip());
+        }
+    }
+
+    @Test
+    void backFromSettingsRebuildsTheHomePage() {
+        // a home page built before the user edited their name in Settings would still greet the old name
+        VBox staleHome = new VBox();
+        nav.goToPage(staleHome, "Booking", true);
+        nav.goToPage(new VBox(), "Settings", false);
+        nav.goBack();
+        assertNotSame(staleHome, nav.getRoot().getCenter());
+        assertNotNull(nav.getRoot().getCenter());
+    }
+
+    @Test
+    void backFromOtherPagesKeepsTheSameHomePage() {
+        VBox home = new VBox();
+        nav.goToPage(home, "Booking", true);
+        nav.goToPage(new VBox(), "Find a clinic", false);
+        nav.goBack();
+        assertSame(home, nav.getRoot().getCenter());
+    }
+
+    @Test
+    void tabLabelsFitAtEveryTextSize() throws Exception {
+        // measure with the app's real font; the default font is narrower and would hide the problem
+        for (String f : new String[]{"Regular", "SemiBold", "Bold", "ExtraBold"}) {
+            try (var in = getClass().getResourceAsStream("/fonts/Nunito-" + f + ".ttf")) {
+                Font.loadFont(in, 14);
+            }
+        }
+        for (String size : new String[]{null, UI.TEXT_SIZE_UP_STYLE, UI.TEXT_SIZE_DOWN_STYLE}) {
+            MainView v = new MainView();
+            Navigator n = new Navigator(v);
+            v.getRemindersButton().setSelected(true); // the selected tab uses the heaviest weight
+            Scene scene = new Scene(n.getRoot(), 420, 720);
+            scene.getStylesheets().addAll(UI.STYLE, UI.BOLD_STYLE);
+            if (size != null) scene.getStylesheets().add(size);
+            n.getRoot().resize(420, 720);
+            n.getRoot().applyCss();
+            n.getRoot().layout();
+            for (var b : List.of(v.getBookingButton(), v.getTrackingButton(), v.getRemindersButton())) {
+                Text needed = new Text(b.getText());
+                needed.setFont(b.getFont());
+                double room = b.getWidth() - b.snappedLeftInset() - b.snappedRightInset();
+                // a few px of slack: on a real (scaled) display "Reminders" was ellipsised with under 1px to spare
+                assertTrue(needed.getLayoutBounds().getWidth() + 8 <= room,
+                        "'" + b.getText() + "' is cut short with " + size + ": needs "
+                                + needed.getLayoutBounds().getWidth() + "px, has " + room + "px");
+            }
         }
     }
 }

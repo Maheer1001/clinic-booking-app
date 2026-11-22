@@ -243,6 +243,12 @@ public class Navigator {
         Stack<Page> stack = tabHistory.get(currentTab.get());
         if (!stack.isEmpty()) {
             Page previousPage = stack.pop();
+            if (isSettings.get() && previousPage.isHome()) {
+                // Settings can change what a home page shows (e.g. the "Hi <name>" greeting),
+                // so rebuild it rather than returning to the stale copy.
+                Supplier<Page> factory = homePages.get(currentTab.get());
+                if (factory != null) previousPage = factory.get();
+            }
             navigateTo(previousPage.page(), previousPage.title(), previousPage.isHome());
         } else {
             goToHome();
