@@ -227,7 +227,12 @@ public class TrackingTestController extends TrackingSectionController {
             BookingController bc = new BookingController(nav);
 
             Button newBookingButton = UI.shortcutButton("Book a retest");
-            newBookingButton.setOnAction(e -> {nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Find a clinic", false); nav.clearTabStack("booking");});
+            newBookingButton.setOnAction(e -> {
+                nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Find a clinic", false);
+                nav.clearTabStack("booking");
+                // Same offer as "+ Book Appointment": book at the saved default clinic, or choose another.
+                try { bc.checkForDefaultClinic(); } catch (java.sql.SQLException ignored) {}
+            });
             HBox booking = UI.callout("A positive result usually needs a retest. Book a follow-up when you are ready.", newBookingButton);
 
             return withTrackingStyles(UI.page(UI.card(12, graphic, info), booking, reminder));
