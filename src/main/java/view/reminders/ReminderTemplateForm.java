@@ -33,6 +33,8 @@ public final class ReminderTemplateForm {
     private final TitledPane timePane;
     private final TitledPane emailPane;
     private final TitledPane notifPane;
+    /** True while fields are being filled in from saved settings, so that does not count as an edit. */
+    private boolean populating = true;
 
     public ReminderTemplateForm(String initialCustomDays, String initialCustomMessage, boolean initialNotify) {
         Label scheduleLabel = new Label("When should we remind you?");
@@ -52,12 +54,17 @@ public final class ReminderTemplateForm {
 
         Button addReminderBtn = UI.positiveButton("Add another reminder");
         addReminderBtn.setMaxWidth(Double.MAX_VALUE);
-        addReminderBtn.setOnAction(e -> addScheduleRuleRow(new ReminderSchedule.ReminderRule(1, "day", null, null)));
+        addReminderBtn.setOnAction(e -> {
+            addScheduleRuleRow(new ReminderSchedule.ReminderRule(1, "day", null, null));
+            scheduleEdited();
+        });
 
         quietStartField = UI.textField("");
         quietStartField.setPromptText("Start HH:mm");
+        quietStartField.textProperty().addListener((o, a, b) -> scheduleEdited());
         quietEndField = UI.textField("");
         quietEndField.setPromptText("End HH:mm");
+        quietEndField.textProperty().addListener((o, a, b) -> scheduleEdited());
         Label quietLabel = new Label("Quiet hours (optional, 24h):");
         quietLabel.setWrapText(true);
         quietLabel.setMaxWidth(Double.MAX_VALUE);
@@ -121,13 +128,34 @@ public final class ReminderTemplateForm {
         for (TitledPane pane : List.of(timePane, emailPane, notifPane)) {
             pane.getStyleClass().add(UI.REMINDER_TITLED_PANE);
         }
+        populating = false;
+    }
+
+    /**
+     * Changing when to be reminded only makes sense with reminders on, so it switches them on.
+     * Before, every card started as "Disabled" and saving a new schedule quietly kept it off.
+     */
+    private void scheduleEdited() {
+        if (!populating) {
+            ReminderNotifyChoice.applyEnabled(notifyChoice, true);
+        }
+    }
+
+    /** The last reminder row cannot be removed: an empty schedule used to be saved as "2 days before". */
+    private void refreshRemoveButtons() {
+        boolean onlyOne = scheduleRows.getChildren().size() <= 1;
+        for (javafx.scene.Node n : scheduleRows.getChildren()) {
+            if (n.getUserData() instanceof Button remove) {
+                remove.setDisable(onlyOne);
+            }
+        }
     }
 
     private void addScheduleRuleRow(ReminderSchedule.ReminderRule rule) {
         int amount = rule != null && rule.amount() > 0 ? rule.amount() : 1;
         String unit = rule != null && rule.unit() != null ? rule.unit() : "day";
 
-        Spinner<Integer> amountSpin = new Spinner<>(0, 365, amount);
+        Spinner<Integer> amountSpin = new Spinner<>(1, 365, amount);
         UI.tuneIntSpinner(amountSpin);
         ChoiceBox<String> unitChoice = new ChoiceBox<>();
         unitChoice.getItems().addAll("second", "minute", "hour", "day", "week");
@@ -178,8 +206,23 @@ public final class ReminderTemplateForm {
 
         VBox row = new VBox(8, line1, line2, line3);
         row.setMaxWidth(Double.MAX_VALUE);
+        row.setUserData(removeBtn);
         scheduleRows.getChildren().add(row);
-        removeBtn.setOnAction(ev -> scheduleRows.getChildren().remove(row));
+        removeBtn.setOnAction(ev -> {
+            if (scheduleRows.getChildren().size() > 1) {
+                scheduleRows.getChildren().remove(row);
+                refreshRemoveButtons();
+                scheduleEdited();
+            }
+        });
+        refreshRemoveButtons();
+
+        amountSpin.valueProperty().addListener((o, a, b) -> scheduleEdited());
+        unitChoice.valueProperty().addListener((o, a, b) -> scheduleEdited());
+        timeOfDayField.textProperty().addListener((o, a, b) -> scheduleEdited());
+        repeatCheck.selectedProperty().addListener((o, a, b) -> scheduleEdited());
+        repeatAmount.valueProperty().addListener((o, a, b) -> scheduleEdited());
+        repeatUnit.valueProperty().addListener((o, a, b) -> scheduleEdited());
     }
 
     /**
@@ -187,6 +230,15 @@ public final class ReminderTemplateForm {
      * from the given stored defaults. This does not auto-save.
      */
     public void resetAllFields(String customDays, String customMessage, boolean notifyEnabled) {
+        populating = true;
+        try {
+            fill(customDays, customMessage, notifyEnabled);
+        } finally {
+            populating = false;
+        }
+    }
+
+    private void fill(String customDays, String customMessage, boolean notifyEnabled) {
         ReminderNotifyChoice.applyEnabled(notifyChoice, notifyEnabled);
 
         ReminderSchedule schedule = ReminderSchedule.fromString(customDays, 2);
@@ -234,6 +286,46 @@ public final class ReminderTemplateForm {
         return row;
     }
 
+    /** True when reminders are switched on in this form. */
+    public boolean isEnabled() {
+        return ReminderNotifyChoice.isEnabled(notifyChoice);
+    }
+
+    /**
+     * Checks the typed times before saving. A time such as "9am" used to be saved and then silently
+     * ignored, so the reminder went out at a different time from the one shown.
+     *
+     * @return a message for the user, or null when everything can be saved
+     */
+    public String validationError() {
+        for (javafx.scene.Node n : scheduleRows.getChildren()) {
+            if (!(n instanceof VBox row) || row.getChildren().size() < 3) continue;
+            TextField timeOfDayField = (TextField) ((VBox) row.getChildren().get(1)).getChildren().get(1);
+            if (isBadTime(timeOfDayField.getText())) {
+                return "Time of day must be a 24-hour time such as 09:00.";
+            }
+        }
+        String qs = quietStartField.getText() == null ? "" : quietStartField.getText().trim();
+        String qe = quietEndField.getText() == null ? "" : quietEndField.getText().trim();
+        if (isBadTime(qs) || isBadTime(qe)) {
+            return "Quiet hours must be 24-hour times such as 22:00 and 07:00.";
+        }
+        if (qs.isEmpty() != qe.isEmpty()) {
+            return "Enter both a start and an end for quiet hours, or leave both empty.";
+        }
+        return null;
+    }
+
+    private static boolean isBadTime(String text) {
+        return text != null && !text.isBlank() && ReminderSchedule.parseTime(text) == null;
+    }
+
+    /** Saves times as HH:mm so "9:00" and "09:00" are stored the same way. */
+    private static String normalisedTime(String text) {
+        java.time.LocalTime t = ReminderSchedule.parseTime(text);
+        return t == null ? null : t.toString();
+    }
+
     public Payload collectPayload() {
         boolean notificationsEnabled = ReminderNotifyChoice.isEnabled(notifyChoice);
         Boolean discreetOverride = DiscreetReminderChoice.toOverride(discreetChoice.getValue());
@@ -268,7 +360,7 @@ public final class ReminderTemplateForm {
 
             int amt = amountSpin.getValue();
             String u = unitChoice.getValue();
-            String timeOfDay = timeOfDayField.getText();
+            String timeOfDay = normalisedTime(timeOfDayField.getText());
 
             ReminderSchedule.RepeatEvery repeat = null;
             if (repeatCheck.isSelected()) {
@@ -280,8 +372,8 @@ public final class ReminderTemplateForm {
         ReminderSchedule.QuietHours quiet = null;
         String qs = quietStartField.getText() != null ? quietStartField.getText().trim() : "";
         String qe = quietEndField.getText() != null ? quietEndField.getText().trim() : "";
-        if (!qs.isEmpty() && !qe.isEmpty()) {
-            quiet = new ReminderSchedule.QuietHours(qs, qe);
+        if (normalisedTime(qs) != null && normalisedTime(qe) != null) {
+            quiet = new ReminderSchedule.QuietHours(normalisedTime(qs), normalisedTime(qe));
         }
 
         ReminderSchedule schedule = new ReminderSchedule(rules, quiet);

@@ -234,4 +234,47 @@ class NotificationSchedulerScheduleTest {
         assertFalse(email.isDiscreet());
         assertEquals("STI Screening", email.getTemplateContext().get("appointmentType"));
     }
+
+    @Test
+    void schedule_reportsWhenTheFirstReminderGoesOut() {
+        scheduler = new NotificationScheduler(sender, 30);
+        Appointment appt = new Appointment(5, 1, "STI Screening", "Clinic 1", "Dr. Smith",
+                LocalDateTime.now().plusDays(3).withHour(14).withMinute(0).withSecond(0).withNano(0));
+        String rules = new ReminderSchedule(List.of(
+                new ReminderSchedule.ReminderRule(1, "day", "9:00", null),
+                new ReminderSchedule.ReminderRule(2, "day", null, null)), null).toJson();
+
+        var first = scheduler.scheduleAppointmentReminderWithSchedule(appt, "p@example.com", "P", rules, discreetOverrides());
+
+        assertEquals(java.util.Optional.of(appt.getAppointmentDateTime().minusDays(2)), first);
+        assertEquals(2, scheduler.pendingCount("appointment:5"));
+    }
+
+    @Test
+    void schedule_forPastAppointment_reportsNothing() {
+        scheduler = new NotificationScheduler(sender, 30);
+        assertTrue(scheduler.scheduleAppointmentReminderWithSchedule(appointmentIn(-60), "p@example.com", "P",
+                singleRule(1, "day"), discreetOverrides()).isEmpty());
+    }
+
+    @Test
+    void bookingReminder_goesOutAtExactlyNine() {
+        scheduler = new NotificationScheduler(sender, 30);
+        LocalDate last = LocalDate.now().minusDays(10);
+
+        var when = scheduler.scheduleBookingReminder("p@example.com", "P", 30, last, null, () -> true);
+
+        assertEquals(java.util.Optional.of(last.plusDays(30).atTime(9, 0)), when);
+    }
+
+    @Test
+    void bookingReminder_notSentOnceNoLongerWanted() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+
+        scheduler.scheduleBookingReminder("p@example.com", "P", 30, null, null, () -> false);
+        Thread.sleep(300);
+
+        assertTrue(sender.sent.isEmpty());
+        assertEquals(0, scheduler.pendingCount());
+    }
 }

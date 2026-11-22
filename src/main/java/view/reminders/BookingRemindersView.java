@@ -71,6 +71,7 @@ public class BookingRemindersView {
         daysLabel.setMaxWidth(Double.MAX_VALUE);
         Spinner<Integer> daysSpinner = new Spinner<>(30, 365, existing != null ? existing.getDaysSinceLast() : 180);
         UI.tuneIntSpinner(daysSpinner);
+        daysSpinner.valueProperty().addListener((o, a, b) -> ReminderNotifyChoice.applyEnabled(notifyChoice, true));
         HBox daysSpinnerRow = new HBox(10, daysSpinner);
         daysSpinnerRow.setAlignment(Pos.CENTER_LEFT);
         VBox daysBlock = new VBox(8, daysLabel, daysSpinnerRow);
@@ -240,15 +241,16 @@ public class BookingRemindersView {
             String customJson = toSave.toJson();
 
             boolean saved = controller.saveBookingReminder(notify, days, customJson, Data.getCurrentUserEmail());
-            ReminderFeedback.saveResult(saveConfirmReminder, saved);
+            ReminderFeedback.saveResult(saveConfirmReminder, saved, notify);
 
             if (saved && notify) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
                 if (name == null || name.isBlank()) name = email;
-                var lastDate = controller.getLastAppointmentDate();
-                controller.scheduleBookingReminder(email, name, days, lastDate.orElse(null), customJson);
+                ReminderFeedback.scheduled(saveConfirmReminder,
+                        controller.scheduleBookingReminder(email, name, days, customJson),
+                        "Saved. We'll start counting from your first visit.");
             }
         });
 
