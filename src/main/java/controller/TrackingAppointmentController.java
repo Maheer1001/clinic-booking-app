@@ -69,9 +69,8 @@ public class TrackingAppointmentController extends TrackingSectionController {
             list.getChildren().add(button);
         }
 
-        filteredAppointments.addListener((ListChangeListener<AppointmentDetails>) c ->
-                list.getChildren().setAll(filteredAppointments.stream().map(buttonMap::get).toList()));
-
+        // Redraw from the sorted view only: it wraps the filtered list, so it also fires when the search
+        // or dates change. Redrawing from the filtered list as well undid the chosen sort order.
         sortedAppointments.addListener((ListChangeListener<AppointmentDetails>) c ->
                 list.getChildren().setAll(sortedAppointments.stream().map(buttonMap::get).toList()));
 

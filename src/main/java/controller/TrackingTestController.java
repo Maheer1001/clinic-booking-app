@@ -79,9 +79,8 @@ public class TrackingTestController extends TrackingSectionController {
             list.getChildren().add(button);
         }
 
-        filteredTests.addListener((ListChangeListener<Test>) c ->
-                list.getChildren().setAll(filteredTests.stream().map(buttonMap::get).toList()));
-
+        // Redraw from the sorted view only: it wraps the filtered list, so it also fires when the search
+        // or dates change. Redrawing from the filtered list as well undid the chosen sort order.
         sortedTests.addListener((ListChangeListener<Test>) c ->
                 list.getChildren().setAll(sortedTests.stream().map(buttonMap::get).toList()));
 
