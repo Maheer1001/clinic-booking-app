@@ -339,7 +339,7 @@ public class NotificationScheduler {
         startChain(key, sendAt, null, UnaryOperator.identity(), t -> true, stillWanted,
                 t -> new MakeAppointmentReminderEmail(
                         recipientEmail, recipientName,
-                        "It has been " + daysSinceLast + " days since your last visit",
+                        bookingReminderReason(daysSinceLast),
                         "Routine Sexual Health Check-up",
                         overrides.getEmailSubject(), overrides.getEmailBodyIntro(), overrides.getEmailFromName(),
                         discreet));
@@ -347,6 +347,14 @@ public class NotificationScheduler {
 
     public void cancelBookingReminders(String recipientEmail) {
         cancel(bookingKey(recipientEmail));
+    }
+
+    /**
+     * "At least": an overdue nudge goes out long after the chosen number of days (it used to say
+     * "It has been 30 days" to someone whose last visit was 82 days ago).
+     */
+    public static String bookingReminderReason(int daysSinceLast) {
+        return "It has been at least " + daysSinceLast + " days since your last visit";
     }
 
     // ------------------------------------------------------------------ lifecycle

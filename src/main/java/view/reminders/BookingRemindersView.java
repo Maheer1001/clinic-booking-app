@@ -11,6 +11,7 @@ import model.BookingCommunicationPreferences;
 import model.BookingReminder;
 import model.ReminderTemplateOverrides;
 import service.NotificationDispatcher;
+import service.NotificationScheduler;
 import service.email.BookingConfirmationEmail;
 import service.email.CancellationEmail;
 import service.email.MakeAppointmentReminderEmail;
@@ -283,7 +284,7 @@ public class BookingRemindersView {
             sendTestEmailAsync(
                     new MakeAppointmentReminderEmail(
                             recipientEmail, recipientName,
-                            "It has been " + days + " days since your last visit",
+                            NotificationScheduler.bookingReminderReason(days),
                             "Routine Sexual Health Check-up",
                             current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
                             DiscreetReminderChoice.isDiscreet(current)
@@ -305,7 +306,7 @@ public class BookingRemindersView {
 
             new MakeAppointmentReminderNotification(
                     Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "",
-                    "It has been " + days + " days since your last visit",
+                    NotificationScheduler.bookingReminderReason(days),
                     "Routine Sexual Health Check-up",
                     current.getNotificationTitle(),
                     current.getNotificationPreview(),

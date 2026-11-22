@@ -310,6 +310,17 @@ class NotificationSchedulerScheduleTest {
     }
 
     @Test
+    void overdueBookingReminder_doesNotUnderstateTheTimeSinceTheLastVisit() throws Exception {
+        scheduler = new NotificationScheduler(sender, 0);
+
+        scheduler.scheduleBookingReminder("p@example.com", "P", 30, LocalDate.now().minusDays(82), null, () -> true);
+
+        waitForSends(1, 2000);
+        assertEquals("It has been at least 30 days since your last visit",
+                sender.sent.getFirst().getTemplateContext().get("reminderReason"));
+    }
+
+    @Test
     void bookingReminder_notSentOnceNoLongerWanted() throws Exception {
         scheduler = new NotificationScheduler(sender, 0);
 
