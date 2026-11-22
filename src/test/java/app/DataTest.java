@@ -2,6 +2,10 @@ package app;
 
 import model.AccessibilitySettings;
 import model.Book;
+import model.StaffAccess;
+import model.StaffRole;
+
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +27,38 @@ class DataTest {
         assertNotSame(draft, Data.getBooking());
         assertEquals(-1, Data.getCurrentUserId());
         assertEquals(-1, Data.getLastSeenTestCount());
+    }
+
+    @Test
+    void staffAccessIsStoredAndClearedOnLogout() {
+        assertEquals(StaffRole.PATIENT, Data.getCurrentRole());
+        assertEquals(-1, Data.getCurrentClinicId());
+
+        Data.setCurrentUser(7, "s@example.com", "Sam");
+        Data.setStaffAccess(new StaffAccess(7, StaffRole.CLINIC_ADMIN, List.of(2, 5), false));
+        assertEquals(StaffRole.CLINIC_ADMIN, Data.getCurrentRole());
+        assertTrue(Data.isStaff());
+        assertEquals(List.of(2, 5), Data.getStaffClinicIds());
+        assertEquals(2, Data.getCurrentClinicId(), "starts in the first clinic");
+        Data.setCurrentClinicId(5);
+        assertEquals(5, Data.getCurrentClinicId());
+        assertThrows(IllegalArgumentException.class, () -> Data.setCurrentClinicId(3));
+        assertThrows(UnsupportedOperationException.class, () -> Data.getStaffClinicIds().add(3));
+
+        Data.clearCurrentUser();
+        assertEquals(StaffRole.PATIENT, Data.getCurrentRole());
+        assertFalse(Data.isStaff());
+        assertTrue(Data.getStaffClinicIds().isEmpty());
+        assertEquals(-1, Data.getCurrentClinicId());
+    }
+
+    @Test
+    void staffWithNoClinicHasNoCurrentClinic() {
+        Data.setStaffAccess(new StaffAccess(7, StaffRole.CLINICIAN, List.of(), false));
+        assertEquals(StaffRole.CLINICIAN, Data.getCurrentRole());
+        assertEquals(-1, Data.getCurrentClinicId());
+        Data.setStaffAccess(null);
+        assertEquals(StaffRole.PATIENT, Data.getCurrentRole());
     }
 
     @Test

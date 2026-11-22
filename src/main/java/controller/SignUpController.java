@@ -5,7 +5,9 @@ import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.scene.control.Button;
+import javafx.scene.layout.VBox;
 import service.AuthService;
+import service.StaffAuthService;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
@@ -31,6 +33,9 @@ public class SignUpController {
     @FXML private Label questionHintLabel;
     @FXML private TextField answerField;
     @FXML private Label answerErrorLabel;
+    @FXML private CheckBox staffCheck;
+    @FXML private VBox staffBox;
+    @FXML private TextField staffCodeField;
     @FXML private CheckBox termsCheck;
     @FXML private CheckBox privacyCheck;
     @FXML private Label termsHintLabel;
@@ -38,6 +43,7 @@ public class SignUpController {
     @FXML private Label messageLabel;
 
     private final AuthService authService = new AuthService();
+    private final StaffAuthService staffAuthService = new StaffAuthService();
     private final BooleanProperty busy = new SimpleBooleanProperty(false);
 
     @FXML
@@ -58,6 +64,20 @@ public class SignUpController {
         // kept while the user reads the Terms / Privacy screens, like the other fields
         SecurityQuestion.fromKey(draft.securityQuestionKey).ifPresent(questionBox::setValue);
         if (draft.securityAnswer != null) answerField.setText(draft.securityAnswer);
+        // "I'm clinic staff" reveals the staff code field; both are kept while reading Terms / Privacy
+        staffBox.visibleProperty().bind(staffCheck.selectedProperty());
+        staffBox.managedProperty().bind(staffCheck.selectedProperty());
+        staffCheck.setSelected(draft.staff);
+        if (draft.staffCode != null) staffCodeField.setText(draft.staffCode);
+        staffCheck.selectedProperty().addListener((obs, o, n) -> {
+            draft.staff = n;
+            messageLabel.setText("");
+            if (n) Platform.runLater(staffCodeField::requestFocus);
+        });
+        staffCodeField.textProperty().addListener((obs, o, n) -> {
+            draft.staffCode = n;
+            messageLabel.setText("");
+        });
         termsCheck.setDisable(!draft.termsReadToEnd);
         privacyCheck.setDisable(!draft.privacyReadToEnd);
         termsCheck.setSelected(draft.termsAccepted && draft.termsReadToEnd);
@@ -186,22 +206,17 @@ public class SignUpController {
             return;
         }
 
+        if (staffCheck.isSelected()) {
+            signUpStaff(email, password, accepted, staffCodeField.getText(), questionKey, answer);
+            return;
+        }
+
         busy.set(true);
         Background.run(() -> authService.signUp(email, password, accepted, questionKey, answer), result -> {
             busy.set(false);
             switch (result) {
                 case SUCCESS -> {
-                    // Clear draft on success (avoid carrying sensitive password fields).
-                    var d = Data.getSignUpDraft();
-                    d.email = "";
-                    d.password = "";
-                    d.confirmPassword = "";
-                    d.securityQuestionKey = null;
-                    d.securityAnswer = "";
-                    d.termsAccepted = false;
-                    d.privacyAccepted = false;
-                    d.termsReadToEnd = false;
-                    d.privacyReadToEnd = false;
+                    clearDraft();
                     goToLogin("Account created. Please log in.");
                 }
                 case TERMS_NOT_ACCEPTED -> showError("Please accept the Terms of Service and Privacy Policy.");
@@ -225,6 +240,54 @@ public class SignUpController {
             busy.set(false);
             showError("We couldn't reach the server. Please try again.");
         });
+    }
+
+    /**
+     * "I'm clinic staff": the clinic staff code decides which clinic the account is tied to. Every
+     * outcome's text comes from the result; on success the login screen shows it (new staff may have
+     * to wait for their clinic admin to approve them).
+     */
+    private void signUpStaff(String email, String password, boolean accepted, String code,
+                             String questionKey, String answer) {
+        busy.set(true);
+        Background.run(() -> staffAuthService.signUpStaff(email, password, accepted, code, questionKey, answer), result -> {
+            busy.set(false);
+            switch (result.status()) {
+                case SUCCESS -> {
+                    clearDraft();
+                    goToLogin(result.message());
+                    return;
+                }
+                case INVALID_EMAIL -> updateEmailError(true);
+                case INVALID_SECURITY_QUESTION -> questionBox.requestFocus();
+                case INVALID_SECURITY_ANSWER -> {
+                    updateAnswerError();
+                    answerField.requestFocus();
+                }
+                case MISSING_STAFF_CODE, INVALID_STAFF_CODE -> staffCodeField.requestFocus();
+                default -> {}
+            }
+            showError(result.message());
+        }, ex -> {
+            busy.set(false);
+            showError("We couldn't reach the server. Please try again.");
+        });
+    }
+
+    /** Clears the draft after an account is made (it holds the password and the answer). */
+    private static void clearDraft() {
+        var d = Data.getSignUpDraft();
+        d.email = "";
+        d.password = "";
+        d.confirmPassword = "";
+        d.securityQuestionKey = null;
+        d.securityAnswer = "";
+        d.termsAccepted = false;
+        d.privacyAccepted = false;
+        d.termsReadToEnd = false;
+        d.privacyReadToEnd = false;
+        d.staff = false;
+        d.staffCode = "";
     }
 
     private void showError(String msg) {

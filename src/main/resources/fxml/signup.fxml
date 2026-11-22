@@ -32,6 +32,14 @@
         <TextField fx:id="answerField" promptText="Your answer" accessibleText="Security answer" styleClass="input"/>
         <Label fx:id="answerErrorLabel" styleClass="auth-field-error"/>
 
+        <CheckBox fx:id="staffCheck" text="I'm clinic staff" styleClass="auth-check"/>
+        <VBox fx:id="staffBox" styleClass="auth-step">
+            <TextField fx:id="staffCodeField" promptText="Clinic staff code" accessibleText="Clinic staff code"
+                       styleClass="input"/>
+            <Label text="Your clinic admin gives you this code. It ties your account to your clinic."
+                   styleClass="auth-hint" wrapText="true" minHeight="-Infinity"/>
+        </VBox>
+
         <VBox styleClass="auth-check-group">
             <HBox spacing="4" alignment="BASELINE_LEFT">
                 <CheckBox fx:id="termsCheck" text="I agree to the" styleClass="auth-check"/>

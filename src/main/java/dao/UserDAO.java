@@ -220,6 +220,16 @@ public class UserDAO implements UserRepository, AccountRepository {
         return Optional.of(new StaffAccess(userId, role, clinics, mustReset));
     }
 
+    /** Clears must_reset_password once the user has chosen a new password (seeded clinic admins). */
+    public void clearMustResetPassword(int userId) throws SQLException {
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE \"User\" SET must_reset_password = FALSE WHERE user_id = ?")) {
+            ps.setInt(1, userId);
+            ps.executeUpdate();
+        }
+    }
+
     /** When the patient last saw their results (null: never). See {@link TestDAO#findResultsSinceLastSeen}. */
     public LocalDateTime getLastResultsSeenAt(int userId) throws SQLException {
         try (Connection c = DB.connect();

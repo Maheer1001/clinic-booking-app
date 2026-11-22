@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /** In-memory {@link StaffRepository} that behaves like the SQL: everything is scoped by clinic. */
-class FakeStaffRepository implements StaffRepository {
+public class FakeStaffRepository implements StaffRepository {
 
     final Map<Integer, StaffAccess> access = new HashMap<>();
     /** appId -> clinicId */
@@ -39,12 +39,12 @@ class FakeStaffRepository implements StaffRepository {
     final Map<Integer, List<StaffMember>> staff = new HashMap<>();
     final Map<Integer, StaffTimeslot> timeslots = new HashMap<>();
     final Map<Integer, String> codeHashes = new HashMap<>();
-    final List<AuditEntry> audits = new ArrayList<>();
+    public final List<AuditEntry> audits = new ArrayList<>();
     final List<Medicine> medicines = List.of(new Medicine(1, "Doxycycline"));
     boolean failAudit;
     private int nextId = 1000;
 
-    void addStaff(int userId, StaffRole role, Integer... clinics) {
+    public void addStaff(int userId, StaffRole role, Integer... clinics) {
         access.put(userId, new StaffAccess(userId, role, List.of(clinics), false));
         for (int c : clinics) {
             staff.computeIfAbsent(c, k -> new ArrayList<>())
@@ -55,7 +55,7 @@ class FakeStaffRepository implements StaffRepository {
     final Map<Integer, List<StaffMember>> pending = new HashMap<>();
 
     /** A staff sign-up waiting for approval: like the SQL, access lists no clinic for it. */
-    void addPending(int userId, int clinicId) {
+    public void addPending(int userId, int clinicId) {
         access.putIfAbsent(userId, new StaffAccess(userId, StaffRole.CLINICIAN, List.of(), false));
         pending.computeIfAbsent(clinicId, k -> new ArrayList<>())
                 .add(new StaffMember(userId, "p" + userId + "@x.test", "Pending " + userId, StaffRole.CLINICIAN));
@@ -89,7 +89,7 @@ class FakeStaffRepository implements StaffRepository {
         return removed;
     }
 
-    void addAppointment(int appId, int clinicId, int patientId, LocalDate date, String status) {
+    public void addAppointment(int appId, int clinicId, int patientId, LocalDate date, String status) {
         appClinic.put(appId, clinicId);
         appointments.put(appId, new StaffAppointment(new ClinicBookingDetails(appId, patientId, date,
                 LocalTime.of(10, 0), LocalTime.of(10, 30), "STI test", status, null, null),

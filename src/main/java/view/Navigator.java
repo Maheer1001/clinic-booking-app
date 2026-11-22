@@ -11,6 +11,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -24,9 +25,12 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -37,9 +41,30 @@ import java.util.function.Supplier;
  * touches another tab's pages, so coming back to a tab shows exactly the page it was left on (the same
  * node, so the same scroll position, half-filled fields and chosen sub-tab). Back only moves within the
  * current tab. A tab's home page has no back button; closing the app is left to the window controls.
+ *
+ * <p>The tabs come from a config: an ordered list of {@link Tab}s (patients get {@link #patientTabs},
+ * staff get their own set). The first tab is the one {@link #start()} opens.
  */
 public class Navigator {
     private record Page(Node page, String title, boolean isHome) {}
+
+    /**
+     * One bottom tab: its id (what {@link #handleTabClick} and friends take), the toggle button shown in
+     * the tab bar, the title of its home page, and how to build that home page.
+     */
+    public record Tab(String id, ToggleButton button, String title, Function<Navigator, Node> home) {
+        public Tab {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(button, "button");
+            Objects.requireNonNull(title, "title");
+            Objects.requireNonNull(home, "home");
+        }
+
+        /** A tab with a new nav button labelled with its title. */
+        public static Tab of(String id, String title, Function<Navigator, Node> home) {
+            return new Tab(id, UI.navButton(title), title, home);
+        }
+    }
 
     /** One tab's history: the page it shows (null until first visited) and the pages Back returns to. */
     private static final class TabState {
@@ -47,12 +72,12 @@ public class Navigator {
         Page shown;
     }
 
-    private static final List<String> TABS = List.of("booking", "tracking", "reminders");
-
-    private final MainView view;
+    /** The tab config, in tab-bar order. */
+    private final Map<String, Tab> tabConfig = new LinkedHashMap<>();
+    private final Supplier<Node> settingsPage;
     private final BorderPane root = new BorderPane();
     private final Map<String, TabState> tabs = new HashMap<>();
-    private final StringProperty currentTab = new SimpleStringProperty("booking");
+    private final StringProperty currentTab = new SimpleStringProperty();
     private final ObjectProperty<Node> currentPage = new SimpleObjectProperty<>();
     private final StringProperty title = new SimpleStringProperty();
     private final BooleanProperty isHome = new SimpleBooleanProperty(true);
@@ -70,21 +95,43 @@ public class Navigator {
     private static final String BACK_ICON = "M19,11H9l3.29-3.29a1,1,0,0,0,0-1.42,1,1,0,0,0-1.41,0l-4.29,4.3A2,2,0,0,0,6,12H6a2,2,0,0,0,.59,1.4l4.29,4.3a1,1,0,1,0,1.41-1.42L9,13H19a1,1,0,0,0,0-2Z";
     private static final String SETTINGS_ICON = "M34.283,384c17.646,30.626,56.779,41.148,87.405,23.502c0.021-0.012,0.041-0.024,0.062-0.036l9.493-5.483   c17.92,15.332,38.518,27.222,60.757,35.072V448c0,35.346,28.654,64,64,64s64-28.654,64-64v-10.944   c22.242-7.863,42.841-19.767,60.757-35.115l9.536,5.504c30.633,17.673,69.794,7.167,87.467-23.467   c17.673-30.633,7.167-69.794-23.467-87.467l0,0l-9.472-5.461c4.264-23.201,4.264-46.985,0-70.187l9.472-5.461   c30.633-17.673,41.14-56.833,23.467-87.467c-17.673-30.633-56.833-41.14-87.467-23.467l-9.493,5.483   C362.862,94.638,342.25,82.77,320,74.944V64c0-35.346-28.654-64-64-64s-64,28.654-64,64v10.944   c-22.242,7.863-42.841,19.767-60.757,35.115l-9.536-5.525C91.073,86.86,51.913,97.367,34.24,128s-7.167,69.794,23.467,87.467l0,0   l9.472,5.461c-4.264,23.201-4.264,46.985,0,70.187l-9.472,5.461C27.158,314.296,16.686,353.38,34.283,384z M256,170.667   c47.128,0,85.333,38.205,85.333,85.333S303.128,341.333,256,341.333S170.667,303.128,170.667,256S208.872,170.667,256,170.667z";
 
+    /** The patient app: Booking, Tracking and Reminders, with the patient Settings page. */
     public Navigator(MainView view) {
-        this.view = view;
+        this(patientTabs(view), view::getSettingsScene);
+    }
 
-        for (String tab : TABS) {
-            tabs.put(tab, new TabState());
-        }
-
+    /** The patient tabs, on {@code view}'s tab buttons. Tracking and Reminders are for the user signed in now. */
+    public static List<Tab> patientTabs(MainView view) {
         int userID = Data.getCurrentUserId();
+        return List.of(
+                new Tab("booking", view.getBookingButton(), "Booking", view::getPage),
+                new Tab("tracking", view.getTrackingButton(), "Tracking",
+                        nav -> new TrackingController(nav, new TrackingService(userID)).getTrackingMainScene()),
+                new Tab("reminders", view.getRemindersButton(), "Reminders",
+                        nav -> new RemindersView(userID).getRemindersScene("appointments")));
+    }
 
-        homePages.put("booking", () -> new Page(view.getPage(this), "Booking", true));
-        homePages.put("tracking", () -> {
-            TrackingController tc = new TrackingController(this, new TrackingService(userID));
-            return new Page(tc.getTrackingMainScene(), "Tracking", true);
-        });
-        homePages.put("reminders", () -> new Page(new RemindersView(userID).getRemindersScene("appointments"), "Reminders", true));
+    /**
+     * @param tabConfig    the bottom tabs, in order; ids must be unique, the first is the start tab
+     * @param settingsPage builds the page the header's Settings button opens
+     */
+    public Navigator(List<Tab> tabConfig, Supplier<Node> settingsPage) {
+        if (tabConfig == null || tabConfig.isEmpty()) throw new IllegalArgumentException("At least one tab is needed");
+        this.settingsPage = Objects.requireNonNull(settingsPage, "settingsPage");
+
+        ToggleGroup group = new ToggleGroup();
+        for (Tab tab : tabConfig) {
+            if (this.tabConfig.putIfAbsent(tab.id(), tab) != null) {
+                throw new IllegalArgumentException("Duplicate tab: " + tab.id());
+            }
+            tabs.put(tab.id(), new TabState());
+            homePages.put(tab.id(), () -> new Page(tab.home().apply(this), tab.title(), true));
+            ToggleButton button = tab.button();
+            button.setToggleGroup(group);
+            // stays selected when the open tab is clicked again (that restarts the tab instead)
+            button.setOnAction(e -> { button.setSelected(true); handleTabClick(tab.id()); });
+        }
+        currentTab.set(tabConfig.getFirst().id());
 
         Label title = new Label();
         title.getStyleClass().add(UI.TITLE);
@@ -113,7 +160,7 @@ public class Navigator {
         // Keep long titles clear of the buttons on either side; they are truncated with an ellipsis.
         title.maxWidthProperty().bind(header.widthProperty().subtract(TITLE_SIDE_GUTTER * 2));
         root.setTop(header);
-        StackPane navBar = getNavBar(view.getBookingButton(), view.getTrackingButton(), view.getRemindersButton());
+        StackPane navBar = getNavBar(tabConfig.stream().map(Tab::button).toArray(ToggleButton[]::new));
         root.setBottom(navBar);
 
         root.centerProperty().bind(currentPage);
@@ -150,12 +197,8 @@ public class Navigator {
     }
 
     private void selectTabButton(String tab) {
-        ToggleButton button = switch (tab) {
-            case "booking" -> view.getBookingButton();
-            case "tracking" -> view.getTrackingButton();
-            case "reminders" -> view.getRemindersButton();
-            default -> null;
-        };
+        Tab config = tabConfig.get(tab);
+        ToggleButton button = config == null ? null : config.button();
         if (button != null && !button.isSelected()) {
             button.setSelected(true);
         }
@@ -171,8 +214,18 @@ public class Navigator {
 
     private TabState current() { return state(currentTab.get()); }
 
-    /** The tab whose pages are currently shown ("booking", "tracking" or "reminders"). */
+    /** The id of the tab whose pages are currently shown (for patients "booking", "tracking" or "reminders"). */
     public String getCurrentTab() { return currentTab.get(); }
+
+    /** The tab ids, in tab-bar order. */
+    public List<String> getTabIds() { return List.copyOf(tabConfig.keySet()); }
+
+    /** Opens the first tab on its home page and highlights its button (once the app is set up). */
+    public void start() {
+        String first = tabConfig.keySet().iterator().next();
+        selectTabButton(first);
+        handleTabClick(first);
+    }
 
     /** Returns the root BorderPane for the main scene. */
     public BorderPane getRoot() { return root; }
@@ -346,11 +399,11 @@ public class Navigator {
         return header;
     }
 
-    /** Bottom tab bar: three equal-width tabs that share the window width as it is resized. */
-    public StackPane getNavBar(ToggleButton booking, ToggleButton tracking, ToggleButton reminders) {
-        HBox tabs = new HBox(8, booking, tracking, reminders);
+    /** Bottom tab bar: equal-width tabs that share the window width as it is resized. */
+    public StackPane getNavBar(ToggleButton... buttons) {
+        HBox tabs = new HBox(8, buttons);
         tabs.setAlignment(Pos.CENTER);
-        for (ToggleButton b : new ToggleButton[]{booking, tracking, reminders}) {
+        for (ToggleButton b : buttons) {
             b.setMaxWidth(Double.MAX_VALUE);
             HBox.setHgrow(b, Priority.ALWAYS);
         }
@@ -372,7 +425,7 @@ public class Navigator {
         if (isSettings.get()) {
             goBack();
         } else {
-            Node settings = view.getSettingsScene();
+            Node settings = settingsPage.get();
             goToPage(settings, "Settings", false);
             // "Discard your changes?" for unsaved account details (see AccountView.LEAVE_GUARD)
             if (settings.getProperties().get(AccountView.LEAVE_GUARD) instanceof BooleanSupplier guard) setLeaveGuard(guard);

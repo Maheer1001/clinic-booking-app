@@ -8,7 +8,7 @@ import view.Navigator;
 /**
  * The home page of each staff tab (Today / Patients / Clinic). Pages inside a tab are opened with
  * {@link Navigator#goToPage} and left with Back. All three follow the clinic switcher
- * ({@code Data.staffClinicIdProperty()}); an account with no approved clinic gets a waiting page.
+ * ({@code Data.getCurrentClinicId()}); an account with no approved clinic gets a waiting page.
  */
 public final class StaffTabs {
 

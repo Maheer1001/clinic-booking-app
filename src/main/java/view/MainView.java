@@ -290,27 +290,46 @@ public class MainView {
     }
 
     public Node getSettingsScene() {
+        return settingsScene(false);
+    }
+
+    /**
+     * Settings for staff: account, sign-in and security, accessibility and Log Out. No reminder
+     * defaults (patient reminders) and no Delete account (staff are removed by their clinic admin).
+     */
+    public Node getStaffSettingsScene() {
+        return settingsScene(true);
+    }
+
+    private Node settingsScene(boolean staff) {
         Label accountLabel = sectionTitle("Account");
         Node accountSettings = AccountView.getPage(Data.getCurrentUserId());
-        Button delete = copyOf(deleteUser);
-        VBox deleteBox = new VBox(delete);
-        deleteBox.setAlignment(Pos.CENTER);
-        deleteBox.setPadding(new Insets(6, 0, 4, 0));
         VBox account = UI.card(5, accountLabel, accountSettings);
 
         Label securityLabel = sectionTitle("Sign-in and security");
         Node securitySettings = new AccountSecurityView(Data.getCurrentUserId()).getPage();
-        VBox security = UI.card(5, securityLabel, securitySettings, deleteBox);
+        VBox security = UI.card(5, securityLabel, securitySettings);
+        if (!staff) {
+            Button delete = copyOf(deleteUser);
+            VBox deleteBox = new VBox(delete);
+            deleteBox.setAlignment(Pos.CENTER);
+            deleteBox.setPadding(new Insets(6, 0, 4, 0));
+            security.getChildren().add(deleteBox);
+        }
 
         Label accessibilityLabel = sectionTitle("Accessibility");
         Node accessibilitySettings = AccessibilitySettingsView.getPage();
         VBox accessibility = UI.card(5, accessibilityLabel, accessibilitySettings);
 
-        Label reminderDefaultsLabel = sectionTitle("Reminder defaults");
-        Node reminderDefaultsSettings = new ReminderDefaultsView(new ReminderController(Data.getCurrentUserId())).getReminderDefaultsView();
-        VBox reminderDefaults = UI.card(5, reminderDefaultsLabel, reminderDefaultsSettings);
-
-        VBox root = UI.pageTop(account, security, accessibility, reminderDefaults);
+        VBox root;
+        if (staff) {
+            root = UI.pageTop(account, security, accessibility);
+        } else {
+            Label reminderDefaultsLabel = sectionTitle("Reminder defaults");
+            Node reminderDefaultsSettings = new ReminderDefaultsView(new ReminderController(Data.getCurrentUserId())).getReminderDefaultsView();
+            VBox reminderDefaults = UI.card(5, reminderDefaultsLabel, reminderDefaultsSettings);
+            root = UI.pageTop(account, security, accessibility, reminderDefaults);
+        }
         root.setMaxWidth(Double.MAX_VALUE);
         ScrollPane sp = new ScrollPane(root);
         sp.setFitToWidth(true);

@@ -349,5 +349,76 @@ public class NavigatorTest {
             }
         }
     }
+
+    // ---------------------------------------------------------------- custom tab config
+
+    /** Two tabs whose home pages are counted, so tests can see when a home is (re)built. */
+    private static final class CustomTabs {
+        final int[] builds = new int[2];
+        final List<Navigator.Tab> tabs = List.of(
+                Navigator.Tab.of("today", "Today", n -> { builds[0]++; return new VBox(); }),
+                Navigator.Tab.of("patients", "Patients", n -> { builds[1]++; return new VBox(); }));
+        final VBox settings = new VBox();
+        final Navigator nav = new Navigator(tabs, () -> settings);
+    }
+
+    @Test
+    void patientConfigKeepsItsThreeTabsInOrder() {
+        assertEquals(List.of("booking", "tracking", "reminders"), nav.getTabIds());
+        assertEquals("booking", nav.getCurrentTab());
+    }
+
+    @Test
+    void customTabsAreShownInOrderAndStartOnTheFirst() {
+        CustomTabs c = new CustomTabs();
+        assertEquals(List.of("today", "patients"), c.nav.getTabIds());
+        var bar = c.nav.getRoot().getBottom().lookupAll("." + UI.NAV_BTN);
+        assertEquals(2, bar.size(), "only the configured tabs are in the tab bar");
+
+        c.nav.start();
+        assertEquals("today", c.nav.getCurrentTab());
+        assertTrue(c.tabs.get(0).button().isSelected());
+        assertEquals(1, c.builds[0]);
+        assertEquals(0, c.builds[1], "other tabs are built on first visit");
+        assertTrue(test.containsLabelWithGivenText((Parent) c.nav.getRoot().getTop(), "Today"));
+    }
+
+    @Test
+    void customTabsKeepTheirOwnHistory() {
+        CustomTabs c = new CustomTabs();
+        c.nav.start();
+        VBox deeper = new VBox();
+        c.nav.goToPage(deeper, "Appointment", false);
+        c.tabs.get(1).button().fire(); // a real click on the tab button
+        assertEquals("patients", c.nav.getCurrentTab());
+        assertTrue(c.tabs.get(1).button().isSelected());
+        assertEquals(1, c.builds[1]);
+        c.tabs.get(0).button().fire();
+        assertSame(deeper, c.nav.getRoot().getCenter(), "Today comes back on the page it was left on");
+        assertEquals(1, c.nav.backStackSize());
+        c.tabs.get(0).button().fire(); // the open tab again: fresh home, still selected
+        assertEquals(2, c.builds[0]);
+        assertTrue(c.tabs.get(0).button().isSelected());
+        assertEquals(0, c.nav.backStackSize());
+    }
+
+    @Test
+    void customSettingsPageAndUnknownTabs() {
+        CustomTabs c = new CustomTabs();
+        c.nav.start();
+        c.nav.goToSettings();
+        assertSame(c.settings, c.nav.getRoot().getCenter());
+        c.nav.goToSettings(); // pressing Settings again goes back
+        assertNotSame(c.settings, c.nav.getRoot().getCenter());
+        assertThrows(IllegalArgumentException.class, () -> c.nav.handleTabClick("booking"));
+    }
+
+    @Test
+    void tabConfigMustBeNonEmptyAndUnique() {
+        assertThrows(IllegalArgumentException.class, () -> new Navigator(List.of(), VBox::new));
+        assertThrows(IllegalArgumentException.class, () -> new Navigator(List.of(
+                Navigator.Tab.of("a", "A", n -> new VBox()),
+                Navigator.Tab.of("a", "Again", n -> new VBox())), VBox::new));
+    }
 }
 

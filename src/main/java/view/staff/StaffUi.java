@@ -231,10 +231,10 @@ final class StaffUi {
      */
     static void onClinicChange(Node owner, Runnable action) {
         javafx.beans.value.ChangeListener<Number> l = (o, was, now) -> {
-            if (now.intValue() != 0 && now.intValue() != was.intValue()) action.run();
+            if (now.intValue() != 0) action.run();
         };
         owner.getProperties().put("staff.clinicListener." + System.identityHashCode(action), l);
-        app.Data.staffClinicIdProperty().addListener(new javafx.beans.value.WeakChangeListener<>(l));
+        StaffController.clinicChanges().addListener(new javafx.beans.value.WeakChangeListener<>(l));
     }
 
     private static ListCell<Integer> clinicCell() {

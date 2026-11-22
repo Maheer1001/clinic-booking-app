@@ -14,8 +14,9 @@ import java.util.function.Supplier;
  * {@link StaffService} off the JavaFX thread. The service re-checks role and clinic on every call, so
  * the {@link StaffAccess} held here only decides what the screens offer.
  *
- * <p>The current clinic lives in {@link Data#staffClinicIdProperty()} so all three staff tabs follow
- * the clinic switcher. A clinic the user does not (or no longer) work at is replaced by their first one.
+ * <p>The current clinic is {@link Data#getCurrentClinicId()}, shared by all three staff tabs; when the
+ * clinic switcher changes it, {@link #clinicChanges()} tells the open tab pages to reload. A clinic the
+ * user does not work at is replaced by their first one.
  */
 public class StaffController {
 
@@ -49,6 +50,14 @@ public class StaffController {
         }
     };
 
+    /** Bumped on every clinic switch (the new clinic id); tab pages listen to it. */
+    private static final javafx.beans.property.IntegerProperty CLINIC_CHANGES =
+            new javafx.beans.property.SimpleIntegerProperty(0);
+
+    public static javafx.beans.value.ObservableIntegerValue clinicChanges() {
+        return CLINIC_CHANGES;
+    }
+
     private final StaffService service;
     private final Runner runner;
     private final StaffAccess access;
@@ -61,7 +70,6 @@ public class StaffController {
         this.service = service;
         this.runner = runner;
         this.access = access;
-        clinicId();
     }
 
     public StaffAccess access() {
@@ -83,15 +91,16 @@ public class StaffController {
 
     /** The clinic being worked in, or 0 if the user has no clinic yet (waiting for approval). */
     public int clinicId() {
-        int current = Data.getStaffClinicId();
+        int current = Data.getCurrentClinicId();
         if (access.worksAt(current)) return current;
-        int first = access.clinicIds().isEmpty() ? 0 : access.clinicIds().get(0);
-        if (first != current) Data.setStaffClinicId(first);
-        return first;
+        return access.clinicIds().isEmpty() ? 0 : access.clinicIds().get(0);
     }
 
+    /** Switches every staff tab to another of the user's clinics (call on the JavaFX thread). */
     public void switchClinic(int clinicId) {
-        if (access.worksAt(clinicId)) Data.setStaffClinicId(clinicId);
+        if (!access.worksAt(clinicId) || clinicId == clinicId()) return;
+        if (Data.getStaffClinicIds().contains(clinicId)) Data.setCurrentClinicId(clinicId);
+        CLINIC_CHANGES.set(clinicId);
     }
 
     /** Calls the service for the current clinic off the JavaFX thread and passes the result to {@code done}. */
