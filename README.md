@@ -21,7 +21,7 @@ The demo above follows a patient through the app:
 5. **Pick a free time.** Slots are generated from each clinic's opening hours and the service's length. Only booked slots are stored, and a slot drops out once its bookings reach capacity (reserved with a single conditional update, so it can't be overbooked).
 6. **Check and confirm.** A five-step progress bar runs through the booking; the review page shows the clinic, time and your details before you confirm.
 7. **Confirmation email.** Booking, reschedule and cancellation emails are HTML (Thymeleaf templates) and are sent in the background, alongside an in-app notification with a booking reference.
-8. **Reminders your way.** Set how far ahead you are reminded, repeat reminders, quiet hours, discreet wording, and saved defaults for new bookings; check-up reminders if it has been a while since your last visit.
+8. **Reminders your way.** Set how far ahead you are reminded, repeat reminders, quiet hours, discreet wording, and saved defaults for new bookings; check-up reminders if it has been a while since your last visit. Dose reminders for a prescription keep a fixed rhythm and stop when staff stop or shorten the course. While the app is open, reminders and new-result alerts also show as in-app popups, one at a time (several new results come as one popup).
 9. **Manage bookings.** Reschedule to another free slot (the old one is released) or cancel; cancelling always asks first and defaults to keeping the appointment.
 10. **Track tests and prescriptions.** Test results with a clear status, treatment and clinician notes (and a shortcut to book a retest after a positive result); current and past prescriptions with dose, frequency and course dates; past appointments. Search, sort and filter each list by date.
 11. **Accessible.** Keyboard navigation with visible focus rings, screen-reader labels, and per-user high contrast, bold text and text size settings that apply instantly.
@@ -35,6 +35,8 @@ Clinic staff use the same app and the same login screen, with their own tabs:
 - **Today**: the clinic's appointments for a day. Open one to see the booking details, mark it attended or a no-show, and keep staff-only notes.
 - **Patients**: search patients who have an appointment at the clinic and open their record (appointments, tests, prescriptions). Add a test result: it is saved as a draft and the patient sees nothing until you **Release to patient** (a positive result asks you to confirm first). The patient then gets a discreet email that never says the result, and an in-app alert. Prescribe from the medicine list, then shorten the course or stop it early; dose reminders end with it.
 - **Clinic** (clinic admins only): approve or reject new staff, make staff admins or clinicians, remove them, rotate the staff code, and add or edit timeslots.
+
+Roles are per clinic: someone can be a clinic admin at one clinic and a clinician at another. Staff who belong to more than one clinic switch between them with the clinic picker on the staff pages, and the Clinic tab shows admin tools only at clinics where they are an admin.
 
 Staff and patient accounts are separate: an email that already has an account can't become staff. The app talks to the database directly, so clinic scoping controls what the app shows, not who can read the database (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
 
@@ -169,7 +171,7 @@ Or in IntelliJ, run `app.Main`. If the database is unreachable the window still 
 ## Test
 
 ```powershell
-mvn test                 # 596 tests on in-memory H2, no database needed (tests tagged "db" are excluded)
+mvn test                 # 598 tests on in-memory H2, no database needed (tests tagged "db" are excluded)
 mvn test -Pdb-tests      # also runs the integration tests against the Postgres in .env
 ```
 
@@ -186,7 +188,16 @@ mvn -Pscreenshots test-compile exec:exec -Dshots.only=book    # just the booking
 
 It books and moves appointments, so reload `docs/demo-data.sql` before running it again.
 
-`mvn -Pstaff-screenshots test-compile exec:exec` does the same for the staff side (PNGs and a log in `target/staff-shots`). It needs a clinic admin made with `StaffSeed` and the environment variables listed in `dev.StaffHarness`; it creates its own test patient and clinician with `example.com` emails and deletes them at the end.
+`mvn -Pstaff-screenshots test-compile exec:exec` does the same for the staff side (PNGs and a log in `target/staff-shots`). It needs a clinic admin made with `StaffSeed` and the environment variables listed in `dev.StaffHarness`; it creates its own test patient and clinician with `example.com` emails and deletes them at the end. `mvn -Pverify-screenshots test-compile exec:exec` (`dev.VerifyHarness`, same environment variables) checks the popup queue, a partly-failed multi-service booking, switching clinics with per-clinic roles and the result-release email, with PNGs in `target/verify-shots`.
+
+Both staff harnesses use the app normally, so they add rows to `AuditLog`, which is append-only by design.
+
+### Known limits
+
+- Removed or rejected staff can't sign up again with the same email.
+- New user ids are the highest id plus one, so a deleted account's id can be reused.
+- A few database calls (selecting a clinic, confirming a booking, loading account details, saving booking-communication settings) still run on the UI thread and can pause the window briefly on a slow connection.
+- Staff land on their lowest-numbered clinic after login, even if they are an admin somewhere else.
 
 More setup notes and troubleshooting: [`docs/SETUP.md`](docs/SETUP.md).
 
