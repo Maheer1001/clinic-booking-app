@@ -171,11 +171,34 @@ Or in IntelliJ, run `app.Main`. If the database is unreachable the window still 
 ## Test
 
 ```powershell
-mvn test                 # 598 tests on in-memory H2, no database needed (tests tagged "db" are excluded)
-mvn test -Pdb-tests      # also runs the integration tests against the Postgres in .env
+mvn test                 # unit tests: 598 tests on in-memory H2, no database or .env needed
+mvn test -Psetup-check   # "check my setup": is the app hooked up to the database and SMTP in your .env?
 ```
 
-Email sending is disabled during tests (`-Demail.disabled=true` is set by the build). Plain `mvn test` also refuses to connect to anything except in-memory H2 (`-Ddb.inMemoryOnly=true`), so it never writes to the database in your `.env`; only `-Pdb-tests` turns that off.
+Plain `mvn test` never touches your database: it refuses to connect to anything except in-memory H2 (`-Ddb.inMemoryOnly=true`) and email sending is disabled (`-Demail.disabled=true`). Tests tagged `db` are left out.
+
+### Check my setup
+
+After filling in `.env`, `mvn test -Psetup-check` runs `setup.SetupCheckTest` and then the other `db` tests against the database in `.env`. It is safe on a fresh, empty database and on one already in use: everything it creates has a `setup-check` name or `example.com` email and is deleted at the end (even after a crashed run, the next run removes it). Each step prints `[setup-check] OK`, `NOTE` or `SKIP`; when a step fails, the steps that depend on it are skipped, so read the first failure.
+
+| Step | What it proves | If it fails |
+|---|---|---|
+| 1. `.env` | `.env` is found in the project root (or the variables are set in the environment) and has `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`; `DB_URL` starts with `jdbc:postgresql://`. Optional keys you have not set are listed as a NOTE. | Copy `.env.example` to `.env` and fill it in (see [Configure](#configure)). Run Maven from the project root. |
+| 2. Database reachable | The app can log in to the database in `DB_URL` and it is PostgreSQL. | The message says which: wrong login (`DB_USERNAME`/`DB_PASSWORD`), unknown database name, or the server cannot be reached (host, port, `?sslmode=require` for hosted databases, network). |
+| 3a. Schema on an empty database | `DB.initTables` builds all 20 tables, the per-clinic `"StaffClinic".role` column and the unique email index from nothing (done in a temporary schema that is dropped after). | Skipped if your login may not create schemas; 3b still runs. A failure here is a bug in `DB.initTables`. |
+| 3b. Schema on your database | `DB.initTables` (run twice, as on every app start) creates or upgrades your schema: all tables, the role column with its CHECK constraint, the `user_email_lower_key` unique index and the append-only `AuditLog` trigger. | The login needs rights to create and alter tables. A missing unique email index on a database that already has users means duplicates must be checked first: apply `docs/migrations/2026-11-23-unique-email.sql`. |
+| 4a. Sample data | Clinics and their services can be read. | Skipped when there are no clinics yet (the booking screens would be empty): load `docs/sample-data.sql`. |
+| 4b. Patient sign-up | Sign-up with a security question, sign-in, wrong password refused, and a second account with the same email in a different case refused by the database index itself. | See the assertion message; usually the schema (step 3). |
+| 4c. Booking | On a temporary clinic open every day: the clinic and service are listed, free slots are generated, booking saves the `Timeslot`, `Appointment` and `BookingDetails` rows, the booking shows as upcoming and the full slot is no longer offered. | See the assertion message. |
+| 4d. Reminders and cancel | Appointment and booking reminder rows are saved (and replaced, not duplicated); cancelling frees the slot. | See the assertion message. |
+| 4e. Staff | A clinic admin is seeded, a clinician signs up with the clinic's staff code, waits as PENDING with no access, is approved by the admin and gets the CLINICIAN role at that clinic; `AuditLog` refuses deletes. | See the assertion message. |
+| 5a. SMTP login | Connects to `SMTP_HOST:SMTP_PORT` and logs in with `SMTP_USERNAME`/`SMTP_PASSWORD`. **No email is sent.** Skipped when `SMTP_HOST` is empty (the app then runs but sends no email). | Rejected login: for Gmail use an App Password. Cannot connect: check host and port (587 STARTTLS, 465 SSL) and that your network allows outgoing SMTP. |
+| 5b. Send a test email | Only when `SETUP_CHECK_EMAIL_TO` is set (environment or `.env`): sends one test booking confirmation there through the app's `EmailSender`. Otherwise skipped. | The `[Email]` lines above the failure say why. |
+| 6. Cleanup | Nothing the check created is left (users, clinic, service, slots, bookings, reminders, staff rows; its own `AuditLog` rows are removed with the append-only trigger lifted inside one transaction). | If your login may not alter `AuditLog`, those few id-only rows are kept and a NOTE says so. |
+
+To send yourself the test email as well (PowerShell): `$env:SETUP_CHECK_EMAIL_TO="you@example.com"; mvn test -Psetup-check`.
+
+`mvn test -Pdb-tests` runs everything: the unit tests, the setup check and the other `db` tests, plus `SchemaIntrospectTest`, which only prints your live schema (`mvn test -Pdb-tests -Dtest=SchemaIntrospectTest`).
 
 ### Screenshots
 
