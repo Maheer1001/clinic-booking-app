@@ -29,6 +29,7 @@ import view.Review;
 import view.ServiceSelection;
 import view.reminders.AppointmentRemindersView;
 import view.notification.BookingConfirmationNotification;
+import view.notification.PopupQueue;
 import view.reminders.RemindersView;
 import view.ui.UI;
 
@@ -54,6 +55,11 @@ public class BookingController {
     private final Navigator nav;
     private final BookingService bookingService;
     private final NotificationDispatcher notificationDispatcher;
+    /**
+     * Where the confirmation popups wait their turn: a booking of several services used to open one
+     * popup per service at once, on top of each other (and of any reminder). Replaced in tests.
+     */
+    PopupQueue popups = PopupQueue.shared();
     private final ReminderDefaultsReader reminderDefaultsReader;
     private final UserRepository userRepository;
     private final NewBookingReminders newBookingReminders;
@@ -482,11 +488,11 @@ public class BookingController {
                             recipientEmail, recipientName, bookingRef, serviceName,
                             appointmentDateTime, clinicName, "Clinician", confirmationDiscreet,
                             confirmationTpl) : null,
-                    new BookingConfirmationNotification(
+                    popups.queued(new BookingConfirmationNotification(
                             recipientName, bookingRef, serviceName, appointmentDateTime, clinicName, "Clinician",
                             confirmationDiscreet,
                             confirmationTpl
-                    ),
+                    ), () -> Data.getCurrentUserId() == userId),
                     hasEmail ? sent -> {
                         if (!sent) anyFailed[0] = true;
                         if (--emailsLeft[0] == 0) {

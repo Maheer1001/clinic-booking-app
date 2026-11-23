@@ -43,6 +43,8 @@ class BookingControllerPromptTest {
         boolean slotTaken;
         /** Books the first item only; every other item's slot has been taken. */
         boolean onlyFirstFree;
+        /** Books every item. */
+        boolean allFree;
 
         @Override
         public BookingResult placeBooking(Book book, int userId) {
@@ -50,6 +52,11 @@ class BookingControllerPromptTest {
             this.lastUserId = userId;
             if (slotTaken) {
                 return new BookingResult(List.of(), List.of("Service A"));
+            }
+            if (allFree) {
+                return new BookingResult(book.getItems().stream()
+                        .map(i -> new BookedAppointment(55 + book.getItems().indexOf(i), i.getService(), i.getDate(), i.getTime()))
+                        .toList(), List.of());
             }
             if (onlyFirstFree) {
                 Item first = book.getItems().getFirst();
@@ -284,6 +291,45 @@ class BookingControllerPromptTest {
 
         onFx(() -> { button(nav.lastPage, "Done").fire(); return null; });
         assertNotSame(b, Data.getBooking(), "Done ends the half-finished booking");
+    }
+
+    @Test
+    void confirmBooking_severalServices_confirmationPopupsWaitTheirTurn() throws Exception {
+        Data.setCurrentUser(1, "patient@example.com", "Test User");
+        Book b = Data.getBooking();
+        Service s1 = new Service(1, "Service A", "desc", 30);
+        Service s2 = new Service(2, "Service B", "desc", 15);
+        LocalDate day = LocalDate.now().plusDays(2);
+        Item a = new Item(s1);
+        a.setDate(day);
+        a.setTime(LocalTime.of(10, 30));
+        Item second = new Item(s2);
+        second.setDate(day);
+        second.setTime(LocalTime.of(11, 30));
+        b.setItems(List.of(a, second));
+        b.setClinic(clinicOffering(s1, s2));
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.allFree = true;
+        // like the real dispatcher: shows the popup it is handed
+        List<String> shown = new java.util.ArrayList<>();
+        NotificationDispatcher showing = new NotificationDispatcher() {
+            @Override
+            public void notifyUserAsync(int targetUserId, Email email, Notification notification,
+                                        java.util.function.Consumer<Boolean> onEmailResult) {
+                shown.add(notification.getTitle());
+                notification.show();
+            }
+        };
+        BookingController controller = new BookingController(new CapturingNavigator(new MainView()), bookingService,
+                showing, uid -> Optional.empty(), new FakeUserRepository(), NO_REMINDERS);
+        view.notification.PopupQueue queue = new view.notification.PopupQueue();
+        queue.enqueue(onClosed -> {}); // another popup (e.g. a reminder) is open
+        controller.popups = queue;
+
+        onFx(controller::confirmBooking);
+
+        assertEquals(2, shown.size(), "one confirmation per booked service");
+        assertEquals(2, queue.waitingCount(), "both wait behind the open popup instead of opening on top of it");
     }
 
     @Test
