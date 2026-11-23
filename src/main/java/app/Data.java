@@ -136,7 +136,10 @@ public class Data {
         currentClinicId = -1;
     }
 
-    /** PATIENT unless a staff member is signed in. Never null. */
+    /**
+     * PATIENT unless a staff member is signed in. Never null. This is the account role (patient or
+     * staff) only; what staff may do is per clinic ({@code StaffAccess.roleAt}).
+     */
     public static StaffRole getCurrentRole() {
         return currentRole;
     }

@@ -341,6 +341,45 @@ class StaffDAOTest {
     }
 
     @Test
+    void roles_arePerClinicMembership_andSetRoleOnlyChangesThatClinic() throws Exception {
+        // clinics 8 and 9 are used by this test only (memberships need no "Clinic" row)
+        int mixed = new StaffAccountDAO().createStaffUser("mixed@example.com", "h", StaffRole.CLINIC_ADMIN, 8, false);
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("INSERT INTO \"StaffClinic\" (user_id, clinic_id, status, role) VALUES ("
+                    + mixed + ", 9, 'ACTIVE', 'CLINICIAN')");
+        }
+        StaffAccess a = dao.access(mixed).orElseThrow();
+        assertEquals(List.of(8, 9), a.clinicIds());
+        assertEquals(StaffRole.CLINIC_ADMIN, a.roleAt(8));
+        assertEquals(StaffRole.CLINICIAN, a.roleAt(9));
+        assertTrue(a.isAdminAt(8));
+        assertFalse(a.isAdminAt(9));
+        assertEquals(StaffRole.CLINICIAN, dao.staff(9).get(0).role(), "the staff list shows the role at that clinic");
+
+        // demote at 8: 9 is untouched; promote at 9: 8 is untouched
+        assertTrue(dao.setRole(8, mixed, StaffRole.CLINICIAN, AuditEntry.of(mixed, 8, Action.DEMOTE_STAFF, "x", mixed, null)));
+        assertTrue(dao.setRole(9, mixed, StaffRole.CLINIC_ADMIN, AuditEntry.of(mixed, 9, Action.PROMOTE_STAFF, "x", mixed, null)));
+        a = dao.access(mixed).orElseThrow();
+        assertEquals(StaffRole.CLINICIAN, a.roleAt(8));
+        assertEquals(StaffRole.CLINIC_ADMIN, a.roleAt(9));
+        assertFalse(dao.setRole(8, mixed, StaffRole.PATIENT, audit(Action.DEMOTE_STAFF, null)), "PATIENT is not a membership role");
+        assertEquals(1, count("SELECT COUNT(*) FROM \"StaffClinic\" WHERE user_id = " + mixed + " AND clinic_id = 8"
+                + " AND role = 'CLINICIAN'"));
+
+        // the database refuses a membership role that is not a staff role
+        assertThrows(java.sql.SQLException.class, () -> {
+            try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+                s.executeUpdate("UPDATE \"StaffClinic\" SET role = 'PATIENT' WHERE user_id = " + mixed);
+            }
+        });
+        // a new membership without a role is the lesser role
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("INSERT INTO \"StaffClinic\" (user_id, clinic_id, status) VALUES (" + mixed + ", 10, 'ACTIVE')");
+        }
+        assertEquals(StaffRole.CLINICIAN, dao.access(mixed).orElseThrow().roleAt(10));
+    }
+
+    @Test
     void seedClinicAdmin_refusesAnExistingAccount_andCreatesANewOne() throws Exception {
         IllegalStateException e = assertThrows(IllegalStateException.class,
                 () -> StaffSeed.seedClinicAdmin(7, "one@example.com", "Password1"));
@@ -351,6 +390,8 @@ class StaffDAOTest {
         StaffAccess a = new UserDAO().getStaffAccess(admin).orElseThrow();
         assertEquals(StaffRole.CLINIC_ADMIN, a.role());
         assertEquals(List.of(7), a.clinicIds());
+        assertTrue(a.isAdminAt(7), "the seeded role is on the clinic's membership");
+        assertFalse(a.isAdminAt(C1));
         assertTrue(a.mustResetPassword());
     }
 
@@ -372,6 +413,8 @@ class StaffDAOTest {
         assertEquals(List.of(ok.userId()), dao.pendingStaff(C1).stream().map(m -> m.userId()).toList());
         assertTrue(dao.approveStaff(C1, ok.userId(), clinician, NOW, audit(Action.APPROVE_STAFF, null)));
         assertEquals(List.of(C1), new UserDAO().getStaffAccess(ok.userId()).orElseThrow().clinicIds());
+        assertEquals(StaffRole.CLINICIAN, new UserDAO().getStaffAccess(ok.userId()).orElseThrow().roleAt(C1),
+                "approval gives the clinician role at that clinic, never admin");
         assertTrue(new SecurityQuestionService().hasSecurityQuestion(ok.userId()));
 
         new UserDAO().deleteUserById(ok.userId());

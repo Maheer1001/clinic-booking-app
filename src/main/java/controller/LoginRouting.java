@@ -34,12 +34,16 @@ public final class LoginRouting {
         return Route.STAFF;
     }
 
-    /** Today and Patients for every staff member; Clinic (admin tools) for clinic admins only. */
+    /**
+     * Today and Patients for every staff member; Clinic (admin tools) for anyone who is a clinic admin
+     * at one or more of their clinics. The Clinic page itself follows the clinic switcher: at a clinic
+     * where they are only a clinician it shows a note instead of the tools (and the service refuses).
+     */
     public static List<Navigator.Tab> staffTabs(StaffAccess access) {
         List<Navigator.Tab> tabs = new ArrayList<>();
         tabs.add(Navigator.Tab.of(TODAY, "Today", nav -> StaffTabs.today(nav, access)));
         tabs.add(Navigator.Tab.of(PATIENTS, "Patients", nav -> StaffTabs.patients(nav, access)));
-        if (access.isAdmin()) {
+        if (access.isAdminAnywhere()) {
             tabs.add(Navigator.Tab.of(CLINIC, "Clinic", nav -> StaffTabs.clinic(nav, access)));
         }
         return List.copyOf(tabs);

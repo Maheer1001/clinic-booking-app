@@ -12,7 +12,8 @@ import java.util.function.Supplier;
 /**
  * What every staff screen shares: who is acting, the clinic they are working in, and a way to call
  * {@link StaffService} off the JavaFX thread. The service re-checks role and clinic on every call, so
- * the {@link StaffAccess} held here only decides what the screens offer.
+ * the {@link StaffAccess} held here only decides what the screens offer. Roles are per clinic: what is
+ * offered follows the current clinic ({@link #isAdmin()}).
  *
  * <p>The current clinic is {@link Data#getCurrentClinicId()}, shared by all three staff tabs; when the
  * clinic switcher changes it, {@link #clinicChanges()} tells the open tab pages to reload. A clinic the
@@ -80,8 +81,17 @@ public class StaffController {
         return access.userId();
     }
 
+    /**
+     * CLINIC_ADMIN at the clinic being worked in now. Roles are per clinic, so this can change when
+     * the clinic switcher moves to another clinic (pages re-check it on {@link #clinicChanges()}).
+     */
     public boolean isAdmin() {
-        return access.isAdmin();
+        return access.isAdminAt(clinicId());
+    }
+
+    /** The role at the clinic being worked in now (PATIENT if there is none). */
+    public model.StaffRole role() {
+        return access.roleAt(clinicId());
     }
 
     /** The clinics the user can switch between (ACTIVE memberships only). */

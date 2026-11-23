@@ -4,6 +4,7 @@ import model.AuditEntry;
 import model.AuditEntry.Action;
 import model.PrescriptionDraft;
 import model.StaffAccess;
+import model.StaffMember;
 import model.StaffRole;
 import model.StaffTest;
 import model.StaffTimeslot;
@@ -484,5 +485,129 @@ class StaffServiceTest {
         String stored = repo.codeHashes.get(CLINIC_1);
         assertNotEquals(code, stored);
         assertTrue(PasswordHasher.verify(code, stored));
+    }
+
+    // ------------------------------------------------------------ roles are per clinic
+
+    private static final int MIXED = 40;        // CLINIC_ADMIN at clinic 1, CLINICIAN at clinic 2
+    private static final int CLINIC_2_ADMIN = 41;
+
+    /** MIXED: admin at 1, clinician at 2; clinic 2 has its own admin and a pending sign-up. */
+    private void mixedRoles() {
+        repo.addMembership(MIXED, CLINIC_1, StaffRole.CLINIC_ADMIN);
+        repo.addMembership(MIXED, CLINIC_2, StaffRole.CLINICIAN);
+        repo.addStaff(CLINIC_2_ADMIN, StaffRole.CLINIC_ADMIN, CLINIC_2);
+        repo.addPending(PENDING_STAFF, CLINIC_2);
+    }
+
+    @Test
+    void adminAtOneClinic_cannotApproveDeactivateOrEditAtAnother_whereTheyAreAClinician() {
+        mixedRoles();
+        assertTrue(service.listStaff(MIXED, CLINIC_1).ok(), "admin at clinic 1");
+        assertTrue(service.dayList(MIXED, CLINIC_2, TODAY).ok(), "still a clinician at clinic 2");
+
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.pendingStaff(MIXED, CLINIC_2).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.approveStaff(MIXED, CLINIC_2, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.rejectStaff(MIXED, CLINIC_2, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.removeStaff(MIXED, CLINIC_2, OTHER_CLINIC_STAFF).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.promoteStaff(MIXED, CLINIC_2, OTHER_CLINIC_STAFF).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.promoteStaff(MIXED, CLINIC_2, MIXED).status(),
+                "no promoting yourself with another clinic's admin role");
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.demoteStaff(MIXED, CLINIC_2, CLINIC_2_ADMIN).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.rotateStaffCode(MIXED, CLINIC_2).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.staffCodeStatus(MIXED, CLINIC_2).status());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.createTimeslot(MIXED, CLINIC_2, 1, TODAY.plusDays(2),
+                LocalTime.of(9, 0), LocalTime.of(9, 30), 2).status());
+
+        assertEquals(List.of(PENDING_STAFF), repo.pendingStaff(CLINIC_2).stream().map(m -> m.userId()).toList());
+        assertTrue(repo.staff(CLINIC_2).stream().anyMatch(m -> m.userId() == OTHER_CLINIC_STAFF));
+        assertEquals(StaffRole.CLINIC_ADMIN, repo.access.get(CLINIC_2_ADMIN).roleAt(CLINIC_2));
+        assertFalse(repo.codeHashes.containsKey(CLINIC_2));
+        assertTrue(repo.audits.stream().noneMatch(a -> a.clinicId() == CLINIC_2 && a.action() != Action.VIEW_DAY_LIST),
+                "nothing written at clinic 2");
+    }
+
+    @Test
+    void adminAtOneClinic_hasNoAccessAtAClinicTheyDoNotBelongTo() {
+        repo.addPending(PENDING_STAFF, CLINIC_2);
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.approveStaff(ADMIN, CLINIC_2, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.rejectStaff(ADMIN, CLINIC_2, PENDING_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.removeStaff(ADMIN, CLINIC_2, OTHER_CLINIC_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.promoteStaff(ADMIN, CLINIC_2, OTHER_CLINIC_STAFF).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.listStaff(ADMIN, CLINIC_2).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(ADMIN, CLINIC_2, TODAY).status());
+        assertTrue(repo.audits.isEmpty());
+    }
+
+    @Test
+    void clinicianAtOneClinic_hasNoAccessAtAnother() {
+        assertTrue(service.dayList(CLINICIAN, CLINIC_1, TODAY).ok());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(CLINICIAN, CLINIC_2, TODAY).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.appointment(CLINICIAN, CLINIC_2, 2).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC,
+                service.patientRecord(CLINICIAN, CLINIC_2, PATIENT_ELSEWHERE).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.searchPatients(CLINICIAN, CLINIC_2, "patient").status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.markCompleted(CLINICIAN, CLINIC_2, 2).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.timeslots(CLINICIAN, CLINIC_2, TODAY).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.listStaff(CLINICIAN, CLINIC_2).status());
+    }
+
+    @Test
+    void promoteAtOneClinic_doesNotChangeTheRoleAtAnother() {
+        mixedRoles();
+        repo.addMembership(OTHER_CLINIC_STAFF, CLINIC_1, StaffRole.CLINICIAN); // clinician at 1 and 2
+        StaffResult<List<StaffMember>> promoted = service.promoteStaff(MIXED, CLINIC_1, OTHER_CLINIC_STAFF);
+        assertTrue(promoted.ok(), promoted.message());
+
+        StaffAccess a = repo.access.get(OTHER_CLINIC_STAFF);
+        assertEquals(StaffRole.CLINIC_ADMIN, a.roleAt(CLINIC_1));
+        assertEquals(StaffRole.CLINICIAN, a.roleAt(CLINIC_2));
+        assertTrue(service.listStaff(OTHER_CLINIC_STAFF, CLINIC_1).ok());
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.listStaff(OTHER_CLINIC_STAFF, CLINIC_2).status());
+        assertEquals(StaffRole.CLINICIAN, service.listStaff(CLINIC_2_ADMIN, CLINIC_2).value().stream()
+                .filter(m -> m.userId() == OTHER_CLINIC_STAFF).findFirst().orElseThrow().role(),
+                "clinic 2's staff list still shows a clinician");
+    }
+
+    @Test
+    void demoteAtOneClinic_keepsAdminAtAnother_andTheLastAdminRuleIsPerClinic() {
+        mixedRoles();
+        repo.addMembership(CLINIC_2_ADMIN, CLINIC_1, StaffRole.CLINIC_ADMIN); // admin at 1 and 2
+        // clinic 1 has ADMIN, MIXED and CLINIC_2_ADMIN as admins: demote CLINIC_2_ADMIN there
+        assertTrue(service.demoteStaff(ADMIN, CLINIC_1, CLINIC_2_ADMIN).ok());
+        StaffAccess a = repo.access.get(CLINIC_2_ADMIN);
+        assertEquals(StaffRole.CLINICIAN, a.roleAt(CLINIC_1));
+        assertEquals(StaffRole.CLINIC_ADMIN, a.roleAt(CLINIC_2));
+        assertTrue(service.rotateStaffCode(CLINIC_2_ADMIN, CLINIC_2).ok());
+
+        // admins at clinic 1 do not count towards clinic 2: CLINIC_2_ADMIN is still its last admin
+        assertTrue(service.demoteStaff(CLINIC_2_ADMIN, CLINIC_2, CLINIC_2_ADMIN).message()
+                .startsWith("A clinic needs at least one admin"));
+        assertTrue(service.removeStaff(CLINIC_2_ADMIN, CLINIC_2, CLINIC_2_ADMIN).message()
+                .startsWith("A clinic needs at least one admin"));
+        assertEquals(1, service.listStaff(CLINIC_2_ADMIN, CLINIC_2).value().stream()
+                .filter(m -> m.role() == StaffRole.CLINIC_ADMIN).count());
+    }
+
+    @Test
+    void approvalAtOneClinic_givesAccessThereOnly_asAClinician() {
+        mixedRoles();
+        assertTrue(service.approveStaff(CLINIC_2_ADMIN, CLINIC_2, PENDING_STAFF).ok());
+        StaffAccess a = repo.access.get(PENDING_STAFF);
+        assertEquals(List.of(CLINIC_2), a.clinicIds());
+        assertEquals(StaffRole.CLINICIAN, a.roleAt(CLINIC_2));
+        assertEquals(StaffResult.Status.ADMIN_ONLY, service.listStaff(PENDING_STAFF, CLINIC_2).status());
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(PENDING_STAFF, CLINIC_1, TODAY).status());
+    }
+
+    @Test
+    void removeAtOneClinic_keepsTheOtherMembershipAndItsRole() {
+        mixedRoles();
+        assertTrue(service.removeStaff(CLINIC_2_ADMIN, CLINIC_2, MIXED).ok());
+        StaffAccess a = repo.access.get(MIXED);
+        assertEquals(List.of(CLINIC_1), a.clinicIds());
+        assertTrue(a.isAdminAt(CLINIC_1));
+        assertEquals(StaffResult.Status.NOT_AT_CLINIC, service.dayList(MIXED, CLINIC_2, TODAY).status());
+        assertTrue(service.listStaff(MIXED, CLINIC_1).ok());
     }
 }

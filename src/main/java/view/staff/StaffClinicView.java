@@ -10,6 +10,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 import javafx.scene.input.Clipboard;
@@ -34,7 +35,8 @@ import java.util.List;
 
 /**
  * Clinic tab (clinic admins): approve new staff, manage the staff list and roles, the clinic's staff
- * code, and timeslots for a day. Clinicians see a short note instead; the service refuses them anyway.
+ * code, and timeslots for a day. At a clinic where the user is a clinician they see a short note
+ * instead; the service refuses them anyway.
  */
 public class StaffClinicView {
 
@@ -55,20 +57,43 @@ public class StaffClinicView {
         this.staff = staff;
     }
 
+    /**
+     * Roles are per clinic, so the page follows the clinic switcher: switching to a clinic where the
+     * user is only a clinician swaps the admin tools for the note (and back), and switching between
+     * two clinics where they are admin reloads the tools for the new clinic.
+     */
     public Node page() {
         if (staff.clinicId() == 0) return StaffUi.scroll(StaffUi.noClinic());
-        if (!staff.isAdmin()) {
-            return StaffUi.scroll(UI.pageTop(StaffUi.clinicSwitcher(staff), UI.emptyState(UI.ICON_BELL,
-                    "For clinic admins",
-                    "Only a clinic admin can manage staff, the staff code and timeslots. Ask your admin if something needs changing.")));
-        }
-        StaffUi.datePicker(slotDate);
-        slotDate.setAccessibleText("Timeslot date");
-        slotDate.setMaxWidth(Double.MAX_VALUE);
-        slotDate.valueProperty().addListener((o, was, now) -> {
-            if (now == null) slotDate.setValue(was == null ? LocalDate.now() : was);
-            else loadSlots();
+        ScrollPane page = StaffUi.scroll(build());
+        StaffUi.onClinicChange(page, () -> {
+            boolean admin = staff.isAdmin();
+            if (admin != shownAdmin) page.setContent(build());
+            else if (admin) loadAll();
         });
+        return page;
+    }
+
+    /** Whether the page on show is the admin tools (true) or the clinician note (false). */
+    private boolean shownAdmin;
+    private boolean slotDateReady;
+
+    private Node build() {
+        shownAdmin = staff.isAdmin();
+        if (!shownAdmin) {
+            return UI.pageTop(StaffUi.clinicSwitcher(staff), UI.emptyState(UI.ICON_BELL,
+                    "For clinic admins",
+                    "Only a clinic admin can manage staff, the staff code and timeslots here. Ask your admin if something needs changing."));
+        }
+        if (!slotDateReady) {
+            slotDateReady = true;
+            StaffUi.datePicker(slotDate);
+            slotDate.setAccessibleText("Timeslot date");
+            slotDate.setMaxWidth(Double.MAX_VALUE);
+            slotDate.valueProperty().addListener((o, was, now) -> {
+                if (now == null) slotDate.setValue(was == null ? LocalDate.now() : was);
+                else loadSlots();
+            });
+        }
 
         VBox content = UI.pageTop(StaffUi.clinicSwitcher(staff),
                 StaffUi.section("Waiting for approval",
@@ -77,9 +102,8 @@ public class StaffClinicView {
                 StaffUi.section("Staff", members, membersMsg),
                 StaffUi.section("Staff code", code),
                 StaffUi.section("Timeslots", slotDate, slots, slotsMsg, newSlot));
-        StaffUi.onClinicChange(content, this::loadAll);
         loadAll();
-        return StaffUi.scroll(content);
+        return content;
     }
 
     private void loadAll() {

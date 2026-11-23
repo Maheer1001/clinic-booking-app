@@ -1,6 +1,10 @@
 package model;
 
-/** "User".role. Patients and staff are separate accounts; staff only see their own clinic(s). */
+/**
+ * A role. On "User".role it only separates patient from staff accounts (login routing); on each
+ * "StaffClinic" membership it is what the person may do at that one clinic. Patients and staff are
+ * separate accounts; staff only see their own clinic(s).
+ */
 public enum StaffRole {
     PATIENT, CLINICIAN, CLINIC_ADMIN;
 

@@ -44,12 +44,31 @@ public class FakeStaffRepository implements StaffRepository {
     boolean failAudit;
     private int nextId = 1000;
 
+    /** A staff account with the same role at each of {@code clinics}. */
     public void addStaff(int userId, StaffRole role, Integer... clinics) {
         access.put(userId, new StaffAccess(userId, role, List.of(clinics), false));
         for (int c : clinics) {
             staff.computeIfAbsent(c, k -> new ArrayList<>())
                     .add(new StaffMember(userId, "s" + userId + "@x.test", "Staff " + userId, role));
         }
+    }
+
+    /** One more ACTIVE membership with its own role (roles are per clinic, like the SQL). */
+    public void addMembership(int userId, int clinicId, StaffRole role) {
+        StaffAccess a = access.get(userId);
+        Map<Integer, StaffRole> roles = new HashMap<>(a == null ? Map.of() : a.clinicRoles());
+        roles.put(clinicId, role);
+        access.put(userId, new StaffAccess(userId, a == null ? role : a.role(), roles, false));
+        staff.computeIfAbsent(clinicId, k -> new ArrayList<>())
+                .add(new StaffMember(userId, "s" + userId + "@x.test", "Staff " + userId, role));
+    }
+
+    private void putClinicRole(int userId, int clinicId, StaffRole role) {
+        StaffAccess a = access.get(userId);
+        Map<Integer, StaffRole> roles = new HashMap<>(a.clinicRoles());
+        if (role == null) roles.remove(clinicId);
+        else roles.put(clinicId, role);
+        access.put(userId, new StaffAccess(userId, a.role(), roles, false));
     }
 
     final Map<Integer, List<StaffMember>> pending = new HashMap<>();
@@ -74,10 +93,7 @@ public class FakeStaffRepository implements StaffRepository {
         if (m.isEmpty()) return false;
         list.remove(m.get());
         staff.computeIfAbsent(clinicId, k -> new ArrayList<>()).add(m.get());
-        StaffAccess a = access.get(staffUserId);
-        List<Integer> clinics = new ArrayList<>(a.clinicIds());
-        clinics.add(clinicId);
-        access.put(staffUserId, new StaffAccess(staffUserId, a.role(), clinics, false));
+        putClinicRole(staffUserId, clinicId, m.get().role());
         write(audit);
         return true;
     }
@@ -275,9 +291,7 @@ public class FakeStaffRepository implements StaffRepository {
     public boolean removeStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException {
         boolean removed = staff.getOrDefault(clinicId, new ArrayList<>()).removeIf(m -> m.userId() == staffUserId);
         if (removed) {
-            StaffAccess a = access.get(staffUserId);
-            access.put(staffUserId, new StaffAccess(staffUserId, a.role(),
-                    a.clinicIds().stream().filter(c -> c != clinicId).toList(), false));
+            putClinicRole(staffUserId, clinicId, null);
             write(audit);
         }
         return removed;
@@ -290,8 +304,8 @@ public class FakeStaffRepository implements StaffRepository {
             StaffMember m = list.get(i);
             if (m.userId() == staffUserId) {
                 list.set(i, new StaffMember(m.userId(), m.email(), m.displayName(), role));
-                StaffAccess a = access.get(staffUserId);
-                access.put(staffUserId, new StaffAccess(staffUserId, role, a.clinicIds(), false));
+                // this clinic's membership only, like the SQL
+                putClinicRole(staffUserId, clinicId, role);
                 write(audit);
                 return true;
             }
