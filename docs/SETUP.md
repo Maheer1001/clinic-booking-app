@@ -50,6 +50,10 @@ How to get the clinic booking app running from a fresh clone.
     - Run from Maven: `mvn javafx:run` (uses `app.Main` as entry point from `pom.xml`)
     - Or in IntelliJ: open `src/main/java/app/Main.java` and run the `main` method (▶), or press `Shift+F10`
 
+5. **Staff accounts (optional)**
+    - The app starts with no staff. Create a clinic's first admin with `app.StaffSeed`, then let clinicians sign up with the clinic's staff code and approve them on the admin's **Clinic** tab. Commands and details: README, [Staff side](../README.md#staff-side).
+    - For a quick demo, set `DEMO_STAFF_CODES=true` in `.env`: on the next start every clinic without a staff code gets `clinic<id>` (`clinic1`, `clinic2`, ...). Don't use it for real clinics.
+
 ### Project Structure
 ```
 clinic-booking-app/
