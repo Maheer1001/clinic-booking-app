@@ -216,11 +216,11 @@ public class BookingController {
         UI.listViewHover(list);
         list.getStyleClass().add("clinic-list");
         list.setFixedCellSize(-1);
-        List<Clinic> clinics;
-        try {clinics = getClinics();} catch (SQLException ex) {clinics = new ArrayList<>();}
-        list.setItems(FXCollections.observableArrayList(clinics));
-        // Tall enough for every clinic (collapsed) so none is hidden below the fold.
-        list.setPrefHeight(Math.max(1, clinics.size()) * 66 + 12);
+        // Filled in the background (below): reading the clinics on the JavaFX thread froze the window
+        // while the database connected, before the page (and the "usual clinic?" question) appeared.
+        list.setItems(FXCollections.observableArrayList());
+        list.setPlaceholder(UI.muted("Loading clinics…"));
+        list.setPrefHeight(66 + 12);
         list.setMinHeight(Region.USE_PREF_SIZE);
         list.setCellFactory(l -> new ListCell<>() {
             private final VBox content = new VBox(6);
@@ -313,18 +313,32 @@ public class BookingController {
             list.scrollTo(c);
             next.fire();
         });
-        clinicMap.show(clinics, null);
+        clinicMap.show(List.of(), null);
 
         VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"),
                 new VBox(4, UI.pageHeading("Where would you like to go?"),
                         UI.intro("Search by postcode to see the nearest clinics, or pick one on the map.")),
                 hbox, messageLabel, clinicMap.node(), list);
         page.setSpacing(12);
-        if (clinics.isEmpty()) {
-            page.getChildren().add(UI.emptyState(UI.ICON_SEARCH, "No clinics yet",
-                    "Add clinics to the database to start booking (see docs/sample-data.sql)."));
-        }
         page.getChildren().add(next);
+        ClinicMap map = clinicMap;
+        Background.run(() -> {
+            try {
+                return getClinics();
+            } catch (SQLException e) {
+                throw new IllegalStateException(e);
+            }
+        }, clinics -> {
+            list.getItems().setAll(clinics);
+            // Tall enough for every clinic (collapsed) so none is hidden below the fold.
+            list.setPrefHeight(Math.max(1, clinics.size()) * 66 + 12);
+            map.show(clinics, null);
+            if (clinics.isEmpty()) {
+                list.setPlaceholder(UI.muted("No clinics found."));
+                page.getChildren().add(page.getChildren().indexOf(next), UI.emptyState(UI.ICON_SEARCH, "No clinics yet",
+                        "Add clinics to the database to start booking (see docs/sample-data.sql)."));
+            }
+        }, ex -> list.setPlaceholder(UI.muted("We couldn't load the clinics. Check your connection, then open Book again.")));
         ScrollPane sp = new ScrollPane(page);
         sp.setFitToWidth(true);
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
