@@ -96,4 +96,43 @@ class DBTest {
         String generic = DB.describeFailure(new SQLException("boom", "XX000"));
         assertTrue(generic.contains("boom"), generic);
     }
+
+    // ---------------------------------------------------------------- unique email
+
+    @Test
+    void freshDatabase_getsTheUniqueEmailIndex_andADuplicateIsReportedAsSuch() throws Exception {
+        DB.setUrl("jdbc:h2:mem:db_test_unique_email;MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
+        DB.setUsername("sa");
+        DB.setPassword("");
+        try (Connection c = DB.connect()) {
+            DB.initTables(c);
+        }
+        dao.UserDAO users = new dao.UserDAO();
+        assertTrue(users.insertUser("same@example.com", "hash"));
+        // insertUser lower-cases, so this is the same address; it must not be retried as an id clash
+        SQLException e = assertThrows(SQLException.class, () -> users.insertUser("SAME@example.com", "hash"));
+        assertTrue(DB.isDuplicateEmail(e), e.getMessage());
+    }
+
+    @Test
+    void existingDatabaseWithUsers_isLeftForTheMigrationScript() throws Exception {
+        DB.setUrl("jdbc:h2:mem:db_test_existing_users;DB_CLOSE_DELAY=-1");
+        DB.setUsername("sa");
+        DB.setPassword("");
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("CREATE TABLE \"User\" (user_id INT PRIMARY KEY, email VARCHAR(255))");
+            s.execute("INSERT INTO \"User\" VALUES (1, 'dup@example.com'), (2, 'dup@example.com')");
+            DB.createUniqueEmailIndexIfFresh(c); // duplicates already there: must not fail start-up
+            s.execute("INSERT INTO \"User\" VALUES (3, 'dup@example.com')");
+        }
+    }
+
+    @Test
+    void isDuplicateEmail_onlyForTheEmailIndex() {
+        assertTrue(DB.isDuplicateEmail(new SQLException(
+                "ERROR: duplicate key value violates unique constraint \"user_email_lower_key\"", "23505")));
+        assertFalse(DB.isDuplicateEmail(new SQLException(
+                "ERROR: duplicate key value violates unique constraint \"User_pkey\"", "23505")));
+        assertFalse(DB.isDuplicateEmail(new SQLException("user_email_lower_key", "08001")));
+    }
 }

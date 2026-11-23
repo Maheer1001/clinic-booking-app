@@ -1,5 +1,6 @@
 package service;
 
+import app.DB;
 import dao.AccountRepository;
 import dao.UserDAO;
 
@@ -178,8 +179,8 @@ public class AccountSecurityService {
             if (!accounts.updateEmail(userId, email)) return fail(ChangeEmailResult.USER_NOT_FOUND, verify);
             return new EmailChange(ChangeEmailResult.SUCCESS, verify, current, email);
         } catch (SQLException e) {
-            // A unique index on email (if the database has one) catches a race with another sign-up.
-            return fail("23505".equals(e.getSQLState()) ? ChangeEmailResult.EMAIL_ALREADY_USED
+            // The unique email index catches a race with another sign-up or email change.
+            return fail(DB.isDuplicateEmail(e) ? ChangeEmailResult.EMAIL_ALREADY_USED
                     : ChangeEmailResult.DB_ERROR, null);
         }
     }

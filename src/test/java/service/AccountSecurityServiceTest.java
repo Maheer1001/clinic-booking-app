@@ -20,6 +20,7 @@ class AccountSecurityServiceTest {
     static final class FakeAccounts implements AccountRepository {
         final Map<Integer, String[]> rows = new HashMap<>(); // first, last, email, passwordHash
         boolean fail;
+        SQLException updateEmailFailure;
 
         void add(int id, String first, String last, String email, String password) {
             rows.put(id, new String[]{first, last, email, PasswordHasher.hash(password)});
@@ -77,6 +78,7 @@ class AccountSecurityServiceTest {
         @Override
         public boolean updateEmail(int userId, String newEmail) throws SQLException {
             check();
+            if (updateEmailFailure != null) throw updateEmailFailure;
             String[] r = rows.get(userId);
             if (r == null) return false;
             r[2] = newEmail;
@@ -187,6 +189,18 @@ class AccountSecurityServiceTest {
         assertEquals(0, questions.rows.get(1).failedAttempts());
         assertEquals(ChangeEmailResult.SAME_EMAIL, service.changeEmail(1, "wrong", "ME@example.com").result());
         assertEquals(0, questions.rows.get(1).failedAttempts());
+    }
+
+    @Test
+    void changeEmail_racingAnotherAccount_uniqueIndexGivesEmailAlreadyUsed() {
+        questionService.setSecurityQuestion(1, "FIRST_JOB", "Paper Round");
+        accounts.updateEmailFailure = new SQLException(
+                "ERROR: duplicate key value violates unique constraint \"user_email_lower_key\"", "23505");
+        assertEquals(ChangeEmailResult.EMAIL_ALREADY_USED,
+                service.changeEmail(1, "paper round", "new@example.com").result());
+        accounts.updateEmailFailure = new SQLException("connection lost", "08006");
+        assertEquals(ChangeEmailResult.DB_ERROR,
+                service.changeEmail(1, "paper round", "new@example.com").result());
     }
 
     @Test

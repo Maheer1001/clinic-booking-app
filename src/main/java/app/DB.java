@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
@@ -97,6 +98,16 @@ public class DB {
         } catch (SQLException e) {
             throw new SQLException(describeFailure(e), e.getSQLState(), e.getErrorCode(), e);
         }
+    }
+
+    /** Case-insensitive unique index on "User".email (docs/migrations/2026-11-23-unique-email.sql). */
+    public static final String USER_EMAIL_UNIQUE_INDEX = "user_email_lower_key";
+
+    /** True if the insert/update failed because another account already has that email. */
+    public static boolean isDuplicateEmail(SQLException e) {
+        String message = e.getMessage();
+        return "23505".equals(e.getSQLState()) && message != null
+                && message.toLowerCase().contains(USER_EMAIL_UNIQUE_INDEX);
     }
 
     /** Turns a driver exception into a message that says what to check. */
@@ -366,9 +377,26 @@ public class DB {
             // Fixed dose-reminder rhythm across logins (docs/migrations/2026-11-22-prescription-reminder-anchor.sql).
             s.execute("ALTER TABLE \"PrescriptionReminder\" ADD COLUMN IF NOT EXISTS schedule_anchor TIMESTAMP");
         }
+        createUniqueEmailIndexIfFresh(c);
         applyStaffLoginMigration(c);
         // Demo only (DEMO_STAFF_CODES=true): clinics with no code get clinic<id>. Never overwrites a code.
         if (demoStaffCodesEnabled()) StaffSeed.seedMissingStaffCodes(c);
+    }
+
+    /**
+     * One account per email, ignoring case. Only created here while "User" is still empty (a fresh
+     * database): an existing database may hold duplicates, so it gets the index from
+     * docs/migrations/2026-11-23-unique-email.sql after they have been checked.
+     */
+    static void createUniqueEmailIndexIfFresh(Connection c) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            try (ResultSet rs = s.executeQuery("SELECT 1 FROM \"User\" LIMIT 1")) {
+                if (rs.next()) return;
+            }
+            // H2 (tests) has no expression indexes; emails are stored lower-cased, so email alone is equivalent there.
+            String column = isPostgres(c) ? "(LOWER(email))" : "(email)";
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS " + USER_EMAIL_UNIQUE_INDEX + " ON \"User\" " + column);
+        }
     }
 
     private static Boolean demoStaffCodes = null;

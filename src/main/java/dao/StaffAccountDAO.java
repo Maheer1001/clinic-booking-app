@@ -117,7 +117,7 @@ public class StaffAccountDAO implements StaffAccountRepository {
                 } catch (SQLException e) {
                     c.rollback();
                     // MAX(user_id)+1 raced with another insert: try the next id.
-                    if ("23505".equals(e.getSQLState())) continue;
+                    if ("23505".equals(e.getSQLState()) && !DB.isDuplicateEmail(e)) continue;
                     throw e;
                 } finally {
                     c.setAutoCommit(autoCommit);
