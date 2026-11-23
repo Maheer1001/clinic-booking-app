@@ -9,8 +9,6 @@ import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
-import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.util.Duration;
 import model.AccessibilitySettings;
 import view.*;
@@ -24,24 +22,11 @@ public class MainController {
     private PauseTransition settingsSave;
     private AccessibilitySettings settings;
     private int settingsUserId;
+    private final Navigator nav;
 
     public MainController(Navigator nav, MainView view, int userID) {
-
-        //sets up toggle group for navigation bar buttons
-        ToggleGroup group = new ToggleGroup();
-        ToggleButton booking = view.getBookingButton();
-        ToggleButton tracking = view.getTrackingButton();
-        ToggleButton reminders = view.getRemindersButton();
-        booking.setToggleGroup(group);
-        tracking.setToggleGroup(group);
-        reminders.setToggleGroup(group);
-
-        //sets actions for each - set selected property to true everytime to ensure clicking a button twice stays selected
-        booking.setOnAction(e -> {booking.selectedProperty().set(true); nav.handleTabClick("booking");});
-
-        tracking.setOnAction(e -> {tracking.selectedProperty().set(true); nav.handleTabClick("tracking");});
-
-        reminders.setOnAction(e -> {reminders.selectedProperty().set(true); nav.handleTabClick("reminders");});
+        this.nav = nav;
+        // The tab buttons (patient or staff) are wired by the Navigator from its tab config.
 
         setUpSettingsListeners(userID);
 
@@ -53,7 +38,9 @@ public class MainController {
         }));
 
         //log out
+        // Unsaved Settings edits get a "Discard your changes?" first (Navigator's guard isn't asked on logout).
         view.getLogOutButton().setOnAction(e -> {
+            if (!nav.confirmLeave()) return;
             flushSettings();
             logOut(null);
         });
@@ -62,29 +49,30 @@ public class MainController {
         view.getQuickBookButton().setOnAction(e -> {
             BookingController bc = new BookingController(nav);
             nav.goToPage(bc.getClinicSearchPage(), "Find a clinic", false);
-            try {
-                bc.checkForDefaultClinic();
-            } catch (SQLException ignored) {}
+            bc.checkForDefaultClinic();
         });
 
-        //initial navigation states
-        booking.selectedProperty().set(true);
-        nav.handleTabClick("booking");
+        // open the first tab (Booking for patients, Today for staff)
+        nav.start();
     }
 
     /** Clears the session and returns to the login screen, optionally showing a message there. */
     private void logOut(String infoMessage) {
         Scene currScene = Data.getScene();
         Data.clearCurrentUser();
+        // every tab's pages and history belong to this session
+        nav.reset();
         // the in-progress booking holds personal details; don't let the next user see them
         Data.reset();
         Data.setSettings(null);
         Data.getSignUpDraft().password = "";
         Data.getSignUpDraft().confirmPassword = "";
+        Data.getSignUpDraft().securityAnswer = "";
+        Data.getSignUpDraft().staffCode = "";
         Stage stage = (Stage) currScene.getWindow();
         FXMLLoader loader = new FXMLLoader(Main.class.getResource("/fxml/login.fxml"));
         try {
-            Scene scene = new Scene(loader.load(), 420, 720);
+            Scene scene = new Scene(UI.authPage(loader.load()), 420, 720);
             scene.getStylesheets().add(UI.STYLE);
             if (infoMessage != null) {
                 LoginController login = loader.getController();

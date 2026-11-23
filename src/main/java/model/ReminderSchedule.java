@@ -338,6 +338,24 @@ public class ReminderSchedule {
         return val.isEmpty() ? null : val.toString();
     }
 
+    private static final DateTimeFormatter TIME_24H = DateTimeFormatter.ofPattern("H:mm");
+
+    /**
+     * Reads a 24-hour time typed by the user. Accepts "9:00" as well as "09:00" (the old "HH:mm"
+     * pattern rejected single-digit hours, so such times were silently ignored).
+     *
+     * @return the time, or null when blank or not a valid time
+     */
+    public static LocalTime parseTime(String text) {
+        String t = trimToNull(text);
+        if (t == null) return null;
+        try {
+            return LocalTime.parse(t, TIME_24H);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     /**
      * Utility to snap a candidate send time to be outside quiet hours, if defined.
      */
@@ -345,9 +363,12 @@ public class ReminderSchedule {
         if (quietHours == null || quietHours.start == null || quietHours.end == null) {
             return candidate;
         }
+        LocalTime start = parseTime(quietHours.start);
+        LocalTime end = parseTime(quietHours.end);
+        if (start == null || end == null || start.equals(end)) {
+            return candidate;
+        }
         try {
-            LocalTime start = LocalTime.parse(quietHours.start, DateTimeFormatter.ofPattern("HH:mm"));
-            LocalTime end = LocalTime.parse(quietHours.end, DateTimeFormatter.ofPattern("HH:mm"));
             LocalTime t = candidate.toLocalTime();
 
             boolean wraps = start.isAfter(end); // e.g. 22:00 -> 07:00

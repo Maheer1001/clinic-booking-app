@@ -3,8 +3,10 @@ package dao;
 import app.DB;
 import model.Appointment;
 import model.AppointmentDetails;
+import model.AppointmentStatus;
 import model.AvailableTimeslot;
 import model.Book;
+import model.BookingDetails;
 import model.UpcomingAppointmentDetails;
 
 import java.sql.Connection;
@@ -35,27 +37,55 @@ public class AppointmentDAO implements AppointmentRepository {
         this.timeslotDAO = timeslotDAO;
     }
 
+    /** Booking notes: blank is stored as NULL, and a blank value saved before that reads as no notes. */
+    static String notesOrNull(String notes) {
+        return notes == null || notes.isBlank() ? null : notes;
+    }
+
+    /**
+     * Inserts the appointment and, when the booking carries personal details (first/last name, date of
+     * birth, phone, email, gender, sexuality, accessibility needs), a "BookingDetails" row for it, in one
+     * transaction: if the details cannot be saved the appointment is not saved either.
+     */
     @Override
     public Optional<Integer> save(Book b, int userId, int timeslotId) {
+        Optional<BookingDetails> details = BookingDetails.fromBook(b);
         try (Connection c = DB.connect()) {
             String insert = """
                 INSERT INTO "Appointment" (user_id, timeslot_id, notes, status)
                 VALUES (?, ?, ?, ?)
                 """;
-            try (PreparedStatement ps = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
-                ps.setInt(1, userId);
-                ps.setInt(2, timeslotId);
-                ps.setString(3, b.getReason());
-                ps.setString(4, "CONFIRMED");
-                ps.executeUpdate();
-                try (ResultSet keys = ps.getGeneratedKeys()) {
-                    if (keys.next()) {
-                        return Optional.of(keys.getInt(1));
+            c.setAutoCommit(false);
+            try {
+                Optional<Integer> appId = Optional.empty();
+                try (PreparedStatement ps = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setInt(1, userId);
+                    ps.setInt(2, timeslotId);
+                    ps.setString(3, notesOrNull(b.getReason()));
+                    ps.setString(4, "CONFIRMED");
+                    ps.executeUpdate();
+                    try (ResultSet keys = ps.getGeneratedKeys()) {
+                        if (keys.next()) {
+                            appId = Optional.of(keys.getInt(1));
+                        }
                     }
                 }
+                if (appId.isPresent() && details.isPresent()) {
+                    BookingDetailsDAO.insert(c, details.get().withAppId(appId.get()));
+                }
+                if (appId.isPresent()) {
+                    c.commit();
+                } else {
+                    c.rollback();
+                }
+                return appId;
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            // Only the SQL state: driver messages can quote the row, which holds personal details.
+            System.err.println("[AppointmentDAO] Could not save appointment (SQLState " + e.getSQLState() + ")");
         }
         return Optional.empty();
     }
@@ -219,18 +249,43 @@ public class AppointmentDAO implements AppointmentRepository {
         }
     }
 
+    /**
+     * Appointments that have started, newest first: ones the clinic marked COMPLETED or NO_SHOW
+     * (listed as missed), and booked (CONFIRMED) ones whose time has passed. Never CANCELLED. Nothing in the app moves a booking to COMPLETED, so
+     * counting only those left the patient's own past bookings out of their history; and the old
+     * "date before today" check (on the database server's clock) hid visits from earlier today.
+     * Staff can record attendance from the start of the day, so a visit later today that is already
+     * marked attended or missed is listed here too (it is no longer upcoming either).
+     */
     @Override
     public List<AppointmentDetails> getPastAppointmentDetailsByUserId(int userId) {
         String sql = """
-            SELECT t.date, t.start_time, t.end_time, s.name AS service_name, c.name AS clinic_name, a.notes, a.app_id
+            SELECT t.date, t.start_time, t.end_time, s.name AS service_name, c.name AS clinic_name, a.notes, a.app_id,
+                   a.status
             FROM "Appointment" a
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
             JOIN "Service" s ON t.service_id = s.service_id
             JOIN "Clinic" c ON t.clinic_id = c.clinic_id
-            WHERE a.user_id = ? AND a.status = 'COMPLETED' AND t.date < CURRENT_DATE
+            WHERE a.user_id = ? AND a.status IN ('COMPLETED', 'CONFIRMED', 'NO_SHOW')
+              AND (NOT """ + NOT_STARTED + """
+                   OR (a.status IN ('COMPLETED', 'NO_SHOW') AND t.date <= ?))
             ORDER BY t.date DESC, t.start_time DESC
             """;
-        return getAppointmentDetailsFromQuery(sql, userId);
+        List<AppointmentDetails> list = new ArrayList<>();
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            bindNow(ps, 2);
+            ps.setObject(5, LocalDateTime.now().toLocalDate());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(toAppointmentDetails(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
     }
 
     @Override
@@ -264,7 +319,7 @@ public class AppointmentDAO implements AppointmentRepository {
                             dateStr, startStr, endStr,
                             rs.getString("service_name"),
                             rs.getString("clinic_name"),
-                            rs.getString("notes")));
+                            notesOrNull(rs.getString("notes"))));
                 }
             }
         } catch (SQLException e) {
@@ -317,30 +372,19 @@ public class AppointmentDAO implements AppointmentRepository {
         return timeslotDAO.findAvailable(clinicId, serviceId, date);
     }
 
-    private List<AppointmentDetails> getAppointmentDetailsFromQuery(String sql, int userId) {
-        List<AppointmentDetails> list = new ArrayList<>();
-        try (Connection c = DB.connect();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, userId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    LocalDate d = rs.getObject("date", LocalDate.class);
-                    LocalTime start = rs.getObject("start_time", LocalTime.class);
-                    LocalTime end = rs.getObject("end_time", LocalTime.class);
-                    String dateStr = d != null ? d.format(DATE_FMT) : "";
-                    String startStr = start != null ? start.format(TIME_FMT) : "";
-                    String endStr = end != null ? end.format(TIME_FMT) : "";
-                    list.add(new AppointmentDetails(
-                            dateStr, startStr, endStr,
-                            rs.getString("service_name"),
-                            rs.getString("clinic_name"),
-                            rs.getString("notes")));
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return list;
+    private static AppointmentDetails toAppointmentDetails(ResultSet rs) throws SQLException {
+        LocalDate d = rs.getObject("date", LocalDate.class);
+        LocalTime start = rs.getObject("start_time", LocalTime.class);
+        LocalTime end = rs.getObject("end_time", LocalTime.class);
+        String dateStr = d != null ? d.format(DATE_FMT) : "";
+        String startStr = start != null ? start.format(TIME_FMT) : "";
+        String endStr = end != null ? end.format(TIME_FMT) : "";
+        return new AppointmentDetails(
+                dateStr, startStr, endStr,
+                rs.getString("service_name"),
+                rs.getString("clinic_name"),
+                notesOrNull(rs.getString("notes")),
+                AppointmentStatus.fromDb(rs.getString("status")));
     }
 
     @Override
@@ -349,8 +393,9 @@ public class AppointmentDAO implements AppointmentRepository {
             SELECT MAX(t.date) AS last_date
             FROM "Appointment" a
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
-            WHERE a.user_id = ? AND t.date < CURRENT_DATE
+            WHERE a.user_id = ? AND t.date < CURRENT_DATE AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
             """;
+        // A cancelled or missed appointment is not a visit, so it must not reset the "time to book" reminder.
         try (Connection c = DB.connect();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, userId);

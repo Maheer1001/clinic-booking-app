@@ -6,13 +6,17 @@ import javafx.beans.Observable;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
 import javafx.collections.FXCollections;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import model.Clinic;
 import model.Item;
 import model.Service;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.util.List;
@@ -43,17 +47,29 @@ public class ServiceSelection {
 
         list.setCellFactory(l -> new ListCell<>() {
             private final CheckBox checkBox = new CheckBox();
+            // The name sits beside the box (not as the box's own text) so it can wrap onto a second
+            // line: as checkbox text in the header it was cut to "Pregnancy Testing and Options ...".
+            private final Label name = UI.wrappingLabel("");
+            private final HBox header = new HBox(8, checkBox, name);
             private final VBox content = new VBox(10);
             private final TitledPane pane = new TitledPane();
             private Service current;
 
             {
-                pane.setGraphic(checkBox);
+                header.setAlignment(Pos.CENTER_LEFT);
+                name.getStyleClass().add("service-name");
+                name.setLabelFor(checkBox);
+                name.prefWidthProperty().bind(list.widthProperty().subtract(110));
+                name.maxWidthProperty().bind(name.prefWidthProperty());
+                // Clicking the name ticks the box, as the checkbox text did (instead of opening the pane).
+                name.addEventHandler(MouseEvent.MOUSE_PRESSED, MouseEvent::consume);
+                name.addEventHandler(MouseEvent.MOUSE_RELEASED, e -> {
+                    checkBox.setSelected(!checkBox.isSelected());
+                    e.consume();
+                });
+                pane.setGraphic(header);
                 pane.setContent(content);
                 pane.setExpanded(false);
-                checkBox.setWrapText(true);
-                checkBox.setMaxWidth(300);
-                checkBox.setPrefHeight(Region.USE_COMPUTED_SIZE);
                 pane.prefWidthProperty().bind(list.widthProperty().subtract(30));
             }
 
@@ -70,10 +86,11 @@ public class ServiceSelection {
                     setGraphic(null);
                 } else {
                     current = service;
-                    checkBox.setText(service.getName());
+                    name.setText(service.getName());
+                    checkBox.setAccessibleText(service.getName());
                     checkBox.selectedProperty().bindBidirectional(service.selectedProperty());
                     Label description = UI.body(service.getDescription() != null ? service.getDescription() : "");
-                    Label duration = UI.muted("About " + service.getDurationMinutes() + " minutes");
+                    Label duration = UI.muted(Dates.duration(service.getDurationMinutes()));
                     // setAll, not addAll: cells are reused, so adding would pile up old labels.
                     content.getChildren().setAll(description, duration);
                     setGraphic(pane);
@@ -82,7 +99,8 @@ public class ServiceSelection {
         });
 
         list.setSelectionModel(null);
-        list.setPrefHeight(services.size() * 56 + 16);
+        // Rows grow when a name wraps, so leave room for that rather than a fixed 56px per row.
+        list.setPrefHeight(services.size() * 64 + 16);
         list.setMinHeight(Region.USE_PREF_SIZE);
         list.setFocusTraversable(false);
 

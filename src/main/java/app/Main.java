@@ -35,7 +35,7 @@ public class Main extends Application {
         loadFonts();
 
         FXMLLoader loader = new FXMLLoader(Main.class.getResource("/fxml/login.fxml"));
-        Scene scene = new Scene(loader.load(), WINDOW_WIDTH, WINDOW_HEIGHT);
+        Scene scene = new Scene(UI.authPage(loader.load()), WINDOW_WIDTH, WINDOW_HEIGHT);
         scene.getStylesheets().add(UI.STYLE);
         stage.setTitle("Health Tracking and Appointments");
         stage.setScene(scene);
@@ -48,6 +48,8 @@ public class Main extends Application {
         stage.show();
 
         ensureTablesExistInBackground();
+        // Scheduled reminders also pop up in the app while their user is signed in.
+        view.notification.ReminderPopups.install(service.NotificationScheduler.shared());
     }
 
     /**

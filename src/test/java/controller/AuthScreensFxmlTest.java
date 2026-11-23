@@ -6,10 +6,12 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import model.SecurityQuestion;
 import service.AuthService;
 
 import java.util.concurrent.CompletableFuture;
@@ -122,6 +124,16 @@ class AuthScreensFxmlTest {
                 assertTrue(btn.isDisabled(), "terms not ticked yet");
                 ((CheckBox) root.lookup("#termsCheck")).setSelected(true);
                 ((CheckBox) root.lookup("#privacyCheck")).setSelected(true);
+                assertTrue(btn.isDisabled(), "no security question yet");
+
+                @SuppressWarnings("unchecked")
+                ComboBox<SecurityQuestion> question = (ComboBox<SecurityQuestion>) root.lookup("#questionBox");
+                assertEquals(SecurityQuestion.all(), question.getItems());
+                question.setValue(SecurityQuestion.FIRST_PET);
+                assertEquals("FIRST_PET", d.securityQuestionKey, "kept while reading the Terms");
+                assertTrue(btn.isDisabled(), "no answer yet");
+                TextField answer = (TextField) root.lookup("#answerField");
+                answer.setText("x");
                 assertFalse(btn.isDisabled());
                 return null;
             });
@@ -129,6 +141,66 @@ class AuthScreensFxmlTest {
             d.email = ""; d.password = ""; d.confirmPassword = "";
             d.termsAccepted = false; d.privacyAccepted = false;
             d.termsReadToEnd = false; d.privacyReadToEnd = false;
+            d.securityQuestionKey = null; d.securityAnswer = "";
+        }
+    }
+
+    @Test
+    void signup_staffOptionRevealsTheCodeAndAMissingCodeIsShownInline() throws Exception {
+        Data.SignUpDraft d = Data.getSignUpDraft();
+        d.termsReadToEnd = true; d.privacyReadToEnd = true;
+        try {
+            Parent root = onFx(() -> {
+                Parent r = load("/fxml/signup.fxml");
+                CheckBox staff = (CheckBox) r.lookup("#staffCheck");
+                javafx.scene.Node box = r.lookup("#staffBox");
+                assertFalse(staff.isSelected());
+                assertFalse(box.isVisible() || box.isManaged(), "the code field is hidden for patients");
+                staff.setSelected(true);
+                assertTrue(box.isVisible() && box.isManaged());
+                assertTrue(d.staff, "kept while reading the Terms");
+                ((TextField) r.lookup("#staffCodeField")).setText("clinic9");
+                assertEquals("clinic9", d.staffCode);
+                return r;
+            });
+            // coming back from the Terms screen rebuilds the form from the draft
+            onFx(() -> {
+                Parent again = load("/fxml/signup.fxml");
+                assertTrue(((CheckBox) again.lookup("#staffCheck")).isSelected());
+                assertEquals("clinic9", ((TextField) again.lookup("#staffCodeField")).getText());
+                return null;
+            });
+
+            // every other field valid and no code: the service's own message, before any database work
+            onFx(() -> {
+                ((TextField) root.lookup("#staffCodeField")).setText("  ");
+                ((TextField) root.lookup("#emailField")).setText("new@example.com");
+                ((TextField) root.lookup("#passwordField")).setText("Password1");
+                ((TextField) root.lookup("#confirmPasswordField")).setText("Password1");
+                ((CheckBox) root.lookup("#termsCheck")).setSelected(true);
+                ((CheckBox) root.lookup("#privacyCheck")).setSelected(true);
+                @SuppressWarnings("unchecked")
+                ComboBox<SecurityQuestion> question = (ComboBox<SecurityQuestion>) root.lookup("#questionBox");
+                question.setValue(SecurityQuestion.FIRST_PET);
+                ((TextField) root.lookup("#answerField")).setText("Rex the dog");
+                Button create = (Button) root.lookup("#createBtn");
+                assertFalse(create.isDisabled());
+                create.fire();
+                return null;
+            });
+            Label message = (Label) root.lookup("#messageLabel");
+            String expected = service.StaffAuthService.Status.MISSING_STAFF_CODE.message();
+            long until = System.currentTimeMillis() + 10_000;
+            while (!expected.equals(onFx(message::getText)) && System.currentTimeMillis() < until) {
+                Thread.sleep(50);
+            }
+            assertEquals(expected, onFx(message::getText));
+        } finally {
+            d.email = ""; d.password = ""; d.confirmPassword = "";
+            d.termsAccepted = false; d.privacyAccepted = false;
+            d.termsReadToEnd = false; d.privacyReadToEnd = false;
+            d.securityQuestionKey = null; d.securityAnswer = "";
+            d.staff = false; d.staffCode = "";
         }
     }
 

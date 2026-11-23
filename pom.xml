@@ -13,6 +13,8 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <test.excludedGroups>db</test.excludedGroups>
+        <!-- mvn test may only connect to in-memory H2, never the database in .env (see app.DB) -->
+        <test.dbInMemoryOnly>true</test.dbInMemoryOnly>
     </properties>
 
     <dependencies>
@@ -111,6 +113,7 @@
                     <systemPropertyVariables>
                         <!-- Prevent any real SMTP/network sends during mvn test -->
                         <email.disabled>true</email.disabled>
+                        <db.inMemoryOnly>${test.dbInMemoryOnly}</db.inMemoryOnly>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
@@ -147,9 +150,65 @@
             </build>
         </profile>
         <profile>
+            <!-- Developer tool: clicks through the staff side (and its patient-side effects) against the
+                 database in .env and saves PNGs and a log to target/staff-shots. Needs a seeded clinic
+                 admin; see dev.StaffHarness. mvn -Pstaff-screenshots test-compile exec:exec -->
+            <id>staff-screenshots</id>
+            <properties>
+                <shots.only></shots.only>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <configuration>
+                            <executable>java</executable>
+                            <classpathScope>test</classpathScope>
+                            <arguments>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>dev.StaffScreenshots</argument>
+                                <argument>target/staff-shots</argument>
+                                <argument>${shots.only}</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <!-- Developer tool: checks the popup queue, the usual-clinic question, a partly booked
+                 multi-service booking, per-clinic roles and the result email's sender name against the
+                 database in .env; PNGs and a log go to target/verify-shots. Needs what staff-screenshots
+                 needs; see dev.VerifyHarness. mvn -o -Pverify-screenshots test-compile exec:exec -->
+            <id>verify-screenshots</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <configuration>
+                            <executable>java</executable>
+                            <classpathScope>test</classpathScope>
+                            <arguments>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>dev.VerifyScreenshots</argument>
+                                <argument>target/verify-shots</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>db-tests</id>
             <properties>
                 <test.excludedGroups>none</test.excludedGroups>
+                <test.dbInMemoryOnly>false</test.dbInMemoryOnly>
             </properties>
         </profile>
     </profiles>

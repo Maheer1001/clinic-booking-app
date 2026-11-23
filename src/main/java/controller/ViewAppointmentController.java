@@ -1,5 +1,6 @@
 package controller;
 
+import app.Data;
 import dao.AppointmentRepository;
 import dao.AppointmentDAO;
 import model.AvailableTimeslot;
@@ -14,16 +15,50 @@ import java.util.Optional;
  */
 public class ViewAppointmentController {
 
+    /** Keeps pending reminders in step when an appointment is cancelled or moved. */
+    public interface ReminderSync {
+        void cancelled(int appId);
+        void moved(int appId);
+
+        ReminderSync NONE = new ReminderSync() {
+            public void cancelled(int appId) {}
+            public void moved(int appId) {}
+        };
+    }
+
     private final int userId;
     private final AppointmentRepository appointmentDAO;
+    private final ReminderSync reminderSync;
 
     public ViewAppointmentController(int userId) {
-        this(userId, new AppointmentDAO());
+        this(userId, new AppointmentDAO(), new ReminderSync() {
+            public void cancelled(int appId) {
+                new ReminderController(userId).cancelAppointmentReminders(appId);
+            }
+            public void moved(int appId) {
+                new ReminderController(userId).rescheduleAppointmentReminder(
+                        appId, Data.getCurrentUserEmail(), Data.getCurrentUserName());
+            }
+        });
     }
 
     public ViewAppointmentController(int userId, AppointmentRepository appointmentDAO) {
+        this(userId, appointmentDAO, ReminderSync.NONE);
+    }
+
+    public ViewAppointmentController(int userId, AppointmentRepository appointmentDAO, ReminderSync reminderSync) {
         this.userId = userId;
         this.appointmentDAO = appointmentDAO;
+        this.reminderSync = reminderSync;
+    }
+
+    private void syncReminders(Runnable r) {
+        try {
+            r.run();
+        } catch (RuntimeException e) {
+            // The appointment change has already been saved; a reminder problem must not hide that.
+            System.err.println("[Reminders] Could not update reminders: " + e.getMessage());
+        }
     }
 
     public List<UpcomingAppointmentDetails> getUpcomingAppointments() {
@@ -46,7 +81,11 @@ public class ViewAppointmentController {
         if (!appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId)) {
             return false;
         }
-        return appointmentDAO.cancelAppointment(appointmentId);
+        boolean cancelled = appointmentDAO.cancelAppointment(appointmentId);
+        if (cancelled) {
+            syncReminders(() -> reminderSync.cancelled(appointmentId));
+        }
+        return cancelled;
     }
 
     public boolean rescheduleAppointment(int appointmentId, LocalDate newDate) {
@@ -57,6 +96,7 @@ public class ViewAppointmentController {
             return false;
         }
         appointmentDAO.rescheduleAppointment(appointmentId, newDate);
+        syncReminders(() -> reminderSync.moved(appointmentId));
         return true;
     }
 
@@ -80,7 +120,11 @@ public class ViewAppointmentController {
         if (!appointmentDAO.isUpcomingAppointmentForUser(appointmentId, userId)) {
             return false;
         }
-        return appointmentDAO.rescheduleToSlot(appointmentId, slot);
+        boolean moved = appointmentDAO.rescheduleToSlot(appointmentId, slot);
+        if (moved) {
+            syncReminders(() -> reminderSync.moved(appointmentId));
+        }
+        return moved;
     }
 
     public boolean isUpcomingAppointmentForUser(int appointmentId) {

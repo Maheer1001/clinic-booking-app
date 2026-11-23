@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -91,7 +92,7 @@ public class ReminderDAO {
     }
 
     public List<PrescriptionReminder> getPrescriptionRemindersByUserId(int userId) {
-        String sql = "SELECT pr_rem_id, user_id, prescription_id, notify, interval_between_doses, custom_message, notification_method FROM \"PrescriptionReminder\" WHERE user_id = ?";
+        String sql = "SELECT pr_rem_id, user_id, prescription_id, notify, interval_between_doses, custom_message, notification_method, schedule_anchor FROM \"PrescriptionReminder\" WHERE user_id = ?";
         List<PrescriptionReminder> list = new ArrayList<>();
         try (Connection c = DB.connect();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -105,7 +106,8 @@ public class ReminderDAO {
                             rs.getBoolean("notify"),
                             rs.getInt("interval_between_doses"),
                             rs.getString("custom_message"),
-                            rs.getString("notification_method")));
+                            rs.getString("notification_method"),
+                            rs.getObject("schedule_anchor", LocalDateTime.class)));
                 }
             }
         } catch (SQLException e) {
@@ -114,8 +116,17 @@ public class ReminderDAO {
         return list;
     }
 
-    /** @return true if saved, false if the database update failed */
+    /** Saves with the dose rhythm starting now. */
     public boolean savePrescriptionReminder(int userId, int prescriptionId, boolean notify, int intervalHours, String customMessage) {
+        return savePrescriptionReminder(userId, prescriptionId, notify, intervalHours, customMessage, LocalDateTime.now());
+    }
+
+    /**
+     * @param scheduleAnchor when the dose rhythm started (doses are due every intervalHours from it)
+     * @return true if saved, false if the database update failed
+     */
+    public boolean savePrescriptionReminder(int userId, int prescriptionId, boolean notify, int intervalHours,
+                                            String customMessage, LocalDateTime scheduleAnchor) {
         return inTransaction(c -> {
             try (PreparedStatement del = c.prepareStatement("DELETE FROM \"PrescriptionReminder\" WHERE user_id = ? AND prescription_id = ?")) {
                 del.setInt(1, userId);
@@ -123,15 +134,30 @@ public class ReminderDAO {
                 del.executeUpdate();
             }
             try (PreparedStatement ins = c.prepareStatement(
-                    "INSERT INTO \"PrescriptionReminder\" (user_id, prescription_id, notify, interval_between_doses, custom_message, notification_method) VALUES (?, ?, ?, ?, ?, 'email')")) {
+                    "INSERT INTO \"PrescriptionReminder\" (user_id, prescription_id, notify, interval_between_doses, custom_message, notification_method, schedule_anchor) VALUES (?, ?, ?, ?, ?, 'email', ?)")) {
                 ins.setInt(1, userId);
                 ins.setInt(2, prescriptionId);
                 ins.setBoolean(3, notify);
                 ins.setInt(4, intervalHours);
                 ins.setString(5, customMessage != null ? customMessage : "");
+                ins.setObject(6, scheduleAnchor);
                 ins.executeUpdate();
             }
         });
+    }
+
+    /** Records when the dose rhythm started, for reminders saved before the anchor was stored. */
+    public void setPrescriptionReminderAnchor(int userId, int prescriptionId, LocalDateTime scheduleAnchor) {
+        String sql = "UPDATE \"PrescriptionReminder\" SET schedule_anchor = ? WHERE user_id = ? AND prescription_id = ? AND schedule_anchor IS NULL";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setObject(1, scheduleAnchor);
+            ps.setInt(2, userId);
+            ps.setInt(3, prescriptionId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public List<BookingReminder> getBookingRemindersByUserId(int userId) {

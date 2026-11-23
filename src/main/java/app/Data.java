@@ -4,7 +4,11 @@ import javafx.scene.Scene;
 import model.AccessibilitySettings;
 import model.Book;
 import model.Session;
+import model.StaffAccess;
+import model.StaffRole;
 import model.User;
+
+import java.util.List;
 
 /**
  * Application-scoped state: current booking and logged-in user.
@@ -15,15 +19,18 @@ public class Data {
     private static Book booking = new Book();
 
     private static Session currentSession = null;
-    // Last-seen counters for tracking notifications (per app session).
-    // -1 means "not initialised yet" (first time user opens tracking).
-    private static int lastSeenTestCount = -1;
 
     private static AccessibilitySettings settings;
     /** User id that {@link #settings} belongs to (-1 if none). */
     private static int settingsOwnerId = -1;
 
     private static Scene scene;
+
+    /** Signed-in user's role and clinics (read at login; staff actions re-check them in the database). */
+    private static StaffRole currentRole = StaffRole.PATIENT;
+    private static List<Integer> staffClinicIds = List.of();
+    /** The clinic a multi-clinic staff member is working in now (-1: none). */
+    private static int currentClinicId = -1;
 
     /**
      * Draft state for Create Account screen (so returning from Terms/Privacy keeps filled fields).
@@ -37,6 +44,12 @@ public class Data {
         public boolean privacyAccepted = false;
         public boolean termsReadToEnd = false;
         public boolean privacyReadToEnd = false;
+        /** {@link model.SecurityQuestion} key, or null when none is chosen yet. */
+        public String securityQuestionKey = null;
+        public String securityAnswer = "";
+        /** "I'm clinic staff" ticked, and the clinic staff code typed so far. */
+        public boolean staff = false;
+        public String staffCode = "";
     }
 
     private static final SignUpDraft signUpDraft = new SignUpDraft();
@@ -96,18 +109,61 @@ public class Data {
      */
     public static void clearCurrentUser() {
         currentSession = null;
-        lastSeenTestCount = -1;
         booking = new Book();
+        clearStaffAccess();
         // Settings are kept until the next user signs in (see getSettings): a pending debounced
         // save from the user who just logged out still needs to read their own values.
     }
 
-    public static int getLastSeenTestCount() {
-        return lastSeenTestCount;
+    /**
+     * Stores the signed-in user's role and clinics. The current clinic starts as the first one (lowest
+     * id); a patient, or staff with no clinics, has none.
+     */
+    public static void setStaffAccess(StaffAccess access) {
+        if (access == null) {
+            clearStaffAccess();
+            return;
+        }
+        currentRole = access.role();
+        staffClinicIds = access.clinicIds();
+        currentClinicId = staffClinicIds.isEmpty() ? -1 : staffClinicIds.getFirst();
     }
 
-    public static void setLastSeenTestCount(int count) {
-        lastSeenTestCount = count;
+    /** Back to a patient with no clinics (log out, account deletion). */
+    public static void clearStaffAccess() {
+        currentRole = StaffRole.PATIENT;
+        staffClinicIds = List.of();
+        currentClinicId = -1;
+    }
+
+    /**
+     * PATIENT unless a staff member is signed in. Never null. This is the account role (patient or
+     * staff) only; what staff may do is per clinic ({@code StaffAccess.roleAt}).
+     */
+    public static StaffRole getCurrentRole() {
+        return currentRole;
+    }
+
+    public static boolean isStaff() {
+        return currentRole.isStaff();
+    }
+
+    /** The clinics the signed-in staff member works at (empty for patients). Unmodifiable. */
+    public static List<Integer> getStaffClinicIds() {
+        return staffClinicIds;
+    }
+
+    /** The clinic the staff member is working in now, or -1 if none. */
+    public static int getCurrentClinicId() {
+        return currentClinicId;
+    }
+
+    /** Switches the current clinic; only one of {@link #getStaffClinicIds()} is accepted. */
+    public static void setCurrentClinicId(int clinicId) {
+        if (!staffClinicIds.contains(clinicId)) {
+            throw new IllegalArgumentException("Not one of this staff member's clinics: " + clinicId);
+        }
+        currentClinicId = clinicId;
     }
 
     /**

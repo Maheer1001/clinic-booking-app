@@ -2,6 +2,7 @@ package dao;
 
 import app.DB;
 import model.Prescription;
+import model.PrescriptionState;
 import model.PrescriptionSummary;
 
 import java.sql.Connection;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class PrescriptionDAO implements PrescriptionRepository {
 
@@ -37,6 +39,9 @@ public class PrescriptionDAO implements PrescriptionRepository {
             FROM "Prescription" p
             JOIN "Medicine" m ON p.medicine_id = m.medicine_id
             WHERE p.user_id = ?
+              -- one made from a draft test would give the result away before it is released
+              AND (p.test_id IS NULL OR EXISTS (
+                    SELECT 1 FROM "Test" t WHERE t.test_id = p.test_id AND t.released_at IS NOT NULL))
             ORDER BY p.start_date DESC
             """;
         return getPrescriptionSummariesFromQuery(sql, userId, false);
@@ -92,13 +97,44 @@ public class PrescriptionDAO implements PrescriptionRepository {
                             startStr,
                             endStr,
                             rs.getString("instructions") != null ? rs.getString("instructions") : "",
-                            endDate == null || endDate.isAfter(LocalDate.now()))); //rs.getBoolean("actively_taking")));
+                            isActive(endDate, (Boolean) rs.getObject("actively_taking"), LocalDate.now())));
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return list;
+    }
+
+    /**
+     * Current = not stopped by the clinic and not past its end date. The course's last day still
+     * counts (it used to show as finished on that day, while dose reminders still offered it), and a
+     * course marked as no longer taken is finished even if its end date is ahead, matching
+     * {@link #getPrescriptionsForRemindersByUserId}.
+     */
+    static boolean isActive(LocalDate endDate, Boolean activelyTaking, LocalDate today) {
+        if (Boolean.FALSE.equals(activelyTaking)) {
+            return false;
+        }
+        return endDate == null || !endDate.isBefore(today);
+    }
+
+    /**
+     * Whether the prescription is still being taken and when it ends, in one small query; empty if
+     * it no longer exists. Read before each dose reminder is sent.
+     */
+    public Optional<PrescriptionState> findReminderState(int prescriptionId) throws SQLException {
+        String sql = "SELECT actively_taking, end_date FROM \"Prescription\" WHERE prescription_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, prescriptionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                Boolean taking = (Boolean) rs.getObject("actively_taking");
+                return Optional.of(new PrescriptionState(!Boolean.FALSE.equals(taking),
+                        rs.getObject("end_date", LocalDate.class)));
+            }
+        }
     }
 
     @Override

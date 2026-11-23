@@ -27,6 +27,14 @@ public abstract class BaseNotification implements Notification {
     private Node previewContent;
     private Node fullContent;
     private boolean previewMode;
+    /** Called once the popup window has closed; set by {@link #show(Runnable)}. */
+    private Runnable onClosed;
+
+    @Override
+    public void show(Runnable onClosed) {
+        this.onClosed = onClosed;
+        show();
+    }
 
     @Override
     public void show() {
@@ -112,7 +120,7 @@ public abstract class BaseNotification implements Notification {
         VBox.setVgrow(scroll, Priority.ALWAYS);
         scroll.setMaxHeight(420);
 
-        Button dismissButton = UI.backButton("Dismiss");
+        Button dismissButton = UI.secondaryButton("Dismiss");
         dismissButton.setOnAction(e -> stage.close());
 
         HBox buttonRow;
@@ -129,6 +137,7 @@ public abstract class BaseNotification implements Notification {
                     previewMode = true;
                 }
                 if (stage != null) {
+                    fitHeight(scroll);
                     stage.sizeToScene();
                 }
             });
@@ -138,6 +147,7 @@ public abstract class BaseNotification implements Notification {
         }
 
         buttonRow.setAlignment(Pos.CENTER_RIGHT);
+        UI.equalSpacing(buttonRow);
 
         root = new VBox(12, scroll, buttonRow);
         root.getStyleClass().add(UI.NOTIFICATION);
@@ -149,6 +159,35 @@ public abstract class BaseNotification implements Notification {
         }
 
         stage.setScene(scene);
+        Runnable closed = onClosed;
+        onClosed = null;
+        if (closed != null) stage.setOnHidden(e -> closed.run());
         stage.show();
+        // The first size comes from the content's one-line height, so wrapped text (a long test type,
+        // several results) was cut off behind a scroll bar. Now the width is known, fit the height.
+        // Twice: the width grows once the scroll bar it no longer needs has gone.
+        for (int i = 0; i < 2; i++) {
+            root.applyCss();
+            root.layout();
+            if (!fitHeight(scroll)) break;
+            stage.sizeToScene();
+        }
+    }
+
+    /** Most of the popup's height the content may take before it scrolls. */
+    static final double MAX_CONTENT_HEIGHT = 420;
+
+    /**
+     * Sets the scroll area's height to what its content needs at the current width (up to
+     * {@link #MAX_CONTENT_HEIGHT}). True if it changed. Package-private for tests.
+     */
+    static boolean fitHeight(ScrollPane scroll) {
+        if (!(scroll.getContent() instanceof javafx.scene.layout.Region content)) return false;
+        double width = scroll.getViewportBounds().getWidth();
+        if (width <= 0) return false;
+        double wanted = Math.min(Math.ceil(content.prefHeight(width)), MAX_CONTENT_HEIGHT);
+        if (Math.abs(scroll.getPrefViewportHeight() - wanted) < 0.5) return false;
+        scroll.setPrefViewportHeight(wanted);
+        return true;
     }
 }

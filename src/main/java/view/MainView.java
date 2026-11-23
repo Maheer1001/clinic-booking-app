@@ -32,7 +32,7 @@ public class MainView {
     private final ToggleButton trackingButton = UI.navButton("Tracking");
     private final ToggleButton remindersButton = UI.navButton("Reminders");
     /** Entry point for per-user default appointment reminder configuration (behaviour can be moved later). */
-    private final Button deleteUser = UI.dangerButton("Delete account");
+    private final Button deleteUser = UI.destructiveButton("Delete account");
     private final Button logOutButton = UI.menuButton("Log Out");
 
     public ToggleButton getBookingButton() {return bookingButton;}
@@ -80,7 +80,7 @@ public class MainView {
         } else {
             for (UpcomingAppointmentDetails apt : appointments) {
 
-                Label service = new Label(apt.serviceName());
+                Label service = UI.wrappingLabel(apt.serviceName());
                 service.getStyleClass().add("appointment-title");
                 Label when = new Label(Dates.upcoming(apt.date(), today) + "  ·  " + Dates.timeRange(apt.startTime(), apt.endTime()));
                 when.getStyleClass().add("appointment-meta");
@@ -93,6 +93,9 @@ public class MainView {
                 btn.getStyleClass().add("appointment-card");
                 btn.setMaxWidth(Double.MAX_VALUE);
                 btn.setAlignment(Pos.CENTER_LEFT);
+                UI.growWithGraphic(btn);
+                // Sized to the card so a long service name wraps and the card grows instead of cutting it off.
+                details.prefWidthProperty().bind(btn.widthProperty().subtract(34));
                 btn.setAccessibleText(apt.serviceName() + ", " + Dates.full(Dates.parseStored(apt.date()))
                         + " at " + apt.startTime() + ", " + apt.clinicName() + ". Open details");
 
@@ -153,7 +156,7 @@ public class MainView {
             card.getChildren().add(chip);
         }
         card.getChildren().addAll(
-                UI.detail("WHEN", (date != null ? Dates.full(date) : apt.date()) + ", " + Dates.timeRange(apt.startTime(), apt.endTime())),
+                UI.detail("WHEN", Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())),
                 UI.detail("CLINIC", apt.clinicName()));
         List<String> notes = apt.getNotesLines();
         if (!notes.isEmpty()) {
@@ -171,7 +174,7 @@ public class MainView {
 
         reschedule.setMaxWidth(Double.MAX_VALUE);
         // Destructive, so styled as such and confirmed: one stray click used to cancel the appointment.
-        Button cancel = UI.dangerButton("Cancel appointment");
+        Button cancel = UI.destructiveButton("Cancel appointment");
         cancel.setMaxWidth(Double.MAX_VALUE);
 
         cancel.setOnAction(e -> {
@@ -192,9 +195,7 @@ public class MainView {
             if (recipientEmail != null && !recipientEmail.isBlank()) {
 
                 String appointmentRef = "APP-" + appId;
-                String dateTimeStr = apt.date() + " " +
-                        apt.startTime() + " - " +
-                        apt.endTime();
+                String dateTimeStr = Dates.dateTime(apt.date(), apt.startTime(), apt.endTime());
 
                 BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(Data.getCurrentUserId());
                 boolean cancellationDiscreet = commPrefs.cancellationDiscreet();
@@ -240,7 +241,7 @@ public class MainView {
         alert.setTitle("Cancel appointment");
         alert.setHeaderText("Cancel your " + apt.serviceName() + "?");
         LocalDate date = Dates.parseStored(apt.date());
-        alert.setContentText((date != null ? Dates.full(date) : apt.date()) + " at " + apt.startTime()
+        alert.setContentText(Dates.dateTime(apt.date(), apt.startTime(), apt.endTime())
                 + "\n" + apt.clinicName() + "\n\nThe time will be released and you will get a cancellation email.");
         UI.styleDialog(alert, Data.getScene());
         DialogPane pane = alert.getDialogPane();
@@ -289,23 +290,46 @@ public class MainView {
     }
 
     public Node getSettingsScene() {
+        return settingsScene(false);
+    }
+
+    /**
+     * Settings for staff: account, sign-in and security, accessibility and Log Out. No reminder
+     * defaults (patient reminders) and no Delete account (staff are removed by their clinic admin).
+     */
+    public Node getStaffSettingsScene() {
+        return settingsScene(true);
+    }
+
+    private Node settingsScene(boolean staff) {
         Label accountLabel = sectionTitle("Account");
         Node accountSettings = AccountView.getPage(Data.getCurrentUserId());
-        Button delete = copyOf(deleteUser);
-        VBox deleteBox = new VBox(delete);
-        deleteBox.setAlignment(Pos.CENTER);
-        deleteBox.setPadding(new Insets(6, 0, 4, 0));
-        VBox account = UI.card(5, accountLabel, accountSettings, deleteBox);
+        VBox account = UI.card(5, accountLabel, accountSettings);
+
+        Label securityLabel = sectionTitle("Sign-in and security");
+        Node securitySettings = new AccountSecurityView(Data.getCurrentUserId()).getPage();
+        VBox security = UI.card(5, securityLabel, securitySettings);
+        if (!staff) {
+            Button delete = copyOf(deleteUser);
+            VBox deleteBox = new VBox(delete);
+            deleteBox.setAlignment(Pos.CENTER);
+            deleteBox.setPadding(new Insets(6, 0, 4, 0));
+            security.getChildren().add(deleteBox);
+        }
 
         Label accessibilityLabel = sectionTitle("Accessibility");
         Node accessibilitySettings = AccessibilitySettingsView.getPage();
         VBox accessibility = UI.card(5, accessibilityLabel, accessibilitySettings);
 
-        Label reminderDefaultsLabel = sectionTitle("Reminder defaults");
-        Node reminderDefaultsSettings = new ReminderDefaultsView(new ReminderController(Data.getCurrentUserId())).getReminderDefaultsView();
-        VBox reminderDefaults = UI.card(5, reminderDefaultsLabel, reminderDefaultsSettings);
-
-        VBox root = UI.pageTop(account, accessibility, reminderDefaults);
+        VBox root;
+        if (staff) {
+            root = UI.pageTop(account, security, accessibility);
+        } else {
+            Label reminderDefaultsLabel = sectionTitle("Reminder defaults");
+            Node reminderDefaultsSettings = new ReminderDefaultsView(new ReminderController(Data.getCurrentUserId())).getReminderDefaultsView();
+            VBox reminderDefaults = UI.card(5, reminderDefaultsLabel, reminderDefaultsSettings);
+            root = UI.pageTop(account, security, accessibility, reminderDefaults);
+        }
         root.setMaxWidth(Double.MAX_VALUE);
         ScrollPane sp = new ScrollPane(root);
         sp.setFitToWidth(true);
@@ -317,7 +341,11 @@ public class MainView {
 
         // Let the settings list take the spare height so Log Out stays pinned at the bottom.
         VBox.setVgrow(sp, Priority.ALWAYS);
-        return new VBox(10, sp, logout);
+        VBox settings = new VBox(10, sp, logout);
+        // Navigator asks this before leaving Settings: "Discard your changes?" for unsaved account details.
+        Object guard = accountSettings.getProperties().get(AccountView.LEAVE_GUARD);
+        if (guard != null) settings.getProperties().put(AccountView.LEAVE_GUARD, guard);
+        return settings;
     }
 
 }

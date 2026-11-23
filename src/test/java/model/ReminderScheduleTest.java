@@ -79,5 +79,27 @@ class ReminderScheduleTest {
         assertEquals(7, adjusted.getHour());
         assertEquals(original.toLocalDate().plusDays(1), adjusted.toLocalDate());
     }
-}
 
+    @Test
+    void parseTime_acceptsSingleDigitHours_andRejectsNonsense() {
+        assertEquals(java.time.LocalTime.of(7, 0), ReminderSchedule.parseTime("7:00"));
+        assertEquals(java.time.LocalTime.of(22, 30), ReminderSchedule.parseTime(" 22:30 "));
+        assertNull(ReminderSchedule.parseTime("7am"));
+        assertNull(ReminderSchedule.parseTime("25:00"));
+        assertNull(ReminderSchedule.parseTime(""));
+        assertNull(ReminderSchedule.parseTime(null));
+    }
+
+    @Test
+    void applyQuietHours_worksWithSingleDigitEnd() {
+        // "7:00" used to fail the HH:mm parse, so quiet hours were silently ignored.
+        ReminderSchedule schedule = new ReminderSchedule(java.util.List.of(), new ReminderSchedule.QuietHours("22:00", "7:00"));
+
+        LocalDateTime lateNight = LocalDateTime.of(2026, 3, 1, 23, 15);
+        LocalDateTime early = LocalDateTime.of(2026, 3, 1, 5, 0);
+
+        assertEquals(LocalDateTime.of(2026, 3, 2, 7, 0), schedule.applyQuietHours(lateNight));
+        assertEquals(LocalDateTime.of(2026, 3, 1, 7, 0), schedule.applyQuietHours(early));
+        assertEquals(LocalDateTime.of(2026, 3, 1, 12, 0), schedule.applyQuietHours(LocalDateTime.of(2026, 3, 1, 12, 0)));
+    }
+}

@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Comparator;
-import java.util.Locale;
 import java.util.function.Function;
 
 /**
@@ -15,7 +14,6 @@ import java.util.function.Function;
 final class TrackingDates {
 
     static final DateTimeFormatter STORED = DateTimeFormatter.ofPattern("dd/MM/yy");
-    private static final DateTimeFormatter DISPLAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK);
 
     private TrackingDates() {}
 
@@ -35,7 +33,7 @@ final class TrackingDates {
     static String display(String stored) {
         LocalDate d = parse(stored);
         if (d != null) {
-            return d.format(DISPLAY);
+            return view.ui.Dates.medium(d);
         }
         return stored == null || stored.isBlank() ? "Date not recorded" : stored;
     }

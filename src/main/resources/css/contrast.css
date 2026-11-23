@@ -482,3 +482,69 @@
 .booking-step-bar.done { -fx-background-color: #000000; }
 .callout, .empty-state-icon { -fx-border-color: #000000; -fx-border-radius: 14px; }
 .chip { -fx-text-fill: #000000; -fx-border-color: #000000; -fx-border-radius: 10px; }
+
+/* ---- Controls at rest: white with a black outline, no lavender fills (pickers, Sort, Clear filters, choices) ---- */
+.choice-box, .combo-box, .date-picker {
+    -fx-background-color: #000000, #ffffff;
+    -fx-background-insets: 0, 1;
+    -fx-border-color: transparent;
+}
+.choice-box:hover, .combo-box:hover, .date-picker:hover {
+    -fx-background-color: #000000, #EDE3F7;
+}
+.date-picker .arrow-button {
+    -fx-background-color: transparent;
+}
+.date-picker .arrow-button:hover {
+    -fx-background-color: #EDE3F7;
+}
+.tracking-clear-btn {
+    -fx-background-color: #000000, #ffffff;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 8px;
+    -fx-text-fill: #000000;
+    -fx-padding: 4 10 4 10;
+}
+.tracking-clear-btn:hover {
+    -fx-background-color: #000000, #EDE3F7;
+}
+.app-card-inner {
+    -fx-background-color: #ffffff;
+}
+
+/* A disabled primary button is solid grey with dark text, not a faded purple. */
+.app-btn:disabled {
+    -fx-opacity: 1;
+    -fx-background-color: #000000, #D6D6D6;
+    -fx-background-insets: 0, 1;
+    -fx-text-fill: #333333;
+}
+
+/* Header icons: the active one (Settings while open) gets a black ring instead of a lavender disc. */
+.app-header-btn:hover, .app-header-btn:active {
+    -fx-background-color: #000000, #ffffff;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 20px;
+}
+
+/* Destructive buttons: white with a strong red outline and text (no pink fill). */
+.app-btn-danger {
+    -fx-background-color: #ffffff;
+    -fx-background-insets: 0;
+    -fx-border-color: #B00000;
+    -fx-border-width: 2px;
+    -fx-text-fill: #B00000;
+}
+.app-btn-danger:hover {
+    -fx-background-color: #FDECEA;
+}
+.scroll-bar .thumb {
+    -fx-background-color: #555555;
+}
+
+.reminder-rule {
+    -fx-border-color: #000000 transparent transparent transparent;
+}
+.reminder-rule.first {
+    -fx-border-color: transparent;
+}

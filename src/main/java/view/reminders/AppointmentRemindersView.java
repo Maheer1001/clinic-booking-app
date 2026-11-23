@@ -77,8 +77,8 @@ public class AppointmentRemindersView {
 
     private static VBox createAppointmentCard(Appointment appt, AppointmentReminder existing, ReminderController controller,
                                              Optional<AppointmentReminderDefaults> defaults) {
-        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("EEE d MMM, HH:mm", java.util.Locale.UK);
-        String dateStr = appt.getAppointmentDateTime().format(dateFmt);
+        String dateStr = view.ui.Dates.dateTime(appt.getAppointmentDateTime().toLocalDate(),
+                appt.getAppointmentDateTime().toLocalTime(), null);
 
         HBox headerRow = UI.reminderCardHeader(appt.getServiceName(), dateStr);
 
@@ -94,10 +94,10 @@ public class AppointmentRemindersView {
                 existing != null ? existing.getCustomMessage() : null,
                 existing != null && existing.isNotify());
 
-        Button saveBtn = UI.primaryButton("Save reminder");
-        Button testEmailBtn = UI.backButton("Send test email");
-        Button testNotifBtn = UI.backButton("Preview notification");
-        Button resetBtn = UI.backButton("Reset to default");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button testNotifBtn = UI.secondaryButton("Preview notification");
+        Button resetBtn = UI.secondaryButton("Reset to default");
 
         Label saveConfirm = UI.inlineSaveConfirmation();
 
@@ -112,16 +112,22 @@ public class AppointmentRemindersView {
         });
 
         saveBtn.setOnAction(e -> {
+            String problem = form.validationError();
+            if (problem != null) {
+                ReminderFeedback.invalid(saveConfirm, problem);
+                return;
+            }
             ReminderTemplateForm.Payload p = form.collectPayload();
             boolean saved = controller.saveAppointmentReminder(appt.getAppId(), p.notificationsEnabled(), p.scheduleJson(), p.templateOverridesJson());
-            ReminderFeedback.saveResult(saveConfirm, saved);
+            ReminderFeedback.saveResult(saveConfirm, saved, p.notificationsEnabled());
 
             if (saved && p.notificationsEnabled()) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
                 if (name == null || name.isBlank()) name = email;
-                controller.scheduleAppointmentReminderWithSchedule(appt, email, name, p.scheduleJson(), p.templateOverridesJson());
+                ReminderFeedback.scheduled(saveConfirm,
+                        controller.scheduleAppointmentReminderWithSchedule(appt, email, name, p.scheduleJson(), p.templateOverridesJson()));
             }
         });
 
@@ -129,13 +135,7 @@ public class AppointmentRemindersView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.");
-                DialogPane dialogPane = alert.getDialogPane();
-                dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-                Stage stage = (Stage) dialogPane.getScene().getWindow();
-                stage.getIcons().add(new Image(AppointmentRemindersView.class.getResource("/icons/safe.png").toExternalForm()));
-                dialogPane.setGraphic(null);
-                alert.showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {

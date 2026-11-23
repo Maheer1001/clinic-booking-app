@@ -19,7 +19,6 @@ import javafx.stage.Stage;
 import javafx.scene.layout.VBox;
 import model.*;
 import service.BookingCommunicationPrefs;
-import service.AsyncNotifier;
 import service.BookingService;
 import service.NotificationDispatcher;
 import service.email.BookingConfirmationEmail;
@@ -30,6 +29,7 @@ import view.Review;
 import view.ServiceSelection;
 import view.reminders.AppointmentRemindersView;
 import view.notification.BookingConfirmationNotification;
+import view.notification.PopupQueue;
 import view.reminders.RemindersView;
 import view.ui.UI;
 
@@ -55,8 +55,14 @@ public class BookingController {
     private final Navigator nav;
     private final BookingService bookingService;
     private final NotificationDispatcher notificationDispatcher;
+    /**
+     * Where the confirmation popups wait their turn: a booking of several services used to open one
+     * popup per service at once, on top of each other (and of any reminder). Replaced in tests.
+     */
+    PopupQueue popups = PopupQueue.shared();
     private final ReminderDefaultsReader reminderDefaultsReader;
     private final UserRepository userRepository;
+    private final NewBookingReminders newBookingReminders;
     private static Label messageLabel;
     private Map<Clinic, Double> postcodeMap = new HashMap<>();
     private ClinicMap clinicMap;
@@ -67,6 +73,20 @@ public class BookingController {
 
     public BookingController(Navigator nav, BookingService bookingService, NotificationDispatcher notificationDispatcher,
                              ReminderDefaultsReader reminderDefaultsReader, UserRepository userRepository) {
+        this(nav, bookingService, notificationDispatcher, reminderDefaultsReader, userRepository,
+                (userId, appIds, email, name) -> new ReminderController(userId).applyReminderForNewBookings(appIds, email, name));
+    }
+
+    /** Sets up reminders for newly booked appointments; true if they are now on. */
+    @FunctionalInterface
+    public interface NewBookingReminders {
+        boolean apply(int userId, List<Integer> appIds, String email, String name);
+    }
+
+    public BookingController(Navigator nav, BookingService bookingService, NotificationDispatcher notificationDispatcher,
+                             ReminderDefaultsReader reminderDefaultsReader, UserRepository userRepository,
+                             NewBookingReminders newBookingReminders) {
+        this.newBookingReminders = newBookingReminders;
         this.nav = nav;
         this.bookingService = bookingService;
         this.notificationDispatcher = notificationDispatcher;
@@ -78,37 +98,76 @@ public class BookingController {
         messageLabel.visibleProperty().bind(messageLabel.textProperty().isNotEmpty());
     }
 
-    public void checkForDefaultClinic() throws SQLException {
-        if (userRepository.defaultClinicExists(Data.getCurrentUserId())) {
-            int clinicID = userRepository.getDefaultClinic(Data.getCurrentUserId());
-            String defaultCName = bookingService.findClinicNameById(clinicID);
-            ButtonType defaultC = new ButtonType("Yes, continue", ButtonBar.ButtonData.OK_DONE);
+    /** The patient's saved default clinic, as offered by {@link #checkForDefaultClinic()}. */
+    record DefaultClinic(int id, String name) {}
 
-            ButtonType ignore = new ButtonType("Choose another", ButtonBar.ButtonData.CANCEL_CLOSE);
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Your clinic");
-            alert.setHeaderText("Book at your usual clinic?");
-            alert.setContentText(defaultCName + " is saved as your default clinic.");
+    /**
+     * Reads the patient's default clinic, if they have one. Reads the database: call off the FX thread.
+     * Package-private for tests.
+     */
+    Optional<DefaultClinic> findDefaultClinic(int userId) throws SQLException {
+        if (userId < 0 || !userRepository.defaultClinicExists(userId)) return Optional.empty();
+        int clinicId = userRepository.getDefaultClinic(userId);
+        return Optional.of(new DefaultClinic(clinicId, bookingService.findClinicNameById(clinicId)));
+    }
 
-            alert.getButtonTypes().setAll(defaultC, ignore);
-            UI.styleDialog(alert, Data.getScene());
-            DialogPane dialogPane = alert.getDialogPane();
+    /** The clinic with its services, ready to book at. Reads the database: call off the FX thread. */
+    private Clinic loadClinicWithServices(int clinicId) {
+        List<Service> services = bookingService.findServicesByClinicId(clinicId);
+        Clinic clinic = bookingService.findClinicById(clinicId);
+        if (clinic != null) clinic.setServices(services);
+        return clinic;
+    }
 
-            Button defaultBtn = (Button) dialogPane.lookupButton(defaultC);
-            defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
-            Button ignoreBtn = (Button) dialogPane.lookupButton(ignore);
-            ignoreBtn.getStyleClass().add(UI.ALERT_IGNORE);
-
-            Optional<ButtonType> result = alert.showAndWait();
-
-            if (result.isPresent() && result.get() == defaultC) {
-                List<Service> services = bookingService.findServicesByClinicId(clinicID);
-                Clinic clinic = bookingService.findClinicById(clinicID);
-                clinic.setServices(services);
-                Data.getBooking().setClinic(clinic);
-                nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
+    /**
+     * Offers "Book at your usual clinic?" when the patient has a default clinic. The database is read
+     * in the background (it used to be read on the JavaFX thread, freezing the window on a slow
+     * connection); the question and the move to "Choose a service" happen back on the FX thread.
+     * Nothing is asked if the patient has logged out meanwhile; if the read fails they just stay on
+     * the clinic search page.
+     */
+    public void checkForDefaultClinic() {
+        int userId = Data.getCurrentUserId();
+        if (userId < 0) return;
+        Background.run(() -> {
+            try {
+                return findDefaultClinic(userId);
+            } catch (SQLException e) {
+                throw new IllegalStateException(e);
             }
-        }
+        }, found -> {
+            if (found.isEmpty() || Data.getCurrentUserId() != userId) return;
+            if (askToUseDefaultClinic(found.get().name())) {
+                int clinicId = found.get().id();
+                Background.run(() -> loadClinicWithServices(clinicId), clinic -> {
+                    if (clinic == null || Data.getCurrentUserId() != userId) return;
+                    Data.getBooking().setClinic(clinic);
+                    nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
+                }, ex -> messageLabel.setText("We couldn't open your usual clinic. Please choose it from the list."));
+            }
+        }, ex -> System.err.println("[Booking] Could not check for a default clinic: " + ex.getClass().getSimpleName()));
+    }
+
+    private static boolean askToUseDefaultClinic(String clinicName) {
+        ButtonType defaultC = new ButtonType("Yes, continue", ButtonBar.ButtonData.OK_DONE);
+
+        ButtonType ignore = new ButtonType("Choose another", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Your clinic");
+        alert.setHeaderText("Book at your usual clinic?");
+        alert.setContentText(clinicName + " is saved as your default clinic.");
+
+        alert.getButtonTypes().setAll(defaultC, ignore);
+        UI.styleDialog(alert, Data.getScene());
+        DialogPane dialogPane = alert.getDialogPane();
+
+        Button defaultBtn = (Button) dialogPane.lookupButton(defaultC);
+        defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
+        Button ignoreBtn = (Button) dialogPane.lookupButton(ignore);
+        ignoreBtn.getStyleClass().add(UI.ALERT_IGNORE);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == defaultC;
     }
 
     public List<Clinic> getClinics() throws SQLException {
@@ -117,11 +176,22 @@ public class BookingController {
 
     public Map<Clinic, Double> sortClinicsByPostcode(List<Clinic> clinics, String postcode) {
         Map<Clinic, Double> dict = new HashMap<>();
+        if (postcode == null || postcode.isBlank()) {
+            // Searching with an empty box used to ask the postcode API and then say "We couldn't find that postcode".
+            messageLabel.setText("Enter your postcode to see the nearest clinics first.");
+            return dict;
+        }
         try {
             Coordinate userCoord = Postcode.getCoord(postcode);
 
             for (Clinic clinic : clinics) {
-                dict.put(clinic, Postcode.haversine(userCoord, Postcode.getCoord(clinic.getPostcode())));
+                // Use the clinic's stored position (the one its map pin uses) and only look the postcode up
+                // when there isn't one: a web request per clinic froze the window for seconds on every search.
+                Coordinate at = clinic.getCoords();
+                if (at == null || !Double.isFinite(at.lat()) || !Double.isFinite(at.lon())) {
+                    at = Postcode.getCoord(clinic.getPostcode());
+                }
+                dict.put(clinic, Postcode.haversine(userCoord, at));
             }
             clinics.sort(
                     Comparator.comparingDouble(dict::get)
@@ -152,11 +222,11 @@ public class BookingController {
         UI.listViewHover(list);
         list.getStyleClass().add("clinic-list");
         list.setFixedCellSize(-1);
-        List<Clinic> clinics;
-        try {clinics = getClinics();} catch (SQLException ex) {clinics = new ArrayList<>();}
-        list.setItems(FXCollections.observableArrayList(clinics));
-        // Tall enough for every clinic (collapsed) so none is hidden below the fold.
-        list.setPrefHeight(Math.max(1, clinics.size()) * 66 + 12);
+        // Filled in the background (below): reading the clinics on the JavaFX thread froze the window
+        // while the database connected, before the page (and the "usual clinic?" question) appeared.
+        list.setItems(FXCollections.observableArrayList());
+        list.setPlaceholder(UI.muted("Loading clinics…"));
+        list.setPrefHeight(66 + 12);
         list.setMinHeight(Region.USE_PREF_SIZE);
         list.setCellFactory(l -> new ListCell<>() {
             private final VBox content = new VBox(6);
@@ -249,15 +319,32 @@ public class BookingController {
             list.scrollTo(c);
             next.fire();
         });
-        clinicMap.show(clinics, null);
+        clinicMap.show(List.of(), null);
 
-        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"), hbox, messageLabel, clinicMap.node(), list);
+        VBox page = UI.pageTop(UI.steps(1, 5, "Clinic"),
+                new VBox(4, UI.pageHeading("Where would you like to go?"),
+                        UI.intro("Search by postcode to see the nearest clinics, or pick one on the map.")),
+                hbox, messageLabel, clinicMap.node(), list);
         page.setSpacing(12);
-        if (clinics.isEmpty()) {
-            page.getChildren().add(UI.emptyState(UI.ICON_SEARCH, "No clinics yet",
-                    "Add clinics to the database to start booking (see docs/sample-data.sql)."));
-        }
         page.getChildren().add(next);
+        ClinicMap map = clinicMap;
+        Background.run(() -> {
+            try {
+                return getClinics();
+            } catch (SQLException e) {
+                throw new IllegalStateException(e);
+            }
+        }, clinics -> {
+            list.getItems().setAll(clinics);
+            // Tall enough for every clinic (collapsed) so none is hidden below the fold.
+            list.setPrefHeight(Math.max(1, clinics.size()) * 66 + 12);
+            map.show(clinics, null);
+            if (clinics.isEmpty()) {
+                list.setPlaceholder(UI.muted("No clinics found."));
+                page.getChildren().add(page.getChildren().indexOf(next), UI.emptyState(UI.ICON_SEARCH, "No clinics yet",
+                        "Add clinics to the database to start booking (see docs/sample-data.sql)."));
+            }
+        }, ex -> list.setPlaceholder(UI.muted("We couldn't load the clinics. Check your connection, then open Book again.")));
         ScrollPane sp = new ScrollPane(page);
         sp.setFitToWidth(true);
         sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
@@ -332,31 +419,12 @@ public class BookingController {
         nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
-    public void selectService(Service service) {
-        Book booking = Data.getBooking();
-        booking.setService(service);
-
-        // Ensure there is at least one item for the selected service (single-service flow).
-        if (booking.getItems() == null || booking.getItems().isEmpty()) {
-            booking.setItems(java.util.List.of(new Item(service)));
-        }
-
-        goToTimeslotsForItems();
-    }
-
     /**
      * Navigates to the timeslot selection page for the currently selected clinic and items
      * in the multi-service booking flow.
      */
     public void goToTimeslotsForItems() {
         nav.goToPage(DateTime.getPage(this), "Pick a time", false);
-    }
-
-    /**
-     * Navigates back to the service selection page for the current clinic.
-     */
-    public void goToServiceSelection() {
-        nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
     }
 
     public void goToDetails() {
@@ -370,6 +438,16 @@ public class BookingController {
      * @return the outcome; when nothing was booked the booking is kept so the user can pick another time
      */
     public BookingService.BookingResult confirmBooking() {
+        return confirmBooking(null);
+    }
+
+    /**
+     * Like {@link #confirmBooking()}, with {@code notice} (if not null) shown on the "Booking confirmed"
+     * page, e.g. that the name typed at booking couldn't be saved to the account.
+     * When only some services were booked, the booking keeps just the others (their dates kept, times
+     * cleared) and the page offers "Choose a different time" for them, like the single-service path.
+     */
+    BookingService.BookingResult confirmBooking(String notice) {
         Book b = Data.getBooking();
         int userId = Data.getCurrentUserId();
         if (userId < 0) {
@@ -382,95 +460,98 @@ public class BookingController {
         List<Integer> newAppIds = outcome.booked().stream().map(BookingService.BookedAppointment::appId).toList();
 
         // Send a booking confirmation email + in-app notification for each saved appointment.
-        BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
+        BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userRepository, userId);
         boolean confirmationDiscreet = commPrefs.confirmationDiscreet();
         ReminderTemplateOverrides confirmationTpl = commPrefs.confirmationTemplate();
         String recipientEmail = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : b.getEmail();
-        String recipientName = Data.getCurrentUserName() != null ? Data.getCurrentUserName()
-                : (b.getFirstName() + " " + b.getLastName()).trim();
-        if (recipientName.isBlank()) {
-            recipientName = "Patient";
-        }
+        String recipientName = recipientName(b, Data.getCurrentUserName());
         Clinic clinic = b.getClinic();
         String clinicName = clinic != null ? clinic.getName() : "";
         boolean hasEmail = recipientEmail != null && !recipientEmail.isBlank();
 
+        // Filled in once the confirmation emails have actually gone (or failed), instead of claiming
+        // they were sent before trying.
+        Label sub = UI.intro(hasEmail
+                ? "Sending a confirmation to " + recipientEmail + "…"
+                : "Your booking is saved. Add an email address to get confirmations.");
+        int[] emailsLeft = {0};
+        boolean[] anyFailed = {false};
         for (BookingService.BookedAppointment appt : outcome.booked()) {
             if (appt.date() == null || appt.time() == null) continue;
             String bookingRef = "APP-" + appt.appId(); // same reference the cancel and reschedule emails use
             LocalDateTime appointmentDateTime = LocalDateTime.of(appt.date(), appt.time());
             String serviceName = appt.service() != null ? appt.service().getName() : "";
-            AsyncNotifier.notifyUser(
-                    notificationDispatcher,
+            if (hasEmail) emailsLeft[0]++;
+            notificationDispatcher.notifyUserAsync(
                     userId,
                     hasEmail ? new BookingConfirmationEmail(
                             recipientEmail, recipientName, bookingRef, serviceName,
                             appointmentDateTime, clinicName, "Clinician", confirmationDiscreet,
                             confirmationTpl) : null,
-                    new BookingConfirmationNotification(
+                    popups.queued(new BookingConfirmationNotification(
                             recipientName, bookingRef, serviceName, appointmentDateTime, clinicName, "Clinician",
                             confirmationDiscreet,
                             confirmationTpl
-                    )
+                    ), () -> Data.getCurrentUserId() == userId),
+                    hasEmail ? sent -> {
+                        if (!sent) anyFailed[0] = true;
+                        if (--emailsLeft[0] == 0) {
+                            sub.setText(anyFailed[0]
+                                    ? "Your booking is saved, but we couldn't send the confirmation email to "
+                                      + recipientEmail + ". Check your email settings and try again later."
+                                    : "We've emailed a confirmation to " + recipientEmail
+                                      + ". If it isn't in your inbox, check your spam folder.");
+                        }
+                    } : null
             );
         }
-        Data.reset();
+        // Some services booked but not all: keep the others (and the details typed) so the patient can
+        // pick another time for them; otherwise this booking is finished.
+        List<Item> rebook = outcome.unavailable().isEmpty() ? List.of()
+                : BookingOutcome.itemsToRebook(b.getItems(), outcome);
+        if (rebook.isEmpty()) {
+            Data.reset();
+        } else {
+            b.setItems(new ArrayList<>(rebook));
+            b.setTimeslotId(0);
+            b.setDate(null);
+            b.setTime(null);
+        }
 
-        Optional<AppointmentReminderDefaults> defaultTemplate = userId >= 0
-                ? reminderDefaultsReader.load(userId)
-                : Optional.empty();
-        boolean showUseDefault = !newAppIds.isEmpty()
-                && defaultTemplate.filter(AppointmentReminderDefaults::hasSavedTemplate).isPresent();
-
-        Button setupRemindersBtn = UI.primaryButton("Set up a reminder");
-        Button defaultRemindersBtn = UI.backButton("Use default reminders");
-        Button skipBtn = UI.backButton("Done");
-
+        // Every new booking gets a reminder straight away (the user's saved default, or one day before).
+        // Before, nothing was set unless the user went to Reminders and switched each one on.
+        Label blurbLabel = UI.intro("Setting up your reminder…");
         List<Integer> savedIds = List.copyOf(newAppIds);
+        String reminderEmail = hasEmail ? recipientEmail : "";
+        String reminderName = recipientName;
+        Background.run(
+                () -> newBookingReminders.apply(userId, savedIds, reminderEmail, reminderName),
+                on -> blurbLabel.setText(on
+                        ? (hasEmail ? (savedIds.size() > 1
+                                        ? "We'll email you a reminder before each appointment. You can change or turn them off in Reminders."
+                                        : "We'll email you a reminder before your appointment. You can change or turn it off in Reminders.")
+                                    : "Reminders are on, but you need an email address on your account to receive them.")
+                        : "Reminders are off (your saved default). You can turn them on in Reminders."),
+                ex -> blurbLabel.setText("We couldn't set up a reminder automatically. You can set one in Reminders."));
 
-        setupRemindersBtn.setOnAction(e -> {nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});
-        defaultRemindersBtn.setOnAction(e -> {
-            defaultTemplate.filter(AppointmentReminderDefaults::hasSavedTemplate).ifPresent(def -> {
-                if (savedIds.isEmpty()) {
-                    return;
-                }
-                ReminderController reminders = new ReminderController(userId);
-                String email = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : "";
-                String rawName = Data.getCurrentUserName();
-                final String reminderName = (rawName == null || rawName.isBlank()) ? email : rawName;
-                for (int appId : savedIds) {
-                    reminders.saveAppointmentReminder(appId, def.notificationsEnabled(), def.customDays(), def.customMessage());
-                    if (def.notificationsEnabled()) {
-                        reminders.getUpcomingAppointments().stream()
-                                .filter(a -> a.getAppId() == appId)
-                                .findFirst()
-                                .ifPresent(appt -> reminders.scheduleAppointmentReminderWithSchedule(
-                                        appt, email, reminderName, def.customDays(), def.customMessage()));
-                    }
-                }
-            });
-            nav.goToHome();
-        });
-        skipBtn.setOnAction(e -> nav.goToHome());
+        Button setupRemindersBtn = UI.secondaryButton("Change reminder");
+        Button skipBtn = UI.primaryButton("Done");
 
-        String blurb = showUseDefault
-                ? "Want a reminder? Apply your saved defaults, customise it in Reminders, or do it later."
-                : "Want a reminder before your appointment? Set one up now or later from the Reminders tab.";
+        // leaving without choosing another time ends the half-finished booking
+        Runnable dropRebook = () -> { if (!rebook.isEmpty() && Data.getBooking() == b) Data.reset(); };
+        setupRemindersBtn.setOnAction(e -> {dropRebook.run(); nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});
+        skipBtn.setOnAction(e -> {dropRebook.run(); nav.goToHome();});
 
         setupRemindersBtn.setMaxWidth(Double.MAX_VALUE);
-        defaultRemindersBtn.setMaxWidth(Double.MAX_VALUE);
         skipBtn.setMaxWidth(Double.MAX_VALUE);
-        VBox buttonRow = new VBox(8, setupRemindersBtn);
-        if (showUseDefault) {
-            buttonRow.getChildren().add(defaultRemindersBtn);
-        }
-        buttonRow.getChildren().add(skipBtn);
+        VBox buttonRow = new VBox(8, skipBtn, setupRemindersBtn);
 
         VBox summary = UI.card(10);
         for (BookingService.BookedAppointment appt : outcome.booked()) {
             String service = appt.service() != null ? appt.service().getName() : "Appointment";
             String when = appt.date() != null && appt.time() != null
-                    ? appt.date().format(CONFIRMED_DATE_FMT) + " at " + appt.time().format(CONFIRMED_TIME_FMT)
+                    ? view.ui.Dates.dateTime(appt.date(), appt.time(), appt.service() != null && appt.service().getDurationMinutes() > 0
+                            ? appt.time().plusMinutes(appt.service().getDurationMinutes()) : null)
                     : "";
             VBox row = new VBox(4, UI.detailTitle(service));
             if (!when.isEmpty()) row.getChildren().add(UI.detail("WHEN", when));
@@ -483,32 +564,56 @@ public class BookingController {
         badge.getStyleClass().add("success-badge");
         Label title = new Label("You're booked in");
         title.getStyleClass().add("success-title");
-        Label sub = UI.intro(hasEmail
-                ? "We've emailed a confirmation to " + recipientEmail + "."
-                : "Your booking is saved. Add an email address to get confirmations.");
         sub.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
         sub.setAlignment(Pos.CENTER);
         VBox hero = new VBox(8, badge, title, sub);
         hero.setAlignment(Pos.CENTER);
 
         javafx.scene.layout.VBox prompt = UI.pageTop(hero, summary);
-        if (!outcome.unavailable().isEmpty()) {
+        if (!rebook.isEmpty()) {
+            Label notBooked = UI.error(BookingOutcome.partialMessage(BookingOutcome.bookedNames(outcome), outcome.unavailable()));
+            notBooked.setWrapText(true);
+            Button changeTime = UI.secondaryButton("Choose a different time");
+            changeTime.setMaxWidth(Double.MAX_VALUE);
+            changeTime.setOnAction(e -> goToTimeslotsForItems());
+            prompt.getChildren().addAll(notBooked, changeTime);
+        } else if (!outcome.unavailable().isEmpty()) {
             Label notBooked = UI.error("Not booked, the time was no longer available: "
                     + String.join(", ", outcome.unavailable()) + ". You can book it again from Booking.");
             notBooked.setWrapText(true);
             prompt.getChildren().add(notBooked);
         }
-        Label blurbLabel = UI.intro(blurb);
+        if (notice != null && !notice.isBlank()) {
+            Label noticeLabel = UI.error(notice);
+            noticeLabel.setWrapText(true);
+            prompt.getChildren().add(noticeLabel);
+        }
+        blurbLabel.setWrapText(true);
+        sub.setWrapText(true);
         prompt.getChildren().addAll(blurbLabel, buttonRow);
 
-        nav.goToPage(prompt, "Booking confirmed", true);
+        // Scrolls like the other booking steps. Without it, booking two services overflowed the window and the
+        // email result and reminder lines were cut to "We've emailed a confirmation to ...".
+        ScrollPane page = new ScrollPane(prompt);
+        page.setFitToWidth(true);
+        page.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        nav.goToPage(page, "Booking confirmed", true);
         return outcome;
     }
 
-    private static final java.time.format.DateTimeFormatter CONFIRMED_DATE_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM yyyy", java.util.Locale.UK);
-    private static final java.time.format.DateTimeFormatter CONFIRMED_TIME_FMT =
-            java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+    /**
+     * Who the confirmation is addressed to: the name typed on the details step, else the account's name.
+     * The account name was used first, and for an account without a name that is its email address,
+     * so the email opened "Dear someone@example.com" even though the patient had just typed their name.
+     */
+    static String recipientName(Book b, String accountName) {
+        String typed = ((b.getFirstName() == null ? "" : b.getFirstName().strip()) + " "
+                + (b.getLastName() == null ? "" : b.getLastName().strip())).strip();
+        if (!typed.isEmpty()) return typed;
+        if (accountName != null && !accountName.isBlank()) return accountName.strip();
+        return "Patient";
+    }
+
 
     public void goToReview() {
         nav.goToPage(Review.getPage(this), "Review booking", false);
@@ -516,6 +621,94 @@ public class BookingController {
 
     public BookingService getBookingService() {
         return bookingService;
+    }
+
+    private AccountController accountController;
+
+    private AccountController accountController() {
+        if (accountController == null) accountController = new AccountController();
+        return accountController;
+    }
+
+    /**
+     * True when the details step has a first and last name but the signed-in account has no name (or only
+     * half of one), so the flow can ask "Save this name to your account?". Ask before
+     * {@link #confirmBooking()}, which clears the booking. Reads the database: call off the FX thread.
+     */
+    public boolean shouldOfferSaveName(String firstName, String lastName) {
+        int userId = Data.getCurrentUserId();
+        if (userId < 0 || firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
+            return false;
+        }
+        return accountController().accountNameMissing(userId);
+    }
+
+    /** Asks "Save this name to your account?"; true when the patient chose Save. Replaceable in tests. */
+    java.util.function.BiPredicate<String, String> saveNamePrompt = BookingController::askToSaveName;
+
+    /**
+     * Books the current booking like {@link #confirmBooking()}, but first, when the account has no name,
+     * offers to save the name typed on the details step to the account (so later emails greet the patient
+     * by name). The database checks run off the FX thread; {@code onResult} gets the booking outcome on it.
+     */
+    public void confirmBookingOfferingName(java.util.function.Consumer<BookingService.BookingResult> onResult) {
+        Book b = Data.getBooking();
+        String first = b.getFirstName();
+        String last = b.getLastName();
+        bookingNotice = null;
+        Runnable book = () -> onResult.accept(confirmBooking(bookingNotice));
+        Background.run(() -> shouldOfferSaveName(first, last), offer -> {
+            if (!offer || !saveNamePrompt.test(first, last)) {
+                book.run();
+                return;
+            }
+            // The booking goes ahead either way; a name that didn't save gets a short line with the result.
+            Background.run(() -> saveNameToAccount(first, last), saved -> {
+                if (saved != service.AccountSecurityService.SaveNameResult.SUCCESS) {
+                    System.err.println("[Booking] Could not save the name to the account: " + saved);
+                    bookingNotice = BookingOutcome.NAME_NOT_SAVED;
+                }
+                book.run();
+            }, ex -> {
+                System.err.println("[Booking] Could not save the name to the account: " + ex.getClass().getSimpleName());
+                bookingNotice = BookingOutcome.NAME_NOT_SAVED;
+                book.run();
+            });
+        }, ex -> book.run());
+    }
+
+    /** Set by {@link #confirmBookingOfferingName} when the typed name couldn't be saved to the account. */
+    private String bookingNotice;
+
+    /**
+     * A message from the last {@link #confirmBookingOfferingName} to show with its result (e.g. that the
+     * name wasn't saved to the account), or null. The "Booking confirmed" page already shows it; the
+     * review page shows it when nothing could be booked.
+     */
+    public String bookingNotice() {
+        return bookingNotice;
+    }
+
+    private static boolean askToSaveName(String first, String last) {
+        ButtonType save = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        ButtonType notNow = new ButtonType("Not now", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Your name");
+        alert.setHeaderText("Save this name to your account?");
+        alert.setContentText("Your account doesn't have a name yet. Save " + first.strip() + " " + last.strip()
+                + " so we can greet you by name in your emails. You can change it in Settings.");
+        alert.getButtonTypes().setAll(save, notNow);
+        UI.styleDialog(alert, Data.getScene());
+        alert.getDialogPane().lookupButton(save).getStyleClass().add(UI.ALERT_AGREE);
+        alert.getDialogPane().lookupButton(notNow).getStyleClass().add(UI.ALERT_IGNORE);
+        return alert.showAndWait().filter(r -> r == save).isPresent();
+    }
+
+    /** Saves the given name onto the signed-in account (after the user said yes). */
+    public service.AccountSecurityService.SaveNameResult saveNameToAccount(String firstName, String lastName) {
+        int userId = Data.getCurrentUserId();
+        if (userId < 0) return service.AccountSecurityService.SaveNameResult.USER_NOT_FOUND;
+        return accountController().saveNameToAccount(userId, firstName, lastName);
     }
 
 }

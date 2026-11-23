@@ -23,7 +23,7 @@ import view.ui.UI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -45,7 +45,9 @@ public class TrackingTestController extends TrackingSectionController {
         text.append(test.isTreatment() ? "treatment " + test.treatment() + " " : "");
         text.append(test.isClinicianNotes() ? "notes " + test.clinicianNotes() : "");
         for (TestResult res : test.testResults()) {
-            text.append(res.condition()).append(res.result()).append(" ");
+            // Spaced, so "chlamydia positive" matches (it used to read "ChlamydiaPOSITIVE").
+            TestResultStatus status = res.result() != null ? res.result() : TestResultStatus.PENDING;
+            text.append(" ").append(res.condition()).append(" ").append(status.label()).append(" ");
         }
         return text.toString();
     }
@@ -65,7 +67,8 @@ public class TrackingTestController extends TrackingSectionController {
         VBox list = new VBox(10);
         list.setAlignment(Pos.CENTER);
 
-        Map<Test, Button> buttonMap = new HashMap<>();
+        // Keyed by identity: two identical test records must still get a button each.
+        Map<Test, Button> buttonMap = new IdentityHashMap<>();
 
         for (Test test : sortedTests) {
             String left = test.testType();
@@ -76,9 +79,8 @@ public class TrackingTestController extends TrackingSectionController {
             list.getChildren().add(button);
         }
 
-        filteredTests.addListener((ListChangeListener<Test>) c ->
-                list.getChildren().setAll(filteredTests.stream().map(buttonMap::get).toList()));
-
+        // Redraw from the sorted view only: it wraps the filtered list, so it also fires when the search
+        // or dates change. Redrawing from the filtered list as well undid the chosen sort order.
         sortedTests.addListener((ListChangeListener<Test>) c ->
                 list.getChildren().setAll(sortedTests.stream().map(buttonMap::get).toList()));
 
@@ -225,7 +227,12 @@ public class TrackingTestController extends TrackingSectionController {
             BookingController bc = new BookingController(nav);
 
             Button newBookingButton = UI.shortcutButton("Book a retest");
-            newBookingButton.setOnAction(e -> {nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Find a clinic", false); nav.clearTabStack("booking");});
+            newBookingButton.setOnAction(e -> {
+                nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Find a clinic", false);
+                nav.clearTabStack("booking");
+                // Same offer as "+ Book Appointment": book at the saved default clinic, or choose another.
+                bc.checkForDefaultClinic();
+            });
             HBox booking = UI.callout("A positive result usually needs a retest. Book a follow-up when you are ready.", newBookingButton);
 
             return withTrackingStyles(UI.page(UI.card(12, graphic, info), booking, reminder));
@@ -247,9 +254,6 @@ public class TrackingTestController extends TrackingSectionController {
 
     static Label statusLabel(TestResultStatus status) {
         TestResultStatus s = status != null ? status : TestResultStatus.PENDING;
-        Label label = new Label(s.label());
-        label.getStyleClass().addAll("tracking-status", "tracking-status-" + s.name().toLowerCase());
-        label.setMinWidth(Region.USE_PREF_SIZE);
-        return label;
+        return statusPill(s.label(), s.name().toLowerCase());
     }
 }

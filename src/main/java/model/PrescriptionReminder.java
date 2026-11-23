@@ -13,9 +13,17 @@ public class PrescriptionReminder {
     private String notificationMethod;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** When the dose rhythm started: doses are due at anchor + k * interval (null for rows saved before this existed). */
+    private LocalDateTime scheduleAnchor;
 
     public PrescriptionReminder(int prRemId, int userId, int prescriptionId, boolean notify,
                                 int intervalBetweenDoses, String customMessage, String notificationMethod) {
+        this(prRemId, userId, prescriptionId, notify, intervalBetweenDoses, customMessage, notificationMethod, null);
+    }
+
+    public PrescriptionReminder(int prRemId, int userId, int prescriptionId, boolean notify,
+                                int intervalBetweenDoses, String customMessage, String notificationMethod,
+                                LocalDateTime scheduleAnchor) {
         this.prRemId = prRemId;
         this.userId = userId;
         this.prescriptionId = prescriptionId;
@@ -25,6 +33,7 @@ public class PrescriptionReminder {
         this.notificationMethod = notificationMethod;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        this.scheduleAnchor = scheduleAnchor;
     }
 
     public int getPrRemId() { return prRemId; }
@@ -40,4 +49,5 @@ public class PrescriptionReminder {
     public void setNotificationMethod(String notificationMethod) { this.notificationMethod = notificationMethod; this.updatedAt = LocalDateTime.now(); }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public LocalDateTime getScheduleAnchor() { return scheduleAnchor; }
 }

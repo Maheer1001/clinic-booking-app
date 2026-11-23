@@ -7,15 +7,23 @@ import com.fasterxml.jackson.databind.JsonNode;
 import model.AccessibilitySettings;
 import model.AppointmentReminderDefaults;
 import model.BookingCommunicationPreferences;
+import model.StaffAccess;
+import model.StaffRole;
 import model.User;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
-public class UserDAO implements UserRepository {
+public class UserDAO implements UserRepository, AccountRepository {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -80,8 +88,9 @@ public class UserDAO implements UserRepository {
                 ps.executeUpdate();
                 return true;
             } catch (SQLException e) {
-                // Postgres unique violation
-                if ("23505".equals(e.getSQLState())) {
+                // Postgres unique violation on user_id: MAX(user_id)+1 raced, try the next id.
+                // A duplicate email is not retried: the caller reports "email already in use".
+                if ("23505".equals(e.getSQLState()) && !DB.isDuplicateEmail(e)) {
                     continue;
                 }
                 throw e;
@@ -177,6 +186,90 @@ public class UserDAO implements UserRepository {
     }
 
 
+    /**
+     * Account role and clinic memberships, each with its own role, for login routing (and for every
+     * staff action, which re-reads it). Empty if the user does not exist. A patient comes back with
+     * role PATIENT and no clinics.
+     * Only ACTIVE memberships count: a staff member still waiting for their clinic admin's approval
+     * comes back with no clinics (the app shows a waiting page).
+     */
+    public Optional<StaffAccess> getStaffAccess(int userId) throws SQLException {
+        try (Connection c = DB.connect()) {
+            return getStaffAccess(c, userId);
+        }
+    }
+
+    public static Optional<StaffAccess> getStaffAccess(Connection c, int userId) throws SQLException {
+        StaffRole role;
+        boolean mustReset;
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT role, must_reset_password FROM \"User\" WHERE user_id = ?")) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return Optional.empty();
+                role = StaffRole.fromDb(rs.getString("role"));
+                mustReset = rs.getBoolean("must_reset_password");
+            }
+        }
+        // Each membership carries its own role: admin at one clinic says nothing about another.
+        Map<Integer, StaffRole> clinics = new LinkedHashMap<>();
+        if (role.isStaff()) {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT clinic_id, role FROM \"StaffClinic\" WHERE user_id = ? AND status = 'ACTIVE'"
+                            + " ORDER BY clinic_id")) {
+                ps.setInt(1, userId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) clinics.put(rs.getInt(1), StaffRole.fromDb(rs.getString(2)));
+                }
+            }
+        }
+        return Optional.of(new StaffAccess(userId, role, clinics, mustReset));
+    }
+
+    /** Clears must_reset_password once the user has chosen a new password (seeded clinic admins). */
+    public void clearMustResetPassword(int userId) throws SQLException {
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE \"User\" SET must_reset_password = FALSE WHERE user_id = ?")) {
+            ps.setInt(1, userId);
+            ps.executeUpdate();
+        }
+    }
+
+    /** When the patient last saw their results (null: never). See {@link TestDAO#findResultsSinceLastSeen}. */
+    public LocalDateTime getLastResultsSeenAt(int userId) throws SQLException {
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT last_results_seen_at FROM \"User\" WHERE user_id = ?")) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                Timestamp t = rs.getTimestamp(1);
+                return t == null ? null : t.toLocalDateTime();
+            }
+        }
+    }
+
+    /**
+     * Moves the "seen up to" watermark forward to {@code seenUpTo} (never back). Pass the watermark
+     * returned with the results that were shown, not "now", so a result released in between is not
+     * lost and client/database clock differences do not matter.
+     */
+    public boolean setLastResultsSeenAt(int userId, LocalDateTime seenUpTo) throws SQLException {
+        if (seenUpTo == null) return false;
+        String sql = """
+            UPDATE "User" SET last_results_seen_at = ?
+            WHERE user_id = ? AND (last_results_seen_at IS NULL OR last_results_seen_at < ?)
+            """;
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setTimestamp(1, Timestamp.valueOf(seenUpTo));
+            ps.setInt(2, userId);
+            ps.setTimestamp(3, Timestamp.valueOf(seenUpTo));
+            return ps.executeUpdate() == 1;
+        }
+    }
+
     private int nextUserId() throws SQLException {
         String sql = "SELECT COALESCE(MAX(user_id), 0) + 1 AS next_id FROM \"User\"";
         try (Connection c = DB.connect();
@@ -221,6 +314,7 @@ public class UserDAO implements UserRepository {
                         WHERE user_id = ? OR test_id IN (SELECT test_id FROM "Test" WHERE user_id = ?))
                 """,
                 "DELETE FROM \"BookingReminder\" WHERE user_id = ?",
+                "DELETE FROM \"BookingDetails\" WHERE app_id IN (SELECT app_id FROM \"Appointment\" WHERE user_id = ?)",
                 "DELETE FROM \"Appointment\" WHERE user_id = ?",
                 """
                 DELETE FROM "Prescription"
@@ -229,6 +323,8 @@ public class UserDAO implements UserRepository {
                 "DELETE FROM \"TestResult\" WHERE test_id IN (SELECT test_id FROM \"Test\" WHERE user_id = ?)",
                 "DELETE FROM \"Test\" WHERE user_id = ?",
                 "DELETE FROM \"Session\" WHERE user_id = ?",
+                // staff accounts: clinic membership (AuditLog rows are kept: append-only, ids only)
+                "DELETE FROM \"StaffClinic\" WHERE user_id = ?",
                 "DELETE FROM \"User\" WHERE user_id = ?"
         };
 
@@ -254,6 +350,43 @@ public class UserDAO implements UserRepository {
         }
     }
 
+    @Override
+    public String getPasswordHashByUserId(int userId) throws SQLException {
+        String sql = "SELECT password_hash FROM \"User\" WHERE user_id = ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString("password_hash") : null;
+            }
+        }
+    }
+
+    @Override
+    public boolean updatePasswordHashByUserId(int userId, String passwordHash) throws SQLException {
+        String sql = "UPDATE \"User\" SET password_hash = ? WHERE user_id = ?";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, passwordHash);
+            ps.setInt(2, userId);
+            return ps.executeUpdate() == 1;
+        }
+    }
+
+    @Override
+    public boolean emailTakenByOtherUser(int userId, String email) throws SQLException {
+        String sql = "SELECT 1 FROM \"User\" WHERE LOWER(email) = LOWER(?) AND user_id <> ? LIMIT 1";
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, email == null ? null : email.trim());
+            ps.setInt(2, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    @Override
     public boolean updateName(int userId, String firstName, String lastName) throws SQLException {
         String sql = "UPDATE \"User\" SET first_name = ?, last_name = ? WHERE user_id = ?";
         try (Connection c = DB.connect();
@@ -265,6 +398,7 @@ public class UserDAO implements UserRepository {
         }
     }
 
+    @Override
     public boolean updateEmail(int userId, String newEmail) throws SQLException {
         String sql = "UPDATE \"User\" SET email = ? WHERE user_id = ?";
         try (Connection c = DB.connect();
@@ -276,6 +410,7 @@ public class UserDAO implements UserRepository {
     }
 
 
+    @Override
     public service.AccountService.AccountInfo getAccountInfo(int userId) throws SQLException {
         String sql = """
         SELECT first_name, last_name, phone_number, dob, email

@@ -5,6 +5,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -38,9 +39,9 @@ public class ScreenshotHarness extends Application {
     static final String DEMO_PASSWORD = "DemoPass2026!";
     static final String DEMO_POSTCODE = "SO17 1BJ";
 
-    private static Path out = Path.of("target", "screenshots");
-    private static String only = "";
-    private Stage stage;
+    static Path out = Path.of("target", "screenshots");
+    static String only = "";
+    Stage stage;
 
     public static void main(String[] args) {
         if (args.length > 0) out = Path.of(args[0]);
@@ -67,7 +68,7 @@ public class ScreenshotHarness extends Application {
         script.start();
     }
 
-    private void showLogin() throws IOException {
+    void showLogin() throws IOException {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/login.fxml"));
         Scene scene = new Scene(loader.load(), WIDTH, HEIGHT);
         scene.getStylesheets().add(UI.STYLE);
@@ -101,7 +102,7 @@ public class ScreenshotHarness extends Application {
 
     record Step(String name, Runnable body) {}
 
-    private List<Step> steps() {
+    List<Step> steps() {
         List<Step> list = new ArrayList<>();
         list.add(new Step("auth", this::authScreens));
         list.add(new Step("dbwarning", this::dbWarning));
@@ -250,10 +251,12 @@ public class ScreenshotHarness extends Application {
         dump("book-07-services");
 
         Fx.run(() -> {
-            TitledPane pane = Fx.require(stage, TitledPane.class, t -> t.getGraphic() instanceof CheckBox cb
-                    && "STI test".equals(cb.getText()), "sti pane");
+            TitledPane pane = Fx.require(stage, TitledPane.class, t -> t.getGraphic() instanceof Parent g
+                    && Fx.all(g).stream().anyMatch(n -> n instanceof Label l && "STI test".equals(l.getText())),
+                    "sti pane");
             pane.setExpanded(true);
-            ((CheckBox) pane.getGraphic()).setSelected(true);
+            Fx.all((Parent) pane.getGraphic()).stream().filter(n -> n instanceof CheckBox).map(n -> (CheckBox) n)
+                    .findFirst().orElseThrow(() -> new IllegalStateException("sti checkbox")).setSelected(true);
         });
         Fx.settle();
         shot("book-08-service-chosen");

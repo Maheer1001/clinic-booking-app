@@ -31,6 +31,17 @@
     -fx-spacing: 8px;
 }
 
+/* Fields keep their height when the password-reset form grows (they were squashed to about 26px,
+   clipping the text, once the new-password step appeared). */
+.auth-card .input {
+    -fx-min-height: 40px;
+}
+
 .error {
     -fx-wrap-text: true;
+}
+
+/* Headings are centred, so a subtitle that wraps onto two lines is centred too (it was left-aligned). */
+.auth-heading .label {
+    -fx-text-alignment: center;
 }

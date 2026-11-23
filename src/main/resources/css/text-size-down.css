@@ -117,7 +117,7 @@
 }
 
 .app-nav-btn {
-    -fx-font-size: 16px; /* -2 */
+    -fx-font-size: 14px; /* -2 */
 }
 
 .app-shortcut-btn {
@@ -176,3 +176,11 @@
 .label.appointment-meta { -fx-font-size: 11px; }
 .label.appointment-place { -fx-font-size: 11px; }
 .entry-header .label.entry-title { -fx-font-size: 16px; }
+
+.app-btn-block {
+    -fx-font-size: 14px; /* -2 */
+}
+
+.label.service-name {
+    -fx-font-size: 12px; /* -2 */
+}

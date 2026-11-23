@@ -52,4 +52,19 @@ public class TrackingService {
     public List<AppointmentDetails> getPastAppointments() {
         return appointmentDAO.getPastAppointmentDetailsByUserId(userId);
     }
+
+    /**
+     * Fetches all three lists now and returns a service that serves those copies from memory, so the
+     * database work can happen off the FX thread and the pages built afterwards without waiting.
+     */
+    public TrackingService snapshot() {
+        List<Test> tests = List.copyOf(getTestResults());
+        List<PrescriptionSummary> prescriptions = List.copyOf(getPrescriptions());
+        List<AppointmentDetails> appointments = List.copyOf(getPastAppointments());
+        return new TrackingService(userId, testDAO, prescriptionDAO, appointmentDAO) {
+            @Override public List<Test> getTestResults() { return tests; }
+            @Override public List<PrescriptionSummary> getPrescriptions() { return prescriptions; }
+            @Override public List<AppointmentDetails> getPastAppointments() { return appointments; }
+        };
+    }
 }

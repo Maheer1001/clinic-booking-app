@@ -1,12 +1,14 @@
 package service;
 
 import dao.UserDAO;
+import dao.UserRepository;
 import model.BookingCommunicationPreferences;
 
 import java.sql.SQLException;
 
 /**
- * Loads {@link BookingCommunicationPreferences} for the current user from persistence.
+ * Loads a user's {@link BookingCommunicationPreferences} from persistence, falling back to the
+ * (discreet) defaults when there are none or they cannot be read.
  */
 public final class BookingCommunicationPrefs {
 
@@ -14,11 +16,16 @@ public final class BookingCommunicationPrefs {
     }
 
     public static BookingCommunicationPreferences load(int userId) {
+        return load(new UserDAO(), userId);
+    }
+
+    public static BookingCommunicationPreferences load(UserRepository users, int userId) {
         if (userId < 0) {
             return BookingCommunicationPreferences.defaults();
         }
         try {
-            return new UserDAO().getBookingCommunicationPreferences(userId);
+            BookingCommunicationPreferences prefs = users.getBookingCommunicationPreferences(userId);
+            return prefs != null ? prefs : BookingCommunicationPreferences.defaults();
         } catch (SQLException e) {
             return BookingCommunicationPreferences.defaults();
         }

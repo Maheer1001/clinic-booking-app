@@ -2,7 +2,7 @@
 
 Book a sexual-health clinic appointment in under a minute: a JavaFX desktop app to find a clinic by postcode, book a slot, and keep track of test results, prescriptions and reminders.
 
-![Demo: sign in, find a clinic on the map, choose a service and time, confirm, manage bookings, track results and prescriptions](media/demo.gif)
+![Demo: sign in, book at your usual clinic or the nearest one on the map, choose a service and time, confirm, reminders, results and prescriptions, then the staff side: the day list, patient records, releasing a result, shortening a course and approving staff](media/demo.gif)
 
 ![Screens: upcoming appointments, clinic search by postcode, times generated from opening hours, test results](media/screens.png)
 
@@ -21,12 +21,51 @@ The demo above follows a patient through the app:
 5. **Pick a free time.** Slots are generated from each clinic's opening hours and the service's length. Only booked slots are stored, and a slot drops out once its bookings reach capacity (reserved with a single conditional update, so it can't be overbooked).
 6. **Check and confirm.** A five-step progress bar runs through the booking; the review page shows the clinic, time and your details before you confirm.
 7. **Confirmation email.** Booking, reschedule and cancellation emails are HTML (Thymeleaf templates) and are sent in the background, alongside an in-app notification with a booking reference.
-8. **Reminders your way.** Set how far ahead you are reminded, repeat reminders, quiet hours, discreet wording, and saved defaults for new bookings; check-up reminders if it has been a while since your last visit.
+8. **Reminders your way.** Set how far ahead you are reminded, repeat reminders, quiet hours, discreet wording, and saved defaults for new bookings; check-up reminders if it has been a while since your last visit. Dose reminders for a prescription keep a fixed rhythm and stop when staff stop or shorten the course. While the app is open, reminders and new-result alerts also show as in-app popups, one at a time (several new results come as one popup).
 9. **Manage bookings.** Reschedule to another free slot (the old one is released) or cancel; cancelling always asks first and defaults to keeping the appointment.
 10. **Track tests and prescriptions.** Test results with a clear status, treatment and clinician notes (and a shortcut to book a retest after a positive result); current and past prescriptions with dose, frequency and course dates; past appointments. Search, sort and filter each list by date.
 11. **Accessible.** Keyboard navigation with visible focus rings, screen-reader labels, and per-user high contrast, bold text and text size settings that apply instantly.
 
 ![More screens: booking confirmed, reschedule, prescriptions, high contrast mode](media/screens-more.png)
+
+## Staff side
+
+Clinic staff use the same app and the same login screen, with their own tabs:
+
+- **Today**: the clinic's appointments for a day. Open one to see the booking details, mark it attended or a no-show, and keep staff-only notes.
+- **Patients**: search patients who have an appointment at the clinic and open their record (appointments, tests, prescriptions). Add a test result: it is saved as a draft and the patient sees nothing until you **Release to patient** (a positive result asks you to confirm first). The patient then gets a discreet email that never says the result, and an in-app alert. Prescribe from the medicine list, then shorten the course or stop it early; dose reminders end with it.
+- **Clinic** (clinic admins only): approve or reject new staff, make staff admins or clinicians, remove them, rotate the staff code, and add or edit timeslots.
+
+Roles are per clinic: someone can be a clinic admin at one clinic and a clinician at another. Staff who belong to more than one clinic switch between them with the clinic picker on the staff pages, and the Clinic tab shows admin tools only at clinics where they are an admin.
+
+Staff and patient accounts are separate: an email that already has an account can't become staff. The app talks to the database directly, so clinic scoping controls what the app shows, not who can read the database (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
+
+### Staff codes
+
+Each clinic has a staff code. Someone who signs up with **I'm clinic staff** and a clinic's code becomes a clinician at that clinic, waiting for approval. Only a hash of the code is stored. A clinic admin can rotate it on the **Clinic** tab: the new code is shown once, the old one stops working at once, and staff who already have access keep it. Wrong codes are rate-limited (5 tries per email and 50 overall per 15 minutes).
+
+`DEMO_STAFF_CODES=true` in `.env` is for demo databases: on startup every clinic with no code gets `clinic<id>` (`clinic1`, `clinic2`, ...). It never overwrites a code, and the Clinic tab asks the admin to rotate a demo code. Leave it `false` for anything real; staff sign-up then fails until an admin creates a code (**Clinic > Create staff code**).
+
+### First clinic admin
+
+There is no sign-up for admins. Create a clinic's first admin with `app.StaffSeed`, against the database in `.env`. The email must not have an account yet, the password comes from an environment variable (never the command line), and the admin must choose a new password at first login.
+
+```powershell
+$env:STAFF_SEED_PASSWORD = "<temporary password, 8+ characters with a letter and a number>"
+mvn -q compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java "-Dexec.mainClass=app.StaffSeed" "-Dexec.args=admin <clinicId> <email>"
+Remove-Item Env:STAFF_SEED_PASSWORD
+```
+
+`<clinicId>` is a `clinic_id` from the `"Clinic"` table (the sample data has 1 to 3). Further admins are promoted from the Clinic tab.
+
+### Clinician sign-up and approval
+
+1. The admin gives the clinic's staff code to the new clinician.
+2. The clinician clicks **Create an account**, ticks **I'm clinic staff** and enters the code.
+3. Until approved, logging in shows **Waiting for approval**.
+4. The admin opens **Clinic > Waiting for approval** and clicks **Approve** (or **Reject**). At their next login the clinician gets the staff tabs.
+
+**Remove** on the Clinic tab takes someone's access away straight away; their account stays but can't use the staff area. They can't sign up again with the same email, so use a different email if they come back.
 
 ## Stack
 
@@ -69,6 +108,7 @@ notepad .env
 | `SMTP_PASSWORD` | for email | SMTP password / app password |
 | `MAIL_FROM` | for email | Sender address |
 | `MAIL_FROM_NAME` | no | Sender display name |
+| `DEMO_STAFF_CODES` | no | `true` gives clinics without a staff code the demo code `clinic<id>` (demo databases only, see [Staff side](#staff-side)) |
 
 Without the SMTP keys the app still runs; it logs `[Email] WARNING` and skips sending.
 
@@ -88,7 +128,7 @@ Without the SMTP keys the app still runs; it logs `[Email] WARNING` and skips se
 
    With Docker, prefix each command with `docker exec -it clinic-db` (e.g. `docker exec -it clinic-db psql -U postgres -c "..."`).
 3. Put `DB_URL=jdbc:postgresql://localhost:5432/clinic_booking`, `DB_USERNAME=clinic_app` and `DB_PASSWORD=change-me` in `.env`.
-4. Schema: there is no separate migration file. The app creates every table itself on startup (`CREATE TABLE IF NOT EXISTS` in `app.DB.initTables`). It does not add any clinics or services, so load the sample data to get something to book:
+4. Schema: nothing to run. The app creates every table and column itself on startup (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` in `app.DB.initTables`). The SQL files in `docs/migrations/` are only for upgrading a database made by an older version of the app by hand; starting the new app does the same. It does not add any clinics or services, so load the sample data to get something to book:
 
    ```powershell
    psql -h localhost -U clinic_app -d clinic_booking -f docs/sample-data.sql
@@ -131,11 +171,11 @@ Or in IntelliJ, run `app.Main`. If the database is unreachable the window still 
 ## Test
 
 ```powershell
-mvn test                 # 299 unit tests, no database needed (tests tagged "db" are excluded)
-mvn test -Pdb-tests      # also runs the 9 integration tests against the Postgres in .env
+mvn test                 # 598 tests on in-memory H2, no database needed (tests tagged "db" are excluded)
+mvn test -Pdb-tests      # also runs the integration tests against the Postgres in .env
 ```
 
-Email sending is disabled during tests (`-Demail.disabled=true` is set by the build).
+Email sending is disabled during tests (`-Demail.disabled=true` is set by the build). Plain `mvn test` also refuses to connect to anything except in-memory H2 (`-Ddb.inMemoryOnly=true`), so it never writes to the database in your `.env`; only `-Pdb-tests` turns that off.
 
 ### Screenshots
 
@@ -147,6 +187,19 @@ mvn -Pscreenshots test-compile exec:exec -Dshots.only=book    # just the booking
 ```
 
 It books and moves appointments, so reload `docs/demo-data.sql` before running it again.
+
+`mvn -Pstaff-screenshots test-compile exec:exec` does the same for the staff side (PNGs and a log in `target/staff-shots`). It needs a clinic admin made with `StaffSeed` and the environment variables listed in `dev.StaffHarness`; it creates its own test patient and clinician with `example.com` emails and deletes them at the end. `mvn -Pverify-screenshots test-compile exec:exec` (`dev.VerifyHarness`, same environment variables) checks the popup queue, a partly-failed multi-service booking, switching clinics with per-clinic roles and the result-release email, with PNGs in `target/verify-shots`.
+
+`media/demo.gif` is built from the patient and staff screenshots with `python media/make_demo_gif.py` (needs Pillow); the steps are at the top of that script.
+
+Both staff harnesses use the app normally, so they add rows to `AuditLog`, which is append-only by design.
+
+### Known limits
+
+- Removed or rejected staff can't sign up again with the same email.
+- New user ids are the highest id plus one, so a deleted account's id can be reused.
+- A few database calls (selecting a clinic, confirming a booking, loading account details, saving booking-communication settings) still run on the UI thread and can pause the window briefly on a slow connection.
+- Staff land on their lowest-numbered clinic after login, even if they are an admin somewhere else.
 
 More setup notes and troubleshooting: [`docs/SETUP.md`](docs/SETUP.md).
 

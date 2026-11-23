@@ -34,8 +34,12 @@ public class ReminderDefaultsView {
     }
 
     public Node getReminderDefaultsView() {
+        // With nothing saved, show what new bookings really get (on, one day before, discreet) rather
+        // than "Disabled": saving that unchanged used to turn reminders off for every new booking.
         AppointmentReminderDefaults initial = controller.getDefaultAppointmentReminderTemplate()
-                .orElse(new AppointmentReminderDefaults(false, "", ""));
+                .filter(AppointmentReminderDefaults::hasSavedTemplate)
+                .orElse(new AppointmentReminderDefaults(true,
+                        ReminderController.NEW_BOOKING_SCHEDULE, ReminderController.NEW_BOOKING_MESSAGE));
 
         ReminderTemplateForm form = new ReminderTemplateForm(
                 initial.customDays().isEmpty() ? null : initial.customDays(),
@@ -43,8 +47,8 @@ public class ReminderDefaultsView {
                 initial.notificationsEnabled());
 
         Label blurb = UI.body(
-                "These settings use the same format as appointment reminders. "
-                        + "They are saved for your account and can be applied to new bookings later.");
+                "Every new booking gets a reminder with these settings. "
+                        + "You can still change the reminder for each appointment in Reminders.");
 
         Appointment previewAppt = new Appointment(
                 0,
@@ -54,12 +58,17 @@ public class ReminderDefaultsView {
                 "Dr Preview",
                 LocalDateTime.now().plusDays(3).withSecond(0).withNano(0));
 
-        Button saveBtn = UI.primaryButton("Save defaults");
-        Button testEmailBtn = UI.backButton("Send preview email");
-        Button testNotifBtn = UI.backButton("Preview notification");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button testNotifBtn = UI.secondaryButton("Preview notification");
         Label saveConfirm = UI.inlineSaveConfirmation();
 
         saveBtn.setOnAction(e -> {
+            String problem = form.validationError();
+            if (problem != null) {
+                ReminderFeedback.invalid(saveConfirm, problem);
+                return;
+            }
             ReminderTemplateForm.Payload p = form.collectPayload();
             boolean saved;
             try {
@@ -70,14 +79,18 @@ public class ReminderDefaultsView {
                 System.err.println("Could not save reminder defaults: " + ex.getMessage());
                 saved = false;
             }
-            ReminderFeedback.saveResult(saveConfirm, saved);
+            if (saved && !p.notificationsEnabled()) {
+                saveConfirm.setText("Saved. New bookings will not get a reminder until you choose Enabled.");
+            } else {
+                ReminderFeedback.saveResult(saveConfirm, saved, "New bookings will use these defaults.");
+            }
         });
 
         testEmailBtn.setOnAction(e -> {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.").showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {

@@ -1,12 +1,15 @@
 package service;
 
 import dao.AppointmentDAO;
+import dao.PrescriptionDAO;
 import model.Appointment;
 import model.Prescription;
+import model.PrescriptionState;
 import model.ReminderSchedule;
 import model.ReminderTemplateOverrides;
 import service.email.*;
 
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -18,17 +21,20 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * Schedules email reminders at the user's chosen time, or after a default delay (e.g. 30s) when the
- * chosen time has already passed.
+ * Schedules email reminders at the user's chosen time. Schedule-based appointment reminders whose
+ * time has already passed are skipped (see {@link #scheduleAppointmentReminderWithSchedule}); the
+ * older one-off methods still fall back to a default delay (e.g. 30s).
  *
  * <ul>
  *   <li>Reminders are keyed per appointment / prescription / booking reminder. Scheduling again replaces
@@ -47,6 +53,8 @@ public class NotificationScheduler {
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
     /** Booking ("time to book") reminders go out in the morning rather than at midnight. */
     private static final LocalTime BOOKING_REMINDER_TIME = LocalTime.of(9, 0);
+    /** Suggested appointment type in the "time to book" reminder. */
+    public static final String BOOKING_APPOINTMENT_TYPE = "Routine Sexual Health Check-up";
 
     private static NotificationScheduler shared;
 
@@ -55,7 +63,10 @@ public class NotificationScheduler {
     private final long defaultDelaySeconds;
     private final Clock clock;
     private final BiPredicate<Integer, Integer> appointmentStillBooked;
+    /** Re-reads a prescription before each dose reminder; null = no database check (tests). */
+    private final PrescriptionLookup prescriptionLookup;
     private final Map<String, List<Handle>> pending = new ConcurrentHashMap<>();
+    private volatile Consumer<ReminderAlert> alertListener;
 
     /**
      * App-wide scheduler. Screens should use this instead of creating their own, so that
@@ -73,7 +84,14 @@ public class NotificationScheduler {
      * and checks the database before sending that the appointment is still booked.
      */
     public NotificationScheduler() {
-        this(new EmailSender(), 30, Clock.systemDefaultZone(), new AppointmentDAO()::isUpcomingAppointmentForUser);
+        this(new EmailSender(), 30, Clock.systemDefaultZone(), new AppointmentDAO()::isUpcomingAppointmentForUser,
+                new PrescriptionDAO()::findReminderState);
+    }
+
+    /** A prescription's current state by id; empty if it no longer exists. */
+    @FunctionalInterface
+    public interface PrescriptionLookup {
+        Optional<PrescriptionState> find(int prescriptionId) throws SQLException;
     }
 
     /**
@@ -88,6 +106,17 @@ public class NotificationScheduler {
      */
     public NotificationScheduler(EmailSender emailSender, long defaultDelaySeconds, Clock clock,
                                  BiPredicate<Integer, Integer> appointmentStillBooked) {
+        this(emailSender, defaultDelaySeconds, clock, appointmentStillBooked, null);
+    }
+
+    /**
+     * @param prescriptionLookup read just before each dose reminder is sent, so a course staff have
+     *                           stopped or shortened ends without a restart; null skips the check
+     */
+    public NotificationScheduler(EmailSender emailSender, long defaultDelaySeconds, Clock clock,
+                                 BiPredicate<Integer, Integer> appointmentStillBooked,
+                                 PrescriptionLookup prescriptionLookup) {
+        this.prescriptionLookup = prescriptionLookup;
         this.emailSender = emailSender;
         this.defaultDelaySeconds = defaultDelaySeconds;
         this.clock = clock;
@@ -138,17 +167,22 @@ public class NotificationScheduler {
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
         startChain(key, now().plusSeconds(Math.max(0, delaySeconds)), null, UnaryOperator.identity(), t -> true,
                 () -> appointmentStillWanted(appt),
-                t -> appointmentEmail(appt, recipientEmail, recipientName, overrides));
+                t -> ReminderAlert.appointment(appt, recipientEmail, recipientName, overrides));
     }
 
     /**
      * Schedule appointment reminders based on a JSON schedule stored in custom_days.
      * Supports multiple reminders, repeats, and quiet hours. Replaces any reminders already
-     * scheduled for this appointment. Reminder times that have already passed are collapsed into a
-     * single catch-up reminder after the default delay; nothing is sent for a past appointment.
+     * scheduled for this appointment. A reminder time that has already passed, or that would only go
+     * out at or after the appointment (e.g. moved there by quiet hours), is skipped rather than sent
+     * early as a "catch-up"; the other rules are scheduled as normal. The same applies when saved
+     * reminders are restored at login, so logging in again never re-sends one whose time has gone.
+     * Nothing is sent for a past appointment.
+     *
+     * @return when the first email will go out and how many reminder times were skipped
      */
-    public void scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
-                                                        String scheduleRaw, String customMessage) {
+    public AppointmentReminderPlan scheduleAppointmentReminderWithSchedule(Appointment appt, String recipientEmail, String recipientName,
+                                                                         String scheduleRaw, String customMessage) {
         String key = appointmentKey(appt.getAppId());
         cancel(key);
 
@@ -156,41 +190,54 @@ public class NotificationScheduler {
         ZonedDateTime apptAt = zoned(appt.getAppointmentDateTime());
         if (!apptAt.isAfter(now)) {
             log("Appointment " + appt.getAppId() + " is in the past; no reminder scheduled");
-            return;
+            return AppointmentReminderPlan.pastAppointment();
         }
 
         ReminderSchedule schedule = ReminderSchedule.fromString(scheduleRaw, 2);
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
         UnaryOperator<ZonedDateTime> quietHours = t -> zoned(schedule.applyQuietHours(t.toLocalDateTime()));
-        Predicate<ZonedDateTime> beforeAppointment = t -> t.isBefore(apptAt);
+        // Judged on the real send time: quiet hours or a time of day can push a reminder to or past the
+        // appointment, and such a reminder used to be reported as scheduled but was never sent.
+        Predicate<ZonedDateTime> beforeAppointment = t -> quietHours.apply(t).isBefore(apptAt);
         BooleanSupplier stillWanted = () -> appointmentStillWanted(appt);
-        Function<ZonedDateTime, Email> email = t -> appointmentEmail(appt, recipientEmail, recipientName, overrides);
+        Function<ZonedDateTime, ReminderAlert> email = t -> ReminderAlert.appointment(appt, recipientEmail, recipientName, overrides);
 
-        boolean missedOne = false;
+        int passed = 0;
+        int afterAppointment = 0;
+        ZonedDateTime firstSend = null;
         for (ReminderSchedule.ReminderRule rule : schedule.getReminders()) {
-            ZonedDateTime first = zoned(computeInitialSendAt(appt.getAppointmentDateTime(), rule));
+            ZonedDateTime nominal = zoned(computeInitialSendAt(appt.getAppointmentDateTime(), rule));
+            ZonedDateTime first = nominal;
             UnaryOperator<ZonedDateTime> next = repeatStep(rule.repeatEvery());
 
             if (next != null) {
                 // Skip occurrences that have already passed rather than firing them all at once.
-                while (!quietHours.apply(first).isAfter(now) && first.isBefore(apptAt)) {
+                while (!quietHours.apply(first).isAfter(now) && beforeAppointment.test(first)) {
                     first = next.apply(first);
                 }
-                if (!first.isBefore(apptAt)) {
-                    missedOne = true;
-                    continue;
-                }
-            } else if (!quietHours.apply(first).isAfter(now)) {
-                missedOne = true;
+            }
+            if (!beforeAppointment.test(nominal)) {
+                afterAppointment++;
+                continue;
+            }
+            if (!beforeAppointment.test(first) || !quietHours.apply(first).isAfter(now)) {
+                passed++;
                 continue;
             }
             startChain(key, first, next, quietHours, beforeAppointment, stillWanted, email);
+            firstSend = earlier(firstSend, quietHours.apply(first));
         }
 
-        if (missedOne) {
-            log("Some reminder times for appointment " + appt.getAppId() + " have passed; sending one reminder in " + defaultDelaySeconds + "s");
-            startChain(key, now.plusSeconds(defaultDelaySeconds), null, UnaryOperator.identity(), t -> true, stillWanted, email);
+        if (passed + afterAppointment > 0) {
+            log((passed + afterAppointment) + " reminder time(s) for appointment " + appt.getAppId()
+                    + " have passed or fall after it; they will not be sent");
         }
+        return new AppointmentReminderPlan(Optional.ofNullable(firstSend).map(ZonedDateTime::toLocalDateTime),
+                passed, afterAppointment);
+    }
+
+    private static ZonedDateTime earlier(ZonedDateTime a, ZonedDateTime b) {
+        return a == null || b.isBefore(a) ? b : a;
     }
 
     /** Cancels every pending reminder for this appointment (e.g. reminders turned off). */
@@ -217,24 +264,63 @@ public class NotificationScheduler {
     /**
      * Schedules a reminder every intervalHours until the prescription's end date (inclusive), replacing any
      * treatment reminders already scheduled for this prescription.
+     *
+     * @return when the first reminder will go out, or empty if none was scheduled
      */
-    public void scheduleTreatmentReminder(Prescription rx, String recipientEmail, String recipientName,
-                                          int intervalHours, String customMessage) {
+    public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String recipientEmail, String recipientName,
+                                                             int intervalHours, String customMessage) {
+        return scheduleTreatmentReminder(rx, recipientEmail, recipientName, intervalHours, customMessage, null);
+    }
+
+    /**
+     * Dose reminders on a fixed rhythm: due at {@code anchor + k * intervalHours}. The next send is
+     * the first of those ticks strictly after now, so restoring at login keeps the original rhythm
+     * (it used to restart at login + interval every time) and never re-sends a tick that has passed.
+     *
+     * @param anchor when the rhythm started (normally when the reminder was saved); null = now
+     * @return when the next reminder will go out, or empty if the course ends first
+     */
+    public Optional<LocalDateTime> scheduleTreatmentReminder(Prescription rx, String recipientEmail, String recipientName,
+                                                             int intervalHours, String customMessage, LocalDateTime anchor) {
         if (intervalHours <= 0) {
             scheduleTreatmentReminder(rx, recipientEmail, recipientName, defaultDelaySeconds, customMessage);
-            return;
+            return Optional.of(now().plusSeconds(defaultDelaySeconds).toLocalDateTime());
         }
         String key = prescriptionKey(rx.getPrescriptionId());
         cancel(key);
         Predicate<ZonedDateTime> withinCourse = treatmentCourse(rx);
-        ZonedDateTime first = now().plusHours(intervalHours);
+        ZonedDateTime first = nextDoseTick(anchor == null ? now() : zoned(anchor), intervalHours, now());
+        // A course that has not started yet used to get dose reminders straight away.
+        if (rx.getStartDate() != null) {
+            ZonedDateTime courseStart = zoned(rx.getStartDate().atStartOfDay());
+            while (first.isBefore(courseStart)) {
+                first = first.plusHours(intervalHours);
+            }
+        }
         if (!withinCourse.test(first)) {
             log("Prescription " + rx.getPrescriptionId() + " ends before the next dose; no reminder scheduled");
-            return;
+            return Optional.empty();
         }
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
-        startChain(key, first, t -> t.plusHours(intervalHours), UnaryOperator.identity(), withinCourse, () -> true,
-                t -> treatmentEmail(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
+        startChain(key, first, t -> t.plusHours(intervalHours), UnaryOperator.identity(), withinCourse,
+                () -> prescriptionStillWanted(rx),
+                t -> ReminderAlert.treatment(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
+        return Optional.of(first.toLocalDateTime());
+    }
+
+    /**
+     * First tick {@code anchor + k * intervalHours} (k &gt;= 1) strictly after {@code now}. Whole hours
+     * of elapsed time, so the rhythm is not moved by daylight saving changes.
+     */
+    static ZonedDateTime nextDoseTick(ZonedDateTime anchor, int intervalHours, ZonedDateTime now) {
+        long periodSeconds = intervalHours * 3600L;
+        long elapsed = Duration.between(anchor, now).getSeconds();
+        long k = Math.max(1, Math.floorDiv(elapsed, periodSeconds) + 1);
+        ZonedDateTime tick = anchor.plusSeconds(k * periodSeconds);
+        while (!tick.isAfter(now)) {
+            tick = tick.plusSeconds(periodSeconds);
+        }
+        return tick;
     }
 
     /** Sends a single treatment reminder after delaySeconds, replacing any already scheduled for this prescription. */
@@ -243,8 +329,9 @@ public class NotificationScheduler {
         String key = prescriptionKey(rx.getPrescriptionId());
         cancel(key);
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
-        startChain(key, now().plusSeconds(Math.max(0, delaySeconds)), null, UnaryOperator.identity(), treatmentCourse(rx), () -> true,
-                t -> treatmentEmail(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
+        startChain(key, now().plusSeconds(Math.max(0, delaySeconds)), null, UnaryOperator.identity(), treatmentCourse(rx),
+                () -> prescriptionStillWanted(rx),
+                t -> ReminderAlert.treatment(rx, recipientEmail, recipientName, overrides, t.toLocalDate()));
     }
 
     public void cancelTreatmentReminders(int prescriptionId) {
@@ -269,34 +356,63 @@ public class NotificationScheduler {
 
     public void scheduleBookingReminder(String recipientEmail, String recipientName,
                                         int daysSinceLast, LocalDate lastAppointmentDate, String customMessage) {
-        long delaySeconds = defaultDelaySeconds;
+        scheduleBookingReminder(recipientEmail, recipientName, daysSinceLast, lastAppointmentDate, customMessage, () -> true);
+    }
+
+    /**
+     * @param stillWanted checked just before sending, e.g. false once the user has booked again
+     * @return when the reminder will go out
+     */
+    public Optional<LocalDateTime> scheduleBookingReminder(String recipientEmail, String recipientName, int daysSinceLast,
+                                                           LocalDate lastAppointmentDate, String customMessage,
+                                                           BooleanSupplier stillWanted) {
+        ZonedDateTime sendAt = now().plusSeconds(defaultDelaySeconds);
         if (lastAppointmentDate != null) {
-            ZonedDateTime sendAt = zoned(lastAppointmentDate.plusDays(daysSinceLast).atTime(BOOKING_REMINDER_TIME));
-            long secs = Duration.between(now(), sendAt).getSeconds();
-            if (secs > 0) {
-                delaySeconds = secs;
+            // Exactly 09:00 (working in whole seconds from "now" used to log and send at 08:59).
+            ZonedDateTime due = zoned(lastAppointmentDate.plusDays(daysSinceLast).atTime(BOOKING_REMINDER_TIME));
+            if (due.isAfter(now())) {
+                sendAt = due;
             }
         }
-        scheduleBookingReminder(recipientEmail, recipientName, daysSinceLast, delaySeconds, customMessage);
+        startBookingReminder(recipientEmail, recipientName, daysSinceLast, sendAt, customMessage, stillWanted);
+        return Optional.of(sendAt.toLocalDateTime());
     }
 
     public void scheduleBookingReminder(String recipientEmail, String recipientName,
                                         int daysSinceLast, long delaySeconds, String customMessage) {
+        startBookingReminder(recipientEmail, recipientName, daysSinceLast,
+                now().plusSeconds(Math.max(0, delaySeconds)), customMessage, () -> true);
+    }
+
+    private void startBookingReminder(String recipientEmail, String recipientName, int daysSinceLast,
+                                      ZonedDateTime sendAt, String customMessage, BooleanSupplier stillWanted) {
         String key = bookingKey(recipientEmail);
         cancel(key);
         ReminderTemplateOverrides overrides = ReminderTemplateOverrides.fromString(customMessage);
-        boolean discreet = isDiscreet(overrides);
-        startChain(key, now().plusSeconds(Math.max(0, delaySeconds)), null, UnaryOperator.identity(), t -> true, () -> true,
-                t -> new MakeAppointmentReminderEmail(
-                        recipientEmail, recipientName,
-                        "It has been " + daysSinceLast + " days since your last visit",
-                        "Routine Sexual Health Check-up",
-                        overrides.getEmailSubject(), overrides.getEmailBodyIntro(), overrides.getEmailFromName(),
-                        discreet));
+        startChain(key, sendAt, null, UnaryOperator.identity(), t -> true, stillWanted,
+                t -> ReminderAlert.booking(recipientEmail, recipientName, overrides, bookingReminderReason(daysSinceLast)));
     }
 
     public void cancelBookingReminders(String recipientEmail) {
         cancel(bookingKey(recipientEmail));
+    }
+
+    /**
+     * "At least": an overdue nudge goes out long after the chosen number of days (it used to say
+     * "It has been 30 days" to someone whose last visit was 82 days ago).
+     */
+    public static String bookingReminderReason(int daysSinceLast) {
+        return "It has been at least " + daysSinceLast + " days since your last visit";
+    }
+
+    // ------------------------------------------------------------------ in-app alerts
+
+    /**
+     * Called on a scheduler thread each time a reminder goes out (whether or not the email got
+     * through), so the app can also show it as a popup. Null removes the listener.
+     */
+    public void setAlertListener(Consumer<ReminderAlert> listener) {
+        this.alertListener = listener;
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -352,19 +468,19 @@ public class NotificationScheduler {
      * @param adjust       maps a nominal time to the real send time (quiet hours)
      * @param keepGoing    nominal times failing this are not sent and end the chain
      * @param stillWanted  checked right before each send; false ends the chain without sending
-     * @param emailFor     builds the email for a given send time
+     * @param alertFor     the reminder for a given send time (sent by email and passed to the alert listener)
      */
     private void startChain(String key, ZonedDateTime first, UnaryOperator<ZonedDateTime> next,
                             UnaryOperator<ZonedDateTime> adjust, Predicate<ZonedDateTime> keepGoing,
-                            BooleanSupplier stillWanted, Function<ZonedDateTime, Email> emailFor) {
+                            BooleanSupplier stillWanted, Function<ZonedDateTime, ReminderAlert> alertFor) {
         Handle handle = new Handle(key);
         pending.computeIfAbsent(key, k -> new CopyOnWriteArrayList<>()).add(handle);
-        scheduleRun(handle, first, next, adjust, keepGoing, stillWanted, emailFor);
+        scheduleRun(handle, first, next, adjust, keepGoing, stillWanted, alertFor);
     }
 
     private void scheduleRun(Handle handle, ZonedDateTime nominal, UnaryOperator<ZonedDateTime> next,
                              UnaryOperator<ZonedDateTime> adjust, Predicate<ZonedDateTime> keepGoing,
-                             BooleanSupplier stillWanted, Function<ZonedDateTime, Email> emailFor) {
+                             BooleanSupplier stillWanted, Function<ZonedDateTime, ReminderAlert> alertFor) {
         if (handle.cancelled) {
             return;
         }
@@ -382,8 +498,10 @@ public class NotificationScheduler {
                         continueChain = false;
                         return;
                     }
-                    boolean success = emailSender.send(emailFor.apply(fireAt));
+                    ReminderAlert alert = alertFor.apply(fireAt);
+                    boolean success = emailSender.send(emailFor(alert));
                     log("Reminder " + handle.key + " " + (success ? "sent" : "failed"));
+                    publish(alert);
                 } catch (Throwable t) {
                     // Never let one failure end the chain silently.
                     logError("Reminder " + handle.key + " threw " + t);
@@ -394,7 +512,7 @@ public class NotificationScheduler {
                         following = next.apply(following);
                     }
                     if (following != null && keepGoing.test(following) && !handle.cancelled) {
-                        scheduleRun(handle, following, next, adjust, keepGoing, stillWanted, emailFor);
+                        scheduleRun(handle, following, next, adjust, keepGoing, stillWanted, alertFor);
                     } else {
                         remove(handle);
                     }
@@ -453,6 +571,25 @@ public class NotificationScheduler {
         }
     }
 
+    /**
+     * Re-reads the prescription (one query) right before a dose reminder goes out: false once staff
+     * have stopped it, its end date has been moved before today, or it has been deleted. If the
+     * database cannot be read the reminder is sent as scheduled, so a short outage does not end the
+     * course's reminders for good (a false here ends the chain).
+     */
+    private boolean prescriptionStillWanted(Prescription rx) {
+        if (prescriptionLookup == null) {
+            return true;
+        }
+        try {
+            Optional<PrescriptionState> state = prescriptionLookup.find(rx.getPrescriptionId());
+            return state.isPresent() && state.get().wantsRemindersOn(now().toLocalDate());
+        } catch (SQLException | RuntimeException e) {
+            logError("Could not check prescription " + rx.getPrescriptionId() + "; sending as scheduled");
+            return true;
+        }
+    }
+
     /** Nominal times up to the end of the prescription's last day (no end date = ongoing). */
     private Predicate<ZonedDateTime> treatmentCourse(Prescription rx) {
         LocalDate end = rx.getEndDate();
@@ -468,23 +605,41 @@ public class NotificationScheduler {
         return !Boolean.FALSE.equals(overrides.getDiscreetOverride());
     }
 
-    private static Email appointmentEmail(Appointment appt, String recipientEmail, String recipientName,
-                                          ReminderTemplateOverrides overrides) {
-        return new AppointmentReminderEmail(
-                recipientEmail, recipientName,
-                appt.getServiceName(), appt.getAppointmentDateTime(),
-                appt.getClinicName(), appt.getDoctorName(),
-                overrides.getEmailSubject(), overrides.getEmailBodyIntro(), overrides.getEmailFromName(),
-                isDiscreet(overrides));
+    /** The email for a reminder that has come due. */
+    static Email emailFor(ReminderAlert alert) {
+        ReminderTemplateOverrides o = alert.overrides();
+        boolean discreet = isDiscreet(o);
+        return switch (alert.kind()) {
+            case APPOINTMENT -> {
+                Appointment appt = alert.appointment();
+                yield new AppointmentReminderEmail(
+                        alert.recipientEmail(), alert.recipientName(),
+                        appt.getServiceName(), appt.getAppointmentDateTime(),
+                        appt.getClinicName(), appt.getDoctorName(),
+                        o.getEmailSubject(), o.getEmailBodyIntro(), o.getEmailFromName(), discreet);
+            }
+            case TREATMENT -> new TreatmentReminderEmail(
+                    alert.recipientEmail(), alert.recipientName(),
+                    alert.prescription().getMedicineName(), alert.prescription().getDosage(), alert.dueDate(),
+                    o.getEmailSubject(), o.getEmailBodyIntro(), o.getEmailFromName(), discreet);
+            case BOOKING -> new MakeAppointmentReminderEmail(
+                    alert.recipientEmail(), alert.recipientName(),
+                    alert.reason(), BOOKING_APPOINTMENT_TYPE,
+                    o.getEmailSubject(), o.getEmailBodyIntro(), o.getEmailFromName(), discreet);
+        };
     }
 
-    private static Email treatmentEmail(Prescription rx, String recipientEmail, String recipientName,
-                                        ReminderTemplateOverrides overrides, LocalDate dueDate) {
-        return new TreatmentReminderEmail(
-                recipientEmail, recipientName,
-                rx.getMedicineName(), rx.getDosage(), dueDate,
-                overrides.getEmailSubject(), overrides.getEmailBodyIntro(), overrides.getEmailFromName(),
-                isDiscreet(overrides));
+    /** Hands a sent reminder to the in-app listener; a failure there never affects the schedule. */
+    private void publish(ReminderAlert alert) {
+        Consumer<ReminderAlert> listener = alertListener;
+        if (listener == null) {
+            return;
+        }
+        try {
+            listener.accept(alert);
+        } catch (RuntimeException e) {
+            logError("Reminder alert listener threw " + e);
+        }
     }
 
     private static String appointmentKey(int appId) {
@@ -529,13 +684,10 @@ public class NotificationScheduler {
             default -> base = base.minusDays(amount);
         }
 
-        if (rule.timeOfDay() != null && !rule.timeOfDay().isBlank()) {
-            try {
-                LocalTime t = LocalTime.parse(rule.timeOfDay().trim(), HH_MM);
-                base = base.toLocalDate().atTime(t);
-            } catch (Exception ignored) {
-                // leave base as-is on parse errors
-            }
+        // Accepts single-digit hours such as "9:00"; an unreadable time leaves the lead time as-is.
+        LocalTime t = ReminderSchedule.parseTime(rule.timeOfDay());
+        if (t != null) {
+            base = base.toLocalDate().atTime(t);
         }
         return base;
     }

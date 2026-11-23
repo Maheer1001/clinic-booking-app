@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
@@ -82,6 +83,10 @@ public class DB {
         if (problem != null) {
             throw new SQLException(problem, "08001");
         }
+        if (isInMemoryOnly() && !url.startsWith("jdbc:h2:")) {
+            throw new SQLException("Tests may only use an in-memory H2 database, not the one in DB_URL "
+                    + "(run database tests with -Pdb-tests).", "08001");
+        }
 
         Properties props = new Properties();
         props.setProperty("user", username);
@@ -97,6 +102,24 @@ public class DB {
         } catch (SQLException e) {
             throw new SQLException(describeFailure(e), e.getSQLState(), e.getErrorCode(), e);
         }
+    }
+
+    /**
+     * Kill-switch so the unit tests can never reach the real database in {@code .env}: with
+     * {@code -Ddb.inMemoryOnly=true} (set by Maven for {@code mvn test}) only {@code jdbc:h2:} URLs connect.
+     */
+    static boolean isInMemoryOnly() {
+        return Boolean.getBoolean("db.inMemoryOnly");
+    }
+
+    /** Case-insensitive unique index on "User".email (docs/migrations/2026-11-23-unique-email.sql). */
+    public static final String USER_EMAIL_UNIQUE_INDEX = "user_email_lower_key";
+
+    /** True if the insert/update failed because another account already has that email. */
+    public static boolean isDuplicateEmail(SQLException e) {
+        String message = e.getMessage();
+        return "23505".equals(e.getSQLState()) && message != null
+                && message.toLowerCase().contains(USER_EMAIL_UNIQUE_INDEX);
     }
 
     /** Turns a driver exception into a message that says what to check. */
@@ -122,6 +145,25 @@ public class DB {
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
     }
+
+    /**
+     * Personal details entered when booking, one row per appointment. Separate from "Appointment" so the
+     * sensitive fields sit in one table a future staff role can be given access to on its own.
+     */
+    public static final String BOOKING_DETAILS_TABLE = """
+            CREATE TABLE IF NOT EXISTS "BookingDetails" (
+                app_id INTEGER PRIMARY KEY REFERENCES "Appointment"(app_id),
+                first_name VARCHAR(50),
+                last_name VARCHAR(50),
+                dob DATE,
+                phone_number VARCHAR(20),
+                contact_email VARCHAR(255),
+                gender VARCHAR(100),
+                sexuality VARCHAR(100),
+                accessibility_needs VARCHAR(500),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """;
 
     public static void initTables(Connection c) throws SQLException {
         // Live DB schema (introspected) uses dob/created/updated and includes default_clinic_id + accessibility_settings.
@@ -336,6 +378,208 @@ public class DB {
             s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS updated TIMESTAMP");
             // ClinicDAO reads this column; older/fresh schemas created above do not have it.
             s.execute("ALTER TABLE \"Clinic\" ADD COLUMN IF NOT EXISTS disability_accessibility TEXT");
+
+            // docs/migrations/2026-11-22-booking-details-and-security-question.sql
+            s.execute(BOOKING_DETAILS_TABLE);
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_question VARCHAR(50)");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_answer_hash VARCHAR(255)");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_failed_attempts INTEGER");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS security_locked_until TIMESTAMP");
+
+            // Fixed dose-reminder rhythm across logins (docs/migrations/2026-11-22-prescription-reminder-anchor.sql).
+            s.execute("ALTER TABLE \"PrescriptionReminder\" ADD COLUMN IF NOT EXISTS schedule_anchor TIMESTAMP");
         }
+        createUniqueEmailIndexIfFresh(c);
+        applyStaffLoginMigration(c);
+        // Demo only (DEMO_STAFF_CODES=true): clinics with no code get clinic<id>. Never overwrites a code.
+        if (demoStaffCodesEnabled()) StaffSeed.seedMissingStaffCodes(c);
+    }
+
+    /**
+     * One account per email, ignoring case. Only created here while "User" is still empty (a fresh
+     * database): an existing database may hold duplicates, so it gets the index from
+     * docs/migrations/2026-11-23-unique-email.sql after they have been checked.
+     */
+    static void createUniqueEmailIndexIfFresh(Connection c) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            try (ResultSet rs = s.executeQuery("SELECT 1 FROM \"User\" LIMIT 1")) {
+                if (rs.next()) return;
+            }
+            // H2 (tests) has no expression indexes; emails are stored lower-cased, so email alone is equivalent there.
+            String column = isPostgres(c) ? "(LOWER(email))" : "(email)";
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS " + USER_EMAIL_UNIQUE_INDEX + " ON \"User\" " + column);
+        }
+    }
+
+    private static Boolean demoStaffCodes = null;
+
+    /** DEMO_STAFF_CODES from the environment / .env; anything but "true" means off. */
+    public static boolean demoStaffCodesEnabled() {
+        if (demoStaffCodes != null) return demoStaffCodes;
+        return "true".equalsIgnoreCase(String.valueOf(dotenv.get("DEMO_STAFF_CODES")).strip());
+    }
+
+    /** Tests: force the demo-code flag on or off (null = read the environment again). */
+    public static void setDemoStaffCodes(Boolean enabled) { demoStaffCodes = enabled; }
+
+    /** Name recorded in "SchemaMigration" once existing tests have been marked released. */
+    public static final String RELEASE_BACKFILL = "2026-11-22-release-existing-tests";
+
+    /**
+     * docs/migrations/2026-11-22-staff-login.sql: roles, staff-clinic membership, hashed staff codes,
+     * draft/release of tests, appointment outcomes and the append-only audit log. Idempotent.
+     */
+    public static void applyStaffLoginMigration(Connection c) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'PATIENT'");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS must_reset_password BOOLEAN DEFAULT FALSE");
+            s.execute("ALTER TABLE \"User\" ADD COLUMN IF NOT EXISTS last_results_seen_at TIMESTAMP");
+            s.execute("UPDATE \"User\" SET role = 'PATIENT' WHERE role IS NULL");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "StaffClinic" (
+                    user_id INTEGER NOT NULL REFERENCES "User"(user_id),
+                    clinic_id INTEGER NOT NULL,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, clinic_id)
+                )
+                """);
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "ClinicStaffCode" (
+                    clinic_id INTEGER PRIMARY KEY,
+                    code_hash VARCHAR(255) NOT NULL,
+                    rotated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    rotated_by INTEGER
+                )
+                """);
+            // TRUE for a seeded demo code (clinic<id>): the admin screen asks for it to be rotated.
+            s.execute("ALTER TABLE \"ClinicStaffCode\" ADD COLUMN IF NOT EXISTS code_is_demo BOOLEAN DEFAULT FALSE");
+            // Codes seeded before the column existed: only an admin-set code has rotated_by.
+            s.execute("UPDATE \"ClinicStaffCode\" SET code_is_demo = TRUE WHERE rotated_by IS NULL AND code_is_demo = FALSE");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "StaffCodeAttempt" (
+                    attempt_id SERIAL PRIMARY KEY,
+                    email_hash VARCHAR(64) NOT NULL,
+                    attempted_at TIMESTAMP NOT NULL
+                )
+                """);
+            s.execute("CREATE INDEX IF NOT EXISTS staff_code_attempt_email_idx ON \"StaffCodeAttempt\" (email_hash, attempted_at)");
+            // Admin approval (docs/migrations/2026-11-22-staff-approval.sql): memberships that existed
+            // before approval are ACTIVE; from now on a missing status means PENDING (never auto-approved).
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ACTIVE'");
+            s.execute("UPDATE \"StaffClinic\" SET status = 'ACTIVE' WHERE status IS NULL");
+            s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN status SET DEFAULT 'PENDING'");
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS approved_by INTEGER");
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP");
+        }
+        // Roles per clinic membership (docs/migrations/2026-11-23-per-clinic-roles.sql).
+        applyPerClinicRolesMigration(c);
+        try (Statement s = c.createStatement()) {
+            s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS staff_notes TEXT");
+            s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS attended_at TIMESTAMP");
+            s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS app_id INTEGER");
+            s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS clinician_id INTEGER");
+            s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS released_at TIMESTAMP");
+            s.execute("ALTER TABLE \"TestResult\" ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "AuditLog" (
+                    audit_id SERIAL PRIMARY KEY,
+                    staff_user_id INTEGER,
+                    clinic_id INTEGER,
+                    action VARCHAR(40) NOT NULL,
+                    entity VARCHAR(30),
+                    entity_id INTEGER,
+                    patient_user_id INTEGER,
+                    at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+            s.execute("CREATE INDEX IF NOT EXISTS audit_log_clinic_idx ON \"AuditLog\" (clinic_id, at)");
+            s.execute("""
+                CREATE TABLE IF NOT EXISTS "SchemaMigration" (
+                    name VARCHAR(100) PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        }
+        runReleaseBackfillOnce(c);
+        if (isPostgres(c)) {
+            try (Statement s = c.createStatement()) {
+                s.execute("""
+                    CREATE OR REPLACE FUNCTION audit_log_append_only() RETURNS trigger AS $$
+                    BEGIN
+                        RAISE EXCEPTION 'AuditLog is append-only';
+                    END;
+                    $$ LANGUAGE plpgsql
+                    """);
+                s.execute("""
+                    CREATE OR REPLACE TRIGGER audit_log_append_only
+                        BEFORE UPDATE OR DELETE ON "AuditLog"
+                        FOR EACH ROW EXECUTE FUNCTION audit_log_append_only()
+                    """);
+            }
+        }
+    }
+
+    /** Name of the CHECK constraint on "StaffClinic".role. */
+    static final String STAFF_CLINIC_ROLE_CHECK = "staff_clinic_role_check";
+
+    /**
+     * docs/migrations/2026-11-23-per-clinic-roles.sql: the staff role moves onto each "StaffClinic"
+     * membership, so a person can be CLINIC_ADMIN at one clinic and CLINICIAN at another. Existing
+     * memberships take the user's old account-wide role (nobody gains or loses anything); a membership
+     * without a usable role becomes CLINICIAN (the lesser role). "User".role stays, but from now on
+     * only says patient or staff. Idempotent.
+     */
+    public static void applyPerClinicRolesMigration(Connection c) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS role VARCHAR(20)");
+            s.executeUpdate("""
+                UPDATE "StaffClinic" SET role = COALESCE(
+                    (SELECT u.role FROM "User" u
+                     WHERE u.user_id = "StaffClinic".user_id AND u.role IN ('CLINICIAN', 'CLINIC_ADMIN')),
+                    'CLINICIAN')
+                WHERE role IS NULL
+                """);
+            s.executeUpdate("UPDATE \"StaffClinic\" SET role = 'CLINICIAN' WHERE role NOT IN ('CLINICIAN', 'CLINIC_ADMIN')");
+            s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN role SET DEFAULT 'CLINICIAN'");
+            s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN role SET NOT NULL");
+            boolean hasCheck;
+            try (ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM information_schema.table_constraints"
+                    + " WHERE LOWER(constraint_name) = '" + STAFF_CLINIC_ROLE_CHECK + "'")) {
+                rs.next();
+                hasCheck = rs.getInt(1) > 0;
+            }
+            if (!hasCheck) {
+                s.execute("ALTER TABLE \"StaffClinic\" ADD CONSTRAINT " + STAFF_CLINIC_ROLE_CHECK
+                        + " CHECK (role IN ('CLINICIAN', 'CLINIC_ADMIN'))");
+            }
+        }
+    }
+
+    /**
+     * Once per database: tests from before draft/release become released (patients keep seeing them)
+     * and existing users count as having seen them (no flood of old "new result" alerts).
+     */
+    private static void runReleaseBackfillOnce(Connection c) throws SQLException {
+        String notDone = " AND NOT EXISTS (SELECT 1 FROM \"SchemaMigration\" WHERE name = '" + RELEASE_BACKFILL + "')";
+        boolean autoCommit = c.getAutoCommit();
+        c.setAutoCommit(false);
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE \"Test\" SET released_at = COALESCE(created_at, CURRENT_TIMESTAMP)"
+                    + " WHERE released_at IS NULL" + notDone);
+            s.executeUpdate("UPDATE \"User\" SET last_results_seen_at = CURRENT_TIMESTAMP"
+                    + " WHERE last_results_seen_at IS NULL" + notDone);
+            s.executeUpdate("INSERT INTO \"SchemaMigration\" (name) SELECT '" + RELEASE_BACKFILL + "'"
+                    + " WHERE NOT EXISTS (SELECT 1 FROM \"SchemaMigration\" WHERE name = '" + RELEASE_BACKFILL + "')");
+            c.commit();
+        } catch (SQLException e) {
+            c.rollback();
+            throw e;
+        } finally {
+            c.setAutoCommit(autoCommit);
+        }
+    }
+
+    private static boolean isPostgres(Connection c) throws SQLException {
+        return "PostgreSQL".equalsIgnoreCase(c.getMetaData().getDatabaseProductName());
     }
 }

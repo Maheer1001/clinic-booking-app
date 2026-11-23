@@ -80,21 +80,22 @@ public class TreatmentRemindersView {
      * Date of the next dose reminder, as the scheduler will send it. (The end date used before was
      * null for ongoing prescriptions, which crashed the preview, and was not the next due date anyway.)
      */
-    private static LocalDate nextDoseDate(int intervalHours) {
-        return java.time.LocalDateTime.now().plusHours(intervalHours).toLocalDate();
+    private static LocalDate nextDoseDate(Prescription rx, int intervalHours) {
+        LocalDate next = java.time.LocalDateTime.now().plusHours(intervalHours).toLocalDate();
+        // Reminders for a course that has not started yet begin on its start date.
+        return rx.getStartDate() != null && next.isBefore(rx.getStartDate()) ? rx.getStartDate() : next;
     }
 
     private static VBox createPrescriptionCard(Prescription rx, PrescriptionReminder existing, ReminderController controller,
                                               Optional<AppointmentReminderDefaults> defaults) {
-        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
         LocalDate end = rx.getEndDate();
         Label dateLabel;
         if (end == null) {
-            dateLabel = UI.body("From " + rx.getStartDate().format(dateFmt));
+            dateLabel = UI.body("From " + view.ui.Dates.medium(rx.getStartDate()));
         } else {
-            dateLabel = UI.body("From " + rx.getStartDate().format(dateFmt)
-                    + " to " + end.format(dateFmt));
+            dateLabel = UI.body("From " + view.ui.Dates.medium(rx.getStartDate())
+                    + " to " + view.ui.Dates.medium(end));
         }
         dateLabel.setWrapText(true);
         dateLabel.setMaxWidth(Double.MAX_VALUE);
@@ -110,6 +111,8 @@ public class TreatmentRemindersView {
         Spinner<Integer> intervalSpinner = new Spinner<>(1, 72,
                 existing != null ? existing.getIntervalBetweenDoses() : 12);
         UI.tuneIntSpinner(intervalSpinner);
+        // Choosing how often to be reminded switches reminders on (cards start as "Disabled").
+        intervalSpinner.valueProperty().addListener((o, a, b) -> ReminderNotifyChoice.applyEnabled(notifyChoice, true));
         HBox intervalSpinnerRow = new HBox(10, intervalSpinner);
         intervalSpinnerRow.setAlignment(Pos.CENTER_LEFT);
         VBox intervalBlock = new VBox(8, intervalLabel, intervalSpinnerRow);
@@ -119,14 +122,14 @@ public class TreatmentRemindersView {
                 existing != null ? existing.getCustomMessage() : null
         );
 
-        TextField emailFromNameField = new TextField(overrides.getEmailFromName());
+        TextField emailFromNameField = UI.textField(overrides.getEmailFromName());
         emailFromNameField.setPromptText("Email sender name (optional)");
-        TextField emailSubjectField = new TextField(overrides.getEmailSubject());
+        TextField emailSubjectField = UI.textField(overrides.getEmailSubject());
         emailSubjectField.setPromptText("Email subject (optional)");
 
-        TextField notifTitleField = new TextField(overrides.getNotificationTitle());
+        TextField notifTitleField = UI.textField(overrides.getNotificationTitle());
         notifTitleField.setPromptText("Notification title (optional)");
-        TextField notifPreviewField = new TextField(overrides.getNotificationPreview());
+        TextField notifPreviewField = UI.textField(overrides.getNotificationPreview());
         notifPreviewField.setPromptText("Notification preview line (optional)");
         TextArea notifBodyField = new TextArea(overrides.getNotificationBody());
         notifBodyField.setPromptText("Notification full body (optional)");
@@ -135,8 +138,7 @@ public class TreatmentRemindersView {
         ChoiceBox<String> discreetChoice = DiscreetReminderChoice.create();
         DiscreetReminderChoice.applyFromOverride(discreetChoice, overrides.getDiscreetOverride());
 
-        HBox notifyDiscreetRow = new HBox(16, notifyChoice, discreetChoice);
-        notifyDiscreetRow.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.layout.FlowPane notifyDiscreetRow = ReminderNotifyChoice.row(notifyChoice, discreetChoice);
 
         Label timeIntro = UI.muted(
                 "Set how often we should remind you between doses (based on your dosing schedule).");
@@ -164,10 +166,10 @@ public class TreatmentRemindersView {
             p.setExpanded(false);
         }
 
-        Button saveBtn = UI.primaryButton("Save reminder");
-        Button testEmailBtn = UI.backButton("Send test email");
-        Button testNotifBtn = UI.backButton("Preview notification");
-        Button resetBtn = UI.backButton("Reset to default");
+        Button saveBtn = UI.primaryButton("Save");
+        Button testEmailBtn = UI.secondaryButton("Send test email");
+        Button testNotifBtn = UI.secondaryButton("Preview notification");
+        Button resetBtn = UI.secondaryButton("Reset to default");
         Label saveConfirm = UI.inlineSaveConfirmation();
 
         boolean canReset = defaults != null && defaults.isPresent() && rx.getDosesPerDay() != null && rx.getDosesPerDay() > 0;
@@ -215,14 +217,16 @@ public class TreatmentRemindersView {
             String customJson = toSave.toJson();
 
             boolean saved = controller.savePrescriptionReminder(rx.getPrescriptionId(), notify, interval, customJson);
-            ReminderFeedback.saveResult(saveConfirm, saved);
+            ReminderFeedback.saveResult(saveConfirm, saved, notify);
 
             if (saved && notify) {
                 String email = Data.getCurrentUserEmail();
                 String name = Data.getCurrentUserName();
                 if (email == null) email = "";
                 if (name == null || name.isBlank()) name = email;
-                controller.scheduleTreatmentReminder(rx, email, name, interval, customJson);
+                ReminderFeedback.scheduled(saveConfirm,
+                        controller.scheduleTreatmentReminder(rx, email, name, interval, customJson),
+                        "Saved, but this prescription ends before the next dose is due.");
             }
         });
 
@@ -230,13 +234,7 @@ public class TreatmentRemindersView {
             String recipientEmail = Data.getCurrentUserEmail();
             String recipientName = Data.getCurrentUserName();
             if (recipientEmail == null || recipientEmail.isBlank()) {
-                Alert alert = new Alert(Alert.AlertType.INFORMATION, "No email address is set for the current user.");
-                DialogPane dialogPane = alert.getDialogPane();
-                dialogPane.getStylesheets().addAll(Data.getScene().getStylesheets());
-                Stage stage = (Stage) dialogPane.getScene().getWindow();
-                stage.getIcons().add(new Image(TreatmentRemindersView.class.getResource("/icons/safe.png").toExternalForm()));
-                dialogPane.setGraphic(null);
-                alert.showAndWait();
+                ReminderFeedback.noEmailAlert();
                 return;
             }
             if (recipientName == null || recipientName.isBlank()) {
@@ -261,7 +259,7 @@ public class TreatmentRemindersView {
                     Data.getCurrentUserId(),
                     new TreatmentReminderEmail(
                             recipientEmail, recipientName,
-                            rx.getMedicineName(), rx.getDosage(), nextDoseDate(intervalSpinner.getValue()),
+                            rx.getMedicineName(), rx.getDosage(), nextDoseDate(rx, intervalSpinner.getValue()),
                             current.getEmailSubject(), current.getEmailBodyIntro(), current.getEmailFromName(),
                             DiscreetReminderChoice.isDiscreet(current)
                     ),
@@ -290,7 +288,7 @@ public class TreatmentRemindersView {
                     Data.getCurrentUserName() != null ? Data.getCurrentUserName() : "",
                     rx.getMedicineName(),
                     rx.getDosage(),
-                    nextDoseDate(intervalSpinner.getValue()),
+                    nextDoseDate(rx, intervalSpinner.getValue()),
                     current.getNotificationTitle(),
                     current.getNotificationPreview(),
                     current.getNotificationBody(),

@@ -73,26 +73,18 @@ public class MakeAppointmentReminderNotification extends BaseNotification {
     @Override
     protected Node buildPreviewContent() {
         String previewLine = overridePreview != null ? overridePreview : "You have a booking reminder.";
-        Label preview = UI.body(previewLine);
-        VBox card = UI.card(4, preview);
-        return new VBox(8, UI.titleSm(getTitle()), card);
+        return NotificationLayout.page(getTitle(), patientName, previewLine, null, null);
     }
 
     @Override
     protected Node buildFullContent() {
         if (overrideBody != null) {
-            Label body = new Label(overrideBody);
-            body.setWrapText(true);
-            return new VBox(8, UI.titleSm(getTitle()), body);
+            return NotificationLayout.custom(getTitle(), overrideBody);
         }
-
-        Label reasonLabel = UI.body(overridePreview != null ? overridePreview : reminderReason);
-        Label suggestionLabel = UI.body("We recommend booking a " + suggestedAppointmentType + ".");
-
-        VBox detailsCard = UI.card(4, reasonLabel, suggestionLabel);
-        Label cta = UI.muted("⚠ Please log in to your account to schedule.");
-
-        return new VBox(8, UI.titleSm(getTitle()), detailsCard, cta);
+        return NotificationLayout.page(getTitle(), patientName,
+                overridePreview != null ? overridePreview : reminderReason,
+                NotificationLayout.detailsCard("Suggested", suggestedAppointmentType),
+                "You can book from the Booking tab.");
     }
 
     @Override

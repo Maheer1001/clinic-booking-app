@@ -22,7 +22,7 @@ import view.ui.UI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -42,8 +42,8 @@ public class TrackingPrescriptionController extends TrackingSectionController {
     public String getSearchableText(TrackingData td) {
         PrescriptionSummary pres = (PrescriptionSummary) td;
         String text = pres.name() + " " + pres.dosage() + " " + pres.getCourse() + " " + pres.instructions();
-        LocalDate end = TrackingDates.parse(pres.endDate());
-        text += end == null || end.isAfter(LocalDate.now()) ? " active current" : " inactive past history";
+        // Same rule as the CURRENT / PAST sections, so searching "current" finds what is listed there.
+        text += pres.active() ? " active current" : " inactive past history finished";
         return text;
     }
 
@@ -78,8 +78,9 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         listHistory.visibleProperty().bind(Bindings.isNotEmpty(filteredHistory));
         listHistory.managedProperty().bind(listHistory.visibleProperty());
 
-        Map<PrescriptionSummary, Button> buttonCurrent = new HashMap<>();
-        Map<PrescriptionSummary, Button> buttonHistory = new HashMap<>();
+        // Keyed by identity: a repeated course with identical details must still get a button each.
+        Map<PrescriptionSummary, Button> buttonCurrent = new IdentityHashMap<>();
+        Map<PrescriptionSummary, Button> buttonHistory = new IdentityHashMap<>();
 
         for (PrescriptionSummary prescription : sortedCurrent) {
             String left = prescription.name();
@@ -99,14 +100,10 @@ public class TrackingPrescriptionController extends TrackingSectionController {
             listHistory.getChildren().add(button);
         }
 
-        filteredCurrent.addListener((ListChangeListener<PrescriptionSummary>) c ->
-                listCurrent.getChildren().setAll(filteredCurrent.stream().map(buttonCurrent::get).toList()));
-
+        // Redraw from the sorted views only: each wraps its filtered list, so it also fires when the search
+        // or dates change. Redrawing from the filtered lists as well undid the chosen sort order.
         sortedCurrent.addListener((ListChangeListener<PrescriptionSummary>) c ->
                 listCurrent.getChildren().setAll(sortedCurrent.stream().map(buttonCurrent::get).toList()));
-
-        filteredHistory.addListener((ListChangeListener<PrescriptionSummary>) c ->
-                listHistory.getChildren().setAll(filteredHistory.stream().map(buttonHistory::get).toList()));
 
         sortedHistory.addListener((ListChangeListener<PrescriptionSummary>) c ->
                 listHistory.getChildren().setAll(sortedHistory.stream().map(buttonHistory::get).toList()));
@@ -251,16 +248,34 @@ public class TrackingPrescriptionController extends TrackingSectionController {
         };
     }
 
+    /**
+     * The end of the course for the details card. A finished course whose end date has not come
+     * (the clinic stopped it early) says "Stopped early" rather than "Finished" next to a future date.
+     */
+    static String endText(PrescriptionSummary prescription, LocalDate today) {
+        LocalDate end = TrackingDates.parse(prescription.endDate());
+        if (!prescription.active() && (end == null || !end.isBefore(today))) {
+            return "Stopped early";
+        }
+        if (end == null) {
+            return "Ongoing";
+        }
+        return TrackingDates.display(prescription.endDate());
+    }
+
     @Override
     public Node getDetailsPage(TrackingData td) {
         PrescriptionSummary prescription = (PrescriptionSummary) td;
 
-        HBox graphic = view.getEntryHeader(prescription.name(), prescription.active() ? "Current" : "Finished");
+        HBox graphic = view.getEntryHeader(prescription.name(), "");
+        // Same coloured pill as a test result's status (it was plain text here).
+        Label status = prescription.active() ? statusPill("Current", "current") : statusPill("Finished", "finished");
+        graphic.getChildren().set(graphic.getChildren().size() - 1, status);
+        graphic.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         HBox doseRow = new HBox(16, UI.detail("DOSE", prescription.dosage()), UI.detail("HOW OFTEN", prescription.getCourse()));
         HBox dateRow = new HBox(16, UI.detail("STARTED", TrackingDates.display(prescription.startDate())),
-                UI.detail("ENDS", prescription.endDate() == null || prescription.endDate().isEmpty()
-                        ? "Ongoing" : TrackingDates.display(prescription.endDate())));
+                UI.detail(prescription.active() ? "ENDS" : "ENDED", endText(prescription, LocalDate.now())));
         for (HBox row : List.of(doseRow, dateRow)) {
             for (Node n : row.getChildren()) {
                 HBox.setHgrow(n, Priority.ALWAYS);
@@ -291,9 +306,9 @@ public class TrackingPrescriptionController extends TrackingSectionController {
             bookingReminderButton.setOnAction(e -> nav.goToPageNewTab("reminders", new RemindersView(Data.getCurrentUserId()).getRemindersScene("prescriptions"), "Reminders", true));
             HBox reminder = UI.callout("A reminder makes it easier to take every dose on time.", bookingReminderButton);
 
-            return UI.page(UI.card(12, graphic, info), reminder);
+            return withTrackingStyles(UI.page(UI.card(12, graphic, info), reminder));
         } else {
-            return UI.page(UI.card(12, graphic, info));
+            return withTrackingStyles(UI.page(UI.card(12, graphic, info)));
         }
     }
 }

@@ -99,15 +99,13 @@ Booking uses **Data.getBooking()** (a single `Book` instance) to accumulate clin
 
 | Screen | Who builds it | Reads | Writes | Next |
 |--------|----------------|-------|--------|------|
-| **Home** | `view.Home.getPage(nav)` | — | — | ViewBookings, ClinicSearch, Reschedule, Cancel |
-| **View Bookings** | `view.ViewBookings.getPage(nav)` | `Data.getCurrentUserId()`, **AppointmentDAO** | — | List or details → Reschedule / Cancel |
+| **Home** | `view.Home.getPage(nav)` | — | — | Upcoming bookings (details, Reschedule, Cancel in `MainView`), ClinicSearch |
 | **Clinic Search** | `view.ClinicSearch.getPage(nav)` | **ClinicDAO**, **ServiceDAO** | `Data.getBooking().setClinic(c)` | ServiceSelection |
 | **Service Selection** | `view.ServiceSelection.getPage(nav)` | `Data.getBooking().getClinic()` | `Data.getBooking().setService(s)` | PersonalInfo |
 | **Personal Info** | `view.PersonalInfo.getPage(nav)` | — | `Data.getBooking()` (name, DOB, etc.) | DateTime |
 | **Date/Time** | `view.DateTime.getPage(nav)` | `Data.getBooking()`, **AppointmentDAO** (slots) | `Data.getBooking().setTimeslotId/Date/Time` | Review |
 | **Review** | `view.Review.getPage(nav)` | `Data.getBooking()`, `Data.getCurrentUserId()` | **AppointmentDAO.save()**, `Data.reset()` | goToHome |
 | **Reschedule** | `view.Reschedule.getPage(nav)` / `getPageWithAppId(nav, id)` | `Data.getCurrentUserId()`, **AppointmentDAO** | **AppointmentDAO.rescheduleAppointment()** | — |
-| **Cancel** | `view.Cancel.getPage(nav)` | `Data.getCurrentUserId()`, **AppointmentDAO** | **AppointmentDAO.cancelAppointment()** | — |
 
 - **AppointmentDAO** is used for: upcoming/past lists, available timeslots, save booking, reschedule, cancel, and “is this appointment owned by this user?” (`isUpcomingAppointmentForUser`).
 - **ClinicDAO** and **ServiceDAO** are used in ClinicSearch and ServiceSelection. **Data.getBooking()** is the only place booking form state lives until it’s saved in Review.
@@ -194,7 +192,7 @@ Booking (Home → ClinicSearch → ServiceSelection → PersonalInfo → DateTim
   → BookingController → BookingService → ClinicDAO, ServiceDAO, TimeslotDAO, AppointmentDAO
   → Data.getBooking() (read/write)
 
-View Bookings / Reschedule / Cancel
+Upcoming bookings / Reschedule / Cancel (MainView)
   → ViewAppointmentController → AppointmentDAO
 
 Tracking

@@ -44,7 +44,7 @@ class TestResultNotificationTest {
 
     @Test
     void getMessageShouldContainFormattedDate() {
-        assertTrue(notification.getMessage().contains("05 February 2026"));
+        assertTrue(notification.getMessage().contains("5 Feb 2026"));
     }
 
     @Test
@@ -53,8 +53,26 @@ class TestResultNotificationTest {
     }
 
     @Test
-    void getMessageShouldContainSecurityInstruction() {
-        assertTrue(notification.getMessage().contains("log in"));
+    void getMessageShouldSayWhereToSeeResults() {
+        assertTrue(notification.getMessage().contains("Tracking"));
+    }
+
+    @Test
+    void updatedResultSaysUpdatedButNotTheResult() {
+        TestResultNotification updated = new TestResultNotification(patientName, testType, testDate, true);
+        assertEquals("Test Result Updated", updated.getTitle());
+        String text = updated.getMessage();
+        assertTrue(text.contains("updated test result"), text);
+        assertTrue(text.contains(testType) && text.contains("5 Feb 2026"), text);
+        String lower = text.toLowerCase();
+        assertFalse(lower.contains("positive") || lower.contains("negative") || lower.contains("pending"), text);
+    }
+
+    @Test
+    void newlyReleasedResultSaysAvailable() {
+        TestResultNotification released = new TestResultNotification(patientName, testType, testDate, false);
+        assertEquals("Test Results Ready", released.getTitle());
+        assertTrue(released.getMessage().contains("Available"));
     }
 
     @Test

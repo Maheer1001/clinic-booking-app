@@ -82,6 +82,7 @@
 
 .app-reminder-tab {
     -fx-font-size: 16px; /* +2 */
+    -fx-padding: 8px 4px; /* narrower sides: with bold text the three tabs were cut to "Appointme..." at 420px */
 }
 
 .app-reminder-titled-pane > .title {
@@ -117,7 +118,8 @@
 }
 
 .app-nav-btn {
-    -fx-font-size: 20px; /* +2 */
+    -fx-font-size: 18px; /* +2; 20px cut "Reminders" short at the 420px window width */
+    -fx-padding: 4px 2px 4px 2px;
 }
 
 .app-shortcut-btn {
@@ -179,3 +181,11 @@
 .label.appointment-meta { -fx-font-size: 15px; }
 .label.appointment-place { -fx-font-size: 15px; }
 .entry-header .label.entry-title { -fx-font-size: 20px; }
+
+.app-btn-block {
+    -fx-font-size: 18px; /* +2 */
+}
+
+.label.service-name {
+    -fx-font-size: 16px; /* +2 */
+}

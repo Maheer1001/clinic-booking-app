@@ -80,6 +80,9 @@ INSERT INTO "Prescription" (prescription_id, user_id, clinic_id, medicine_id, te
         'One tablet a day with or without food.', true)
 ON CONFLICT (prescription_id) DO NOTHING;
 
+-- Results are only shown to the patient once staff release them; the demo results are released.
+UPDATE "Test" SET released_at = test_date WHERE user_id = 1001 AND released_at IS NULL;
+
 -- Keep the SERIAL sequences ahead of the explicit ids above.
 SELECT setval(pg_get_serial_sequence('"Medicine"', 'medicine_id'), (SELECT MAX(medicine_id) FROM "Medicine"));
 SELECT setval(pg_get_serial_sequence('"Timeslot"', 'timeslot_id'), (SELECT MAX(timeslot_id) FROM "Timeslot"));

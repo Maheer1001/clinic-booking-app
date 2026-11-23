@@ -71,6 +71,8 @@ public final class UI {
     public static final String ALERT_AGREE  = "alert-agree";
     public static final String ALERT_IGNORE  = "alert-ignore";
     public static final String TEXT_FIELD = "app-text-field";
+    /** Full-width, primary-height sizing shared by every in-page action button. */
+    public static final String BTN_BLOCK = "app-btn-block";
 
     /** Page container with standard padding/spacing. */
     public static VBox page(Node... children) {
@@ -142,21 +144,40 @@ public final class UI {
         return v;
     }
 
-    /** Primary action button. */
+    /*
+     * Button roles. Every in-page action uses one of these three, full width and the same height,
+     * stacked in this order: primary first, then secondary, destructive last.
+     */
+
+    /** Primary action button (filled). */
     public static Button primaryButton(String text) {
         Button b = new Button(text);
-        b.getStyleClass().add(BTN);
+        b.getStyleClass().addAll(BTN, BTN_BLOCK);
         return b;
     }
 
-    /** Back / secondary button. */
+    /** Secondary action (outlined, same size as {@link #primaryButton}), e.g. "Change reminder", "Send test email". */
+    public static Button secondaryButton(String text) {
+        Button b = new Button(text);
+        b.getStyleClass().addAll(BTN_BACK, BTN_BLOCK);
+        return b;
+    }
+
+    /** Destructive action (red outline, same size as {@link #primaryButton}), e.g. "Cancel appointment". */
+    public static Button destructiveButton(String text) {
+        Button b = new Button(text);
+        b.getStyleClass().addAll(BTN_DANGER, BTN_BLOCK);
+        return b;
+    }
+
+    /** Compact outlined button for the header icons and small inline controls; use {@link #secondaryButton} in pages. */
     public static Button backButton(String text) {
         Button b = new Button(text);
         b.getStyleClass().add(BTN_BACK);
         return b;
     }
 
-    /** Remove / destructive secondary button (light fill, red border and text). */
+    /** Compact destructive button for inline rows (e.g. "Remove" on a reminder row); use {@link #destructiveButton} in pages. */
     public static Button dangerButton(String text) {
         Button b = new Button(text);
         b.getStyleClass().add(BTN_DANGER);
@@ -305,6 +326,73 @@ public final class UI {
         button.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_EXITED, e -> timeline.stop());
     }
 
+    /**
+     * A label that wraps onto more lines and makes its row taller, even inside a button graphic,
+     * a list cell or a TitledPane header. Those ask for the height with no width (-1), which a
+     * plain wrapping Label answers with one line, so long names ("Pregnancy Testing and Options
+     * Counselling") were cut to "Pregnancy Testing and Options ...". This one answers with the
+     * width it was last laid out at.
+     */
+    public static Label wrappingLabel(String text) {
+        Label l = new Label(text) {
+            @Override
+            protected double computePrefHeight(double width) {
+                // Rows often ask with no width, or with the label's one-line width; both would
+                // give one line, so the width it actually has is used instead.
+                double laidOut = getWidth();
+                boolean useLaidOut = laidOut > 0 && (width < 0 || width > laidOut);
+                return super.computePrefHeight(useLaidOut ? laidOut : width);
+            }
+
+            @Override
+            protected double computeMinHeight(double width) {
+                return computePrefHeight(width);
+            }
+        };
+        l.setWrapText(true);
+        l.setMinWidth(0);
+        // The width arrives during a layout pass, where a new layout request would be dropped, so the
+        // row is asked to re-measure on the next pulse.
+        l.widthProperty().addListener((o, was, now) -> {
+            if (was.doubleValue() != now.doubleValue()) {
+                // requestLayout on the label itself clears its cached height and then its parents'.
+                javafx.application.Platform.runLater(l::requestLayout);
+            }
+        });
+        // Switching text size, bold or high contrast changes the font without changing the width.
+        l.fontProperty().addListener((o, was, now) -> javafx.application.Platform.runLater(l::requestLayout));
+        return l;
+    }
+
+    /**
+     * Wraps a login / sign-up / password-reset screen so it scrolls when it is taller than the window
+     * (the reset card alone is about 728px, and large text makes every auth screen taller). The page
+     * still fills the window when it is shorter, so its background reaches the bottom.
+     */
+    public static ScrollPane authPage(javafx.scene.Parent content) {
+        ScrollPane sp = new ScrollPane(content);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        sp.getStyleClass().add("auth-scroll");
+        if (content instanceof Region r) {
+            r.minHeightProperty().bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                    () -> sp.getViewportBounds().getHeight(), sp.viewportBoundsProperty()));
+        }
+        return sp;
+    }
+
+    /**
+     * For a button whose content is a graphic holding a {@link #wrappingLabel} (list rows, appointment
+     * cards): the button is measured at its real width, so the row grows when the name wraps.
+     * As a plain labelled button it measured the graphic with no width and stayed one line tall
+     * at large text sizes.
+     */
+    public static void growWithGraphic(Labeled button) {
+        button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        button.setWrapText(true);
+        button.setMinHeight(Region.USE_PREF_SIZE);
+    }
+
     /** Muted/secondary text. */
     public static Label muted(String text) {
         Label l = new Label(text);
@@ -374,8 +462,16 @@ public final class UI {
         return l;
     }
 
+    /** Every in-place save says "Saved." first, optionally followed by what happens next. */
+    public static final String SAVED = "Saved.";
+
     public static void showSaveConfirmation(Label label) {
-        label.setText("Changes have been saved.");
+        label.setText(SAVED);
+    }
+
+    /** "Saved. " followed by a short note, e.g. "Saved. New bookings will use these defaults." */
+    public static void showSaveConfirmation(Label label, String detail) {
+        label.setText(detail == null || detail.isBlank() ? SAVED : SAVED + " " + detail);
     }
 
     public static HBox equalSpacing(HBox hbox) {
@@ -428,11 +524,16 @@ public final class UI {
         leftLabel.setWrapText(true);
         leftLabel.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(leftLabel, Priority.ALWAYS);
+        // The date or dose goes under the name: beside it, "Wed 25 Nov 2026, 15:00" was squeezed onto three lines.
         Label rightLabel = new Label(right);
-        HBox.setHgrow(rightLabel, Priority.ALWAYS);
+        rightLabel.getStyleClass().add("detail-value");
         rightLabel.setWrapText(true);
-        rightLabel.setMinWidth(80);
-        HBox row = new HBox(12, leftLabel, rightLabel);
+        rightLabel.setMaxWidth(Double.MAX_VALUE);
+        VBox text = new VBox(2, leftLabel);
+        if (right != null && !right.isBlank()) text.getChildren().add(rightLabel);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        text.setMaxWidth(Double.MAX_VALUE);
+        HBox row = new HBox(12, text);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setMaxWidth(Double.MAX_VALUE);
         row.getStyleClass().add(REMINDER_CARD_HEADER);

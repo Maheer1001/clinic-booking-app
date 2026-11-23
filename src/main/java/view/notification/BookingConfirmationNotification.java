@@ -4,10 +4,10 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import model.ReminderTemplateOverrides;
+import view.ui.Dates;
 import view.ui.UI;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Notification popup to confirm a newly booked appointment.
@@ -73,12 +73,7 @@ public class BookingConfirmationNotification extends BaseNotification {
         }
         return "Hi " + patientName + ",\n\n"
                 + "Your appointment has been confirmed:\n\n"
-                + "Reference: " + bookingReference + "\n"
-                + "Type: " + appointmentType + "\n"
-                + "Date: " + appointmentDateTime.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")) + "\n"
-                + "Time: " + appointmentDateTime.format(DateTimeFormatter.ofPattern("HH:mm")) + "\n"
-                + "Location: " + clinicLocation + "\n"
-                + "Clinician: " + doctorName;
+                + NotificationLayout.detailsText(rows());
     }
 
     @Override
@@ -90,29 +85,22 @@ public class BookingConfirmationNotification extends BaseNotification {
     protected Node buildPreviewContent() {
         String custom = overrideNotificationText();
         if (custom != null) {
-            Label body = new Label(custom);
-            body.setWrapText(true);
-            return new VBox(10, UI.titleSm(getTitle()), UI.card(10, body));
+            return NotificationLayout.custom(getTitle(), custom);
         }
-
-        Label heading = UI.titleSm(getTitle());
-        Label hi = UI.body("Hi " + patientName + ",");
         if (discreet) {
-            Label msg = UI.body("Your appointment has been confirmed.");
-            Label hint = UI.muted("Open the app for full details.");
-            return new VBox(10, heading, hi, msg, UI.card(8, hint));
+            return NotificationLayout.page(getTitle(), patientName, "Your appointment has been confirmed.",
+                    null, "Open the app for full details.");
         }
+        return NotificationLayout.page(getTitle(), patientName, null, NotificationLayout.detailsCard(rows()), null);
+    }
 
-        String dateStr = appointmentDateTime.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy"));
-        String timeStr = appointmentDateTime.format(DateTimeFormatter.ofPattern("HH:mm"));
-        VBox card = UI.card(8,
-                NotificationLayout.detailRow("Reference", bookingReference),
-                NotificationLayout.detailRow("Type", appointmentType),
-                NotificationLayout.detailRow("Date", dateStr),
-                NotificationLayout.detailRow("Time", timeStr),
-                NotificationLayout.detailRow("Location", clinicLocation),
-                NotificationLayout.detailRow("Clinician", doctorName)
-        );
-        return new VBox(10, heading, hi, card);
+    private String[] rows() {
+        return new String[]{
+                "Reference", bookingReference,
+                "Type", appointmentType,
+                "Date", Dates.full(appointmentDateTime.toLocalDate()),
+                "Time", Dates.time(appointmentDateTime.toLocalTime()),
+                "Location", clinicLocation,
+                "Clinician", doctorName};
     }
 }

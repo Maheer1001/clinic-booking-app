@@ -9,11 +9,11 @@ import java.util.function.Supplier;
  * Runs slow work (database calls, password hashing, sending email) off the JavaFX
  * application thread and hands the result back on it, so the window stays responsive.
  */
-final class Background {
+public final class Background {
 
     private Background() {}
 
-    static <T> void run(Supplier<T> work, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
+    public static <T> void run(Supplier<T> work, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
         Thread t = new Thread(() -> {
             try {
                 T result = work.get();

@@ -1,5 +1,6 @@
 package view.reminders;
 
+import view.ui.UI;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -28,17 +29,17 @@ public final class BookingCommTemplateFields {
                 ? initial
                 : new ReminderTemplateOverrides(null, null, null, null, null, null, null);
 
-        emailFromNameField = new TextField(blankToEmpty(o.getEmailFromName()));
+        emailFromNameField = UI.textField(blankToEmpty(o.getEmailFromName()));
         emailFromNameField.setPromptText("Email sender name (optional)");
-        emailSubjectField = new TextField(blankToEmpty(o.getEmailSubject()));
+        emailSubjectField = UI.textField(blankToEmpty(o.getEmailSubject()));
         emailSubjectField.setPromptText("Email subject (optional)");
         emailBodyIntroField = new TextArea(blankToEmpty(o.getEmailBodyIntro()));
         emailBodyIntroField.setPromptText("Email body intro (optional, appears after greeting)");
         emailBodyIntroField.setPrefRowCount(2);
 
-        notifTitleField = new TextField(blankToEmpty(o.getNotificationTitle()));
+        notifTitleField = UI.textField(blankToEmpty(o.getNotificationTitle()));
         notifTitleField.setPromptText("Notification title (optional)");
-        notifPreviewField = new TextField(blankToEmpty(o.getNotificationPreview()));
+        notifPreviewField = UI.textField(blankToEmpty(o.getNotificationPreview()));
         notifPreviewField.setPromptText("Notification preview line (optional)");
         notifBodyField = new TextArea(blankToEmpty(o.getNotificationBody()));
         notifBodyField.setPromptText("Notification full body (optional)");
