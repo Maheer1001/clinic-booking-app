@@ -145,6 +145,25 @@ class TrackingDAOTest {
     }
 
     @Test
+    void pastAppointments_includeLaterTodayOnceStaffRecordedTheOutcome() throws Exception {
+        LocalDateTime now = LocalDateTime.now();
+        // later today (skipped in the last minutes before midnight, when "later" is tomorrow)
+        Assumptions.assumeTrue(now.toLocalTime().isBefore(LocalTime.of(23, 50)));
+        LocalDateTime later = now.plusMinutes(5);
+        appointment(later, "COMPLETED", "attended early");
+        appointment(later, "NO_SHOW", "missed early");
+        appointment(later, "CONFIRMED", "still to come");
+        appointment(now.plusDays(2), "NO_SHOW", "future no-show");
+
+        AppointmentDAO dao = new AppointmentDAO();
+        List<String> past = dao.getPastAppointmentDetailsByUserId(USER).stream()
+                .map(AppointmentDetails::notes).sorted().toList();
+        assertEquals(List.of("attended early", "missed early"), past);
+        assertEquals(List.of("still to come"), dao.getUpcomingAppointmentDetailsByUserId(USER).stream()
+                .map(model.UpcomingAppointmentDetails::notes).toList());
+    }
+
+    @Test
     void upcomingAppointments_neverNoShowOrCancelled() throws Exception {
         LocalDateTime now = LocalDateTime.now();
         appointment(now.plusDays(2), "CONFIRMED", "booked");

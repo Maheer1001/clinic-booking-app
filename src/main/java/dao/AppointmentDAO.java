@@ -249,6 +249,8 @@ public class AppointmentDAO implements AppointmentRepository {
      * (listed as missed), and booked (CONFIRMED) ones whose time has passed. Never CANCELLED. Nothing in the app moves a booking to COMPLETED, so
      * counting only those left the patient's own past bookings out of their history; and the old
      * "date before today" check (on the database server's clock) hid visits from earlier today.
+     * Staff can record attendance from the start of the day, so a visit later today that is already
+     * marked attended or missed is listed here too (it is no longer upcoming either).
      */
     @Override
     public List<AppointmentDetails> getPastAppointmentDetailsByUserId(int userId) {
@@ -259,9 +261,9 @@ public class AppointmentDAO implements AppointmentRepository {
             JOIN "Timeslot" t ON a.timeslot_id = t.timeslot_id
             JOIN "Service" s ON t.service_id = s.service_id
             JOIN "Clinic" c ON t.clinic_id = c.clinic_id
-            WHERE a.user_id = ? AND a.status IN ('COMPLETED', 'CONFIRMED', 'NO_SHOW') AND NOT
-            """ + NOT_STARTED + """
-
+            WHERE a.user_id = ? AND a.status IN ('COMPLETED', 'CONFIRMED', 'NO_SHOW')
+              AND (NOT """ + NOT_STARTED + """
+                   OR (a.status IN ('COMPLETED', 'NO_SHOW') AND t.date <= ?))
             ORDER BY t.date DESC, t.start_time DESC
             """;
         List<AppointmentDetails> list = new ArrayList<>();
@@ -269,6 +271,7 @@ public class AppointmentDAO implements AppointmentRepository {
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, userId);
             bindNow(ps, 2);
+            ps.setObject(5, LocalDateTime.now().toLocalDate());
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     list.add(toAppointmentDetails(rs));
