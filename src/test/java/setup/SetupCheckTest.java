@@ -63,6 +63,8 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -70,18 +72,25 @@ import static org.junit.jupiter.api.Assertions.*;
  * "Is my setup hooked up?" Run with {@code mvn test -Psetup-check} after filling in {@code .env}.
  *
  * <p>The steps run in order and each one says what to fix when it fails; a step whose prerequisite
- * failed is skipped rather than failing with a confusing error. Everything the check creates (users,
- * a clinic, a service, slots, bookings, reminders, staff memberships, audit rows) is named
- * {@code setup-check...} and removed again in the last step, so it is safe to run on a fresh database
- * and on one that is already in use, as often as you like.
+ * failed is skipped rather than failing with a confusing error.
+ *
+ * <p>Nothing is written to your own tables apart from what the app itself does on every start
+ * ({@code DB.initTables}). The write round trips (users, a clinic, bookings, reminders, staff) run in a
+ * temporary database {@code setup_check_<epoch seconds>_<random>} on the same server, built with
+ * {@code DB.initTables} and dropped at the end, so the check never deletes rows from your tables or
+ * touches the append-only {@code AuditLog} guard. (A separate database rather than a schema, because
+ * connection poolers such as Neon's or PgBouncer in transaction mode do not keep a per-connection
+ * search_path.) Temporary databases over an hour old, from a run that was killed, are dropped at the
+ * start. Safe on a fresh database and on one already in use, as often as you like.
  *
  * <ol>
  *   <li>.env is found and has the database keys</li>
  *   <li>the database is reachable with those details</li>
- *   <li>DB.initTables creates the schema on an empty database and upgrades this one</li>
- *   <li>sign-up, booking, reminders and staff approval round-trip through the real DAOs</li>
+ *   <li>DB.initTables creates the schema on an empty database (the temporary one) and upgrades yours</li>
+ *   <li>sample clinics can be read from your database; sign-up, booking, reminders and staff approval
+ *       round-trip through the real DAOs in the temporary database</li>
  *   <li>SMTP: login check (no email sent); a real send only if SETUP_CHECK_EMAIL_TO is set</li>
- *   <li>cleanup: nothing the check created is left behind</li>
+ *   <li>cleanup: the temporary database is dropped</li>
  * </ol>
  */
 @Tag("db")
@@ -101,8 +110,11 @@ class SetupCheckTest {
             "BookingReminder", "BookingDetails", "StaffClinic", "ClinicStaffCode", "StaffCodeAttempt",
             "AuditLog", "SchemaMigration");
 
-    /** Everything the check creates is recognisable by these, so a crashed run is cleaned up next time. */
-    static final String EMAIL_PREFIX = "setup-check.";
+    /** Temporary databases are named setup_check_<epoch seconds>_<8 hex>; only these are ever dropped. */
+    static final String SCRATCH_PREFIX = "setup_check_";
+    static final String SCRATCH_PATTERN = "^setup_check_([0-9]+)_[0-9a-f]{8}$";
+    static final long STALE_AFTER_SECONDS = 3600;
+
     static final String EMAIL_DOMAIN = "@example.com";
     static final String CLINIC_PREFIX = "Setup check clinic ";
     static final String SERVICE_PREFIX = "Setup check service ";
@@ -113,6 +125,11 @@ class SetupCheckTest {
     private final String nonce = UUID.randomUUID().toString().substring(0, 8);
 
     private boolean envOk, dbOk, schemaOk;
+    /** DB_URL as configured, and the same URL pointed at the temporary database (null if there is none). */
+    private String realUrl, scratchUrl;
+    private String scratch;
+    /** Row counts in your own "User" and "AuditLog" after step 3b, compared again in step 6. */
+    private long[] realCounts;
     private int clinicId, serviceId;
     private Integer patientId;
     private Integer bookedAppId;
@@ -224,6 +241,7 @@ class SetupCheckTest {
             // DB.connect already turns driver errors into "check X in .env" messages.
             fail("Could not connect: " + e.getMessage());
         }
+        realUrl = DB.getUrl();
         dbOk = true;
     }
 
@@ -231,37 +249,80 @@ class SetupCheckTest {
 
     @Test
     @Order(3)
-    @DisplayName("3a. DB.initTables builds the full schema on an empty database (scratch schema, dropped after)")
+    @DisplayName("3a. DB.initTables builds the full schema on an empty database (temporary database)")
     void step3a_initTablesOnEmptyDatabase() throws SQLException {
         requireStep(dbOk, "step 2 (database connection) failed");
-        String scratch = "setup_check_" + nonce;
+        dropStaleScratchDatabases();
+        String name = SCRATCH_PREFIX + (System.currentTimeMillis() / 1000) + "_" + nonce;
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("CREATE DATABASE " + name);
+        } catch (SQLException e) {
+            note("this login may not create databases (" + e.getMessage() + "): the empty-database check "
+                    + "and the write round trips (4b-4e) are skipped rather than writing to your tables");
+            skip("cannot create a temporary database; step 3b still checks your schema");
+        }
+        scratch = name;
+        scratchUrl = withDatabase(realUrl, scratch);
+        DB.setUrl(scratchUrl);
         try (Connection c = DB.connect()) {
-            try (Statement s = c.createStatement()) {
-                s.execute("CREATE SCHEMA " + scratch);
-            } catch (SQLException e) {
-                skip("this login may not create schemas (" + e.getMessage()
-                        + "), so the empty-database check cannot run here. Step 3b still checks your schema.");
-            }
-            try {
-                try (Statement s = c.createStatement()) {
-                    s.execute("SET search_path TO " + scratch);
+            DB.initTables(c);
+            DB.initTables(c); // a second start must not fail
+            String schema = c.getSchema();
+            assertTablesExist(c, schema);
+            assertStaffClinicRoleColumn(c, schema);
+            assertTrue(uniqueEmailIndexExists(c, schema),
+                    "On an empty database DB.initTables should create the unique index "
+                            + DB.USER_EMAIL_UNIQUE_INDEX + " on \"User\"(LOWER(email))");
+        } finally {
+            useRealDatabase();
+        }
+        ok("an empty database gets all " + EXPECTED_TABLES.size()
+                + " tables, the per-clinic role column and the unique email index (database " + scratch + ")");
+    }
+
+    /** DB_URL with its database name replaced, keeping host, port and parameters. */
+    static String withDatabase(String url, String database) {
+        String prefix = "jdbc:postgresql://";
+        int slash = url.indexOf('/', prefix.length());
+        if (slash < 0) throw new IllegalArgumentException("DB_URL has no database name");
+        int query = url.indexOf('?', slash);
+        return url.substring(0, slash + 1) + database + (query < 0 ? "" : url.substring(query));
+    }
+
+    /** Drops setup_check_* databases left by a run that was killed more than an hour ago. */
+    private static void dropStaleScratchDatabases() throws SQLException {
+        long cutoff = System.currentTimeMillis() / 1000 - STALE_AFTER_SECONDS;
+        Pattern pattern = Pattern.compile(SCRATCH_PATTERN);
+        try (Connection c = DB.connect()) {
+            List<String> stale = new ArrayList<>();
+            try (Statement s = c.createStatement();
+                 ResultSet rs = s.executeQuery("SELECT datname FROM pg_database")) {
+                while (rs.next()) {
+                    Matcher m = pattern.matcher(rs.getString(1));
+                    if (m.matches() && Long.parseLong(m.group(1)) < cutoff) stale.add(m.group());
                 }
-                DB.initTables(c);
-                DB.initTables(c); // a second start must not fail
-                assertTablesExist(c, scratch);
-                assertStaffClinicRoleColumn(c, scratch);
-                assertTrue(uniqueEmailIndexExists(c, scratch),
-                        "On an empty database DB.initTables should create the unique index "
-                                + DB.USER_EMAIL_UNIQUE_INDEX + " on \"User\"(LOWER(email))");
-                ok("an empty database gets all " + EXPECTED_TABLES.size()
-                        + " tables, the per-clinic role column and the unique email index");
-            } finally {
+            }
+            for (String name : stale) {
                 try (Statement s = c.createStatement()) {
-                    s.execute("SET search_path TO DEFAULT");
-                    s.execute("DROP SCHEMA IF EXISTS " + scratch + " CASCADE");
+                    s.execute("DROP DATABASE " + name + " WITH (FORCE)");
+                    note("dropped " + name + ", left by an earlier run that was interrupted");
+                } catch (SQLException e) {
+                    note("could not drop the old temporary database " + name + ": " + e.getMessage());
                 }
             }
         }
+    }
+
+    /** Points every DAO at the temporary database, or skips the step when there is none. */
+    private void useScratchDatabase() {
+        requireStep(scratchUrl != null, "no temporary database (step 3a), so this write check is skipped "
+                + "rather than run against your own tables");
+        DB.setUrl(scratchUrl);
+    }
+
+    /** Back to the database as configured. */
+    private void useRealDatabase() {
+        if (realUrl != null) DB.setUrl(realUrl);
     }
 
     @Test
@@ -298,6 +359,7 @@ class SetupCheckTest {
                 assertTrue(rs.getInt(1) > 0, "the append-only trigger on \"AuditLog\" is missing");
             }
             ok("schema '" + schema + "' is up to date (tables, per-clinic roles, unique email, audit trigger)");
+            realCounts = realCounts(c);
         }
         schemaOk = true;
     }
@@ -350,13 +412,12 @@ class SetupCheckTest {
     @DisplayName("4a. clinics and services can be read (docs/sample-data.sql loaded?)")
     void step4a_sampleDataIsReadable() throws SQLException {
         requireStep(schemaOk, "step 3 (schema) failed");
-        removeLeftovers(); // from an earlier run that was killed before its cleanup
-        List<Clinic> clinics = new ClinicDAO().findAll().stream()
-                .filter(c -> c.getName() == null || !c.getName().startsWith(CLINIC_PREFIX)).toList();
+        useRealDatabase(); // read-only
+        List<Clinic> clinics = new ClinicDAO().findAll();
         if (clinics.isEmpty()) {
             skip("there are no clinics yet, so the booking screens will be empty. Load "
                     + "docs/sample-data.sql (psql ... -f docs/sample-data.sql); the rest of the check uses its "
-                    + "own temporary clinic.");
+                    + "own temporary clinic in the temporary database.");
         }
         ServiceDAO services = new ServiceDAO();
         long withServices = clinics.stream().filter(c -> !services.findByClinicId(c.getId()).isEmpty()).count();
@@ -369,7 +430,7 @@ class SetupCheckTest {
     @Order(6)
     @DisplayName("4b. a patient can sign up, sign in, and the email is unique ignoring case")
     void step4b_patientSignUp() throws SQLException {
-        requireStep(schemaOk, "step 3 (schema) failed");
+        useScratchDatabase();
         String email = email("patient");
         AuthService auth = new AuthService();
 
@@ -409,7 +470,8 @@ class SetupCheckTest {
     @Order(7)
     @DisplayName("4c. the patient can book a slot at a clinic (temporary clinic and service)")
     void step4c_booking() throws SQLException {
-        requireStep(patientId != null, "step 4b (sign-up) failed");
+        requireStep(patientId != null, "step 4b (sign-up) failed or was skipped");
+        useScratchDatabase();
         createClinicAndService();
         BookingService booking = new BookingService();
 
@@ -458,7 +520,8 @@ class SetupCheckTest {
     @Order(8)
     @DisplayName("4d. reminders are saved for the booking, and cancelling frees the slot")
     void step4d_remindersAndCancel() {
-        requireStep(bookedAppId != null, "step 4c (booking) failed");
+        requireStep(bookedAppId != null, "step 4c (booking) failed or was skipped");
+        useScratchDatabase();
         ReminderDAO reminders = new ReminderDAO();
 
         assertTrue(reminders.saveAppointmentReminder(patientId, bookedAppId, true, "1,3", "setup check"),
@@ -485,7 +548,7 @@ class SetupCheckTest {
     @Order(9)
     @DisplayName("4e. staff sign up with a clinic code, wait for approval, and get their per-clinic role")
     void step4e_staffMembershipAndApproval() throws SQLException {
-        requireStep(schemaOk, "step 3 (schema) failed");
+        useScratchDatabase();
         if (clinicId == 0) createClinicAndService();
         String code = "setup-check-" + nonce;
         try (Connection c = DB.connect();
@@ -569,7 +632,7 @@ class SetupCheckTest {
     }
 
     private String email(String who) {
-        return EMAIL_PREFIX + who + "." + nonce + EMAIL_DOMAIN;
+        return "setup-check." + who + "." + nonce + EMAIL_DOMAIN;
     }
 
     // ------------------------------------------------------------------ 5. SMTP
@@ -649,117 +712,61 @@ class SetupCheckTest {
 
     @Test
     @Order(12)
-    @DisplayName("6. everything the check created is removed")
+    @DisplayName("6. the temporary database is dropped and your own tables were not written to")
     void step6_cleanUp() throws SQLException {
         requireStep(dbOk, "step 2 (database connection) failed");
-        List<String> notes = removeLeftovers();
-        try (Connection c = DB.connect()) {
-            assertEquals(0, count(c, "SELECT COUNT(*) FROM \"User\" WHERE email LIKE ?", EMAIL_PREFIX + "%" + EMAIL_DOMAIN),
-                    "setup-check users left behind");
-            assertEquals(0, count(c, "SELECT COUNT(*) FROM \"Clinic\" WHERE name LIKE ?", CLINIC_PREFIX + "%"),
-                    "setup-check clinics left behind");
-            assertEquals(0, count(c, "SELECT COUNT(*) FROM \"Service\" WHERE name LIKE ?", SERVICE_PREFIX + "%"),
-                    "setup-check services left behind");
+        useRealDatabase();
+        if (scratch != null) {
+            dropScratchDatabase();
+            try (Connection c = DB.connect();
+                 PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM pg_database WHERE datname = ?")) {
+                ps.setString(1, scratch);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertEquals(0, rs.getInt(1), "the temporary database " + scratch + " should be gone");
+                }
+            }
+            ok("dropped the temporary database " + scratch + " with everything the round trips created");
         }
-        notes.forEach(SetupCheckTest::note);
-        ok("cleaned up: no setup-check users, clinics, services, slots, bookings or reminders remain");
+        if (realCounts != null) {
+            try (Connection c = DB.connect()) {
+                long[] after = realCounts(c);
+                if (after[0] == realCounts[0] && after[1] == realCounts[1]) {
+                    ok("your own \"User\" and \"AuditLog\" row counts are unchanged");
+                } else {
+                    // Not a failure: the app may be running against this database at the same time.
+                    note("\"User\"/\"AuditLog\" row counts changed during the check (" + realCounts[0] + "/"
+                            + realCounts[1] + " -> " + after[0] + "/" + after[1] + "); the check itself writes "
+                            + "only to its temporary database, so another app instance is probably using this database");
+                }
+            }
+        }
     }
 
     @AfterAll
-    void cleanUpEvenIfAStepFailed() {
-        if (!dbOk) return;
+    void restoreAndDropEvenIfAStepFailed() {
+        useRealDatabase();
+        if (scratch == null) return;
         try {
-            removeLeftovers();
+            dropScratchDatabase();
         } catch (SQLException e) {
-            System.err.println("[setup-check] could not clean up: " + e.getMessage());
+            System.err.println("[setup-check] could not drop " + scratch + " (the next run drops it once it is "
+                    + "an hour old): " + e.getMessage());
         }
     }
 
-    private static int count(Connection c, String sql, String param) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, param);
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getInt(1);
-            }
+    private void dropScratchDatabase() throws SQLException {
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("DROP DATABASE IF EXISTS " + scratch + " WITH (FORCE)");
         }
     }
 
-    /**
-     * Removes every row this check creates, from this run or an earlier one that was interrupted.
-     * Idempotent. Returns notes about anything that could not be removed.
-     */
-    private static List<String> removeLeftovers() throws SQLException {
-        List<String> notes = new ArrayList<>();
-        UserDAO users = new UserDAO();
-        List<Integer> userIds = ids("SELECT user_id FROM \"User\" WHERE email LIKE ?", EMAIL_PREFIX + "%" + EMAIL_DOMAIN);
-        // Users first: deleteUserById removes their reminders, bookings, booking details and memberships.
-        for (int id : userIds) users.deleteUserById(id);
-
-        List<Integer> clinics = ids("SELECT clinic_id FROM \"Clinic\" WHERE name LIKE ?", CLINIC_PREFIX + "%");
-        List<Integer> services = ids("SELECT service_id FROM \"Service\" WHERE name LIKE ?", SERVICE_PREFIX + "%");
-        try (Connection c = DB.connect()) {
-            c.setAutoCommit(false);
-            try {
-                for (int clinic : clinics) {
-                    for (String table : List.of("Timeslot", "ClinicService", "StaffClinic", "ClinicStaffCode")) {
-                        update(c, "DELETE FROM \"" + table + "\" WHERE clinic_id = ?", clinic);
-                    }
-                }
-                for (int service : services) {
-                    update(c, "DELETE FROM \"Timeslot\" WHERE service_id = ?", service);
-                    update(c, "DELETE FROM \"ClinicService\" WHERE service_id = ?", service);
-                    update(c, "DELETE FROM \"Service\" WHERE service_id = ?", service);
-                }
-                for (int clinic : clinics) update(c, "DELETE FROM \"Clinic\" WHERE clinic_id = ?", clinic);
-                c.commit();
-            } catch (SQLException e) {
-                c.rollback();
-                throw e;
-            }
-
-            // "AuditLog" is append-only (a trigger refuses DELETE). Lift it for the check's own rows only,
-            // inside one transaction, so the guard is back on whatever happens.
-            List<Integer> auditClinics = new ArrayList<>(clinics);
-            if (!userIds.isEmpty() || !auditClinics.isEmpty()) {
-                try {
-                    try (Statement s = c.createStatement()) {
-                        s.execute("ALTER TABLE \"AuditLog\" DISABLE TRIGGER audit_log_append_only");
-                    }
-                    for (int clinic : auditClinics) update(c, "DELETE FROM \"AuditLog\" WHERE clinic_id = ?", clinic);
-                    for (int id : userIds) {
-                        update(c, "DELETE FROM \"AuditLog\" WHERE staff_user_id = ? OR patient_user_id = ?", id, id);
-                    }
-                    try (Statement s = c.createStatement()) {
-                        s.execute("ALTER TABLE \"AuditLog\" ENABLE TRIGGER audit_log_append_only");
-                    }
-                    c.commit();
-                } catch (SQLException e) {
-                    c.rollback();
-                    notes.add("audit rows for the check's clinic/users were kept (" + e.getMessage()
-                            + "); they hold ids only and are harmless");
-                }
-            }
-            c.setAutoCommit(true);
-        }
-        return notes;
-    }
-
-    private static List<Integer> ids(String sql, String param) throws SQLException {
-        List<Integer> ids = new ArrayList<>();
-        try (Connection c = DB.connect(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, param);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) ids.add(rs.getInt(1));
-            }
-        }
-        return ids;
-    }
-
-    private static void update(Connection c, String sql, int... params) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(sql)) {
-            for (int i = 0; i < params.length; i++) ps.setInt(i + 1, params[i]);
-            ps.executeUpdate();
+    private static long[] realCounts(Connection c) throws SQLException {
+        try (Statement s = c.createStatement();
+             ResultSet rs = s.executeQuery(
+                     "SELECT (SELECT COUNT(*) FROM \"User\"), (SELECT COUNT(*) FROM \"AuditLog\")")) {
+            rs.next();
+            return new long[] {rs.getLong(1), rs.getLong(2)};
         }
     }
 }
