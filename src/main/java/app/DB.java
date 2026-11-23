@@ -83,6 +83,10 @@ public class DB {
         if (problem != null) {
             throw new SQLException(problem, "08001");
         }
+        if (isInMemoryOnly() && !url.startsWith("jdbc:h2:")) {
+            throw new SQLException("Tests may only use an in-memory H2 database, not the one in DB_URL "
+                    + "(run database tests with -Pdb-tests).", "08001");
+        }
 
         Properties props = new Properties();
         props.setProperty("user", username);
@@ -98,6 +102,14 @@ public class DB {
         } catch (SQLException e) {
             throw new SQLException(describeFailure(e), e.getSQLState(), e.getErrorCode(), e);
         }
+    }
+
+    /**
+     * Kill-switch so the unit tests can never reach the real database in {@code .env}: with
+     * {@code -Ddb.inMemoryOnly=true} (set by Maven for {@code mvn test}) only {@code jdbc:h2:} URLs connect.
+     */
+    static boolean isInMemoryOnly() {
+        return Boolean.getBoolean("db.inMemoryOnly");
     }
 
     /** Case-insensitive unique index on "User".email (docs/migrations/2026-11-23-unique-email.sql). */

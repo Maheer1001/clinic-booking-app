@@ -56,6 +56,7 @@ public class BookingController {
     private final NotificationDispatcher notificationDispatcher;
     private final ReminderDefaultsReader reminderDefaultsReader;
     private final UserRepository userRepository;
+    private final NewBookingReminders newBookingReminders;
     private static Label messageLabel;
     private Map<Clinic, Double> postcodeMap = new HashMap<>();
     private ClinicMap clinicMap;
@@ -66,6 +67,20 @@ public class BookingController {
 
     public BookingController(Navigator nav, BookingService bookingService, NotificationDispatcher notificationDispatcher,
                              ReminderDefaultsReader reminderDefaultsReader, UserRepository userRepository) {
+        this(nav, bookingService, notificationDispatcher, reminderDefaultsReader, userRepository,
+                (userId, appIds, email, name) -> new ReminderController(userId).applyReminderForNewBookings(appIds, email, name));
+    }
+
+    /** Sets up reminders for newly booked appointments; true if they are now on. */
+    @FunctionalInterface
+    public interface NewBookingReminders {
+        boolean apply(int userId, List<Integer> appIds, String email, String name);
+    }
+
+    public BookingController(Navigator nav, BookingService bookingService, NotificationDispatcher notificationDispatcher,
+                             ReminderDefaultsReader reminderDefaultsReader, UserRepository userRepository,
+                             NewBookingReminders newBookingReminders) {
+        this.newBookingReminders = newBookingReminders;
         this.nav = nav;
         this.bookingService = bookingService;
         this.notificationDispatcher = notificationDispatcher;
@@ -376,7 +391,7 @@ public class BookingController {
         List<Integer> newAppIds = outcome.booked().stream().map(BookingService.BookedAppointment::appId).toList();
 
         // Send a booking confirmation email + in-app notification for each saved appointment.
-        BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userId);
+        BookingCommunicationPreferences commPrefs = BookingCommunicationPrefs.load(userRepository, userId);
         boolean confirmationDiscreet = commPrefs.confirmationDiscreet();
         ReminderTemplateOverrides confirmationTpl = commPrefs.confirmationTemplate();
         String recipientEmail = Data.getCurrentUserEmail() != null ? Data.getCurrentUserEmail() : b.getEmail();
@@ -430,7 +445,7 @@ public class BookingController {
         String reminderEmail = hasEmail ? recipientEmail : "";
         String reminderName = recipientName;
         Background.run(
-                () -> new ReminderController(userId).applyReminderForNewBookings(savedIds, reminderEmail, reminderName),
+                () -> newBookingReminders.apply(userId, savedIds, reminderEmail, reminderName),
                 on -> blurbLabel.setText(on
                         ? (hasEmail ? (savedIds.size() > 1
                                         ? "We'll email you a reminder before each appointment. You can change or turn them off in Reminders."

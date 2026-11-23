@@ -16,16 +16,28 @@ public final class StaffTabs {
 
     /** The clinic's appointments for a day (default today). */
     public static Node today(Navigator nav, StaffAccess access) {
-        return new StaffDayView(nav, new StaffController(access)).page();
+        return today(nav, new StaffController(access));
+    }
+
+    public static Node today(Navigator nav, StaffController staff) {
+        return new StaffDayView(nav, staff).page();
     }
 
     /** Search the clinic's patients and open a patient's record. */
     public static Node patients(Navigator nav, StaffAccess access) {
-        return new StaffPatientView(nav, new StaffController(access)).searchPage();
+        return patients(nav, new StaffController(access));
+    }
+
+    public static Node patients(Navigator nav, StaffController staff) {
+        return new StaffPatientView(nav, staff).searchPage();
     }
 
     /** Clinic admin: approvals, staff, staff code and timeslots. */
     public static Node clinic(Navigator nav, StaffAccess access) {
-        return new StaffClinicView(nav, new StaffController(access)).page();
+        return clinic(nav, new StaffController(access));
+    }
+
+    public static Node clinic(Navigator nav, StaffController staff) {
+        return new StaffClinicView(nav, staff).page();
     }
 }

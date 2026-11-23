@@ -6,6 +6,7 @@ import view.staff.StaffTabs;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 /** Where a successful login goes, and which tabs staff get. Pure, so it is unit tested. */
 public final class LoginRouting {
@@ -36,11 +37,16 @@ public final class LoginRouting {
 
     /** Today and Patients for every staff member; Clinic (admin tools) for clinic admins only. */
     public static List<Navigator.Tab> staffTabs(StaffAccess access) {
+        return staffTabs(access, StaffController::new);
+    }
+
+    /** As {@link #staffTabs(StaffAccess)}, with each tab's controller made by {@code controllers} (tests). */
+    static List<Navigator.Tab> staffTabs(StaffAccess access, Function<StaffAccess, StaffController> controllers) {
         List<Navigator.Tab> tabs = new ArrayList<>();
-        tabs.add(Navigator.Tab.of(TODAY, "Today", nav -> StaffTabs.today(nav, access)));
-        tabs.add(Navigator.Tab.of(PATIENTS, "Patients", nav -> StaffTabs.patients(nav, access)));
+        tabs.add(Navigator.Tab.of(TODAY, "Today", nav -> StaffTabs.today(nav, controllers.apply(access))));
+        tabs.add(Navigator.Tab.of(PATIENTS, "Patients", nav -> StaffTabs.patients(nav, controllers.apply(access))));
         if (access.isAdmin()) {
-            tabs.add(Navigator.Tab.of(CLINIC, "Clinic", nav -> StaffTabs.clinic(nav, access)));
+            tabs.add(Navigator.Tab.of(CLINIC, "Clinic", nav -> StaffTabs.clinic(nav, controllers.apply(access))));
         }
         return List.copyOf(tabs);
     }

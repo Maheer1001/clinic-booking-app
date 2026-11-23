@@ -135,4 +135,19 @@ class DBTest {
                 "ERROR: duplicate key value violates unique constraint \"User_pkey\"", "23505")));
         assertFalse(DB.isDuplicateEmail(new SQLException("user_email_lower_key", "08001")));
     }
+
+    @Test
+    void inMemoryOnly_refusesARealDatabaseUrl() {
+        String was = System.getProperty("db.inMemoryOnly");
+        System.setProperty("db.inMemoryOnly", "true");
+        try {
+            DB.setUrl("jdbc:postgresql://example.invalid/clinic");
+            DB.setUsername("u");
+            DB.setPassword("p");
+            SQLException e = assertThrows(SQLException.class, DB::connect);
+            assertTrue(e.getMessage().contains("in-memory"), e.getMessage());
+        } finally {
+            if (was == null) System.clearProperty("db.inMemoryOnly"); else System.setProperty("db.inMemoryOnly", was);
+        }
+    }
 }

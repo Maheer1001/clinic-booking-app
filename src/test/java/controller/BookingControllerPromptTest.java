@@ -1,7 +1,7 @@
 package controller;
 
 import app.Data;
-import dao.UserDAO;
+import service.FakeUserRepository;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.layout.BorderPane;
@@ -33,6 +33,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * "Booking confirmed" prompt via Navigator with options to set up reminders or skip.
  */
 class BookingControllerPromptTest {
+
+    /** Reminder setup is stubbed so confirming a booking never reaches a database. */
+    private static final BookingController.NewBookingReminders NO_REMINDERS = (userId, appIds, email, name) -> true;
 
     private static class CapturingBookingService extends BookingService {
         int lastUserId = -1;
@@ -107,7 +110,7 @@ class BookingControllerPromptTest {
         CapturingBookingService bookingService = new CapturingBookingService();
         bookingService.slotTaken = true;
         CapturingDispatcher dispatcher = new CapturingDispatcher();
-        BookingController controller = new BookingController(nav, bookingService, dispatcher, uid -> Optional.empty(), new UserDAO());
+        BookingController controller = new BookingController(nav, bookingService, dispatcher, uid -> Optional.empty(), new FakeUserRepository(), NO_REMINDERS);
 
         BookingService.BookingResult result = controller.confirmBooking();
 
@@ -135,7 +138,7 @@ class BookingControllerPromptTest {
         CapturingBookingService bookingService = new CapturingBookingService();
         CapturingDispatcher dispatcher = new CapturingDispatcher();
 
-        BookingController controller = new BookingController(nav, bookingService, dispatcher, uid -> Optional.empty(), new UserDAO());
+        BookingController controller = new BookingController(nav, bookingService, dispatcher, uid -> Optional.empty(), new FakeUserRepository(), NO_REMINDERS);
 
         // Act
         controller.confirmBooking();
@@ -161,7 +164,7 @@ class BookingControllerPromptTest {
         final boolean nameMissing;
 
         NameOfferController(Navigator nav, CapturingBookingService bookingService, boolean nameMissing) {
-            super(nav, bookingService, new CapturingDispatcher(), uid -> Optional.empty(), new UserDAO());
+            super(nav, bookingService, new CapturingDispatcher(), uid -> Optional.empty(), new FakeUserRepository(), NO_REMINDERS);
             this.nameMissing = nameMissing;
         }
 
@@ -248,7 +251,7 @@ class BookingControllerPromptTest {
         Clinic b = new Clinic("Clinic B", "Addr", "SO15 3HL", "2", List.of(), new Coordinate(0, 0), List.of());
         List<Clinic> clinics = new java.util.ArrayList<>(List.of(a, b));
         BookingController controller = new BookingController(new CapturingNavigator(new MainView()),
-                new CapturingBookingService(), new CapturingDispatcher(), uid -> Optional.empty(), new UserDAO());
+                new CapturingBookingService(), new CapturingDispatcher(), uid -> Optional.empty(), new FakeUserRepository(), NO_REMINDERS);
 
         assertTrue(controller.sortClinicsByPostcode(clinics, "   ").isEmpty(), "no distances without a postcode");
         assertEquals(List.of(a, b), clinics);

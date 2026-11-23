@@ -13,6 +13,8 @@
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <test.excludedGroups>db</test.excludedGroups>
+        <!-- mvn test may only connect to in-memory H2, never the database in .env (see app.DB) -->
+        <test.dbInMemoryOnly>true</test.dbInMemoryOnly>
     </properties>
 
     <dependencies>
@@ -111,6 +113,7 @@
                     <systemPropertyVariables>
                         <!-- Prevent any real SMTP/network sends during mvn test -->
                         <email.disabled>true</email.disabled>
+                        <db.inMemoryOnly>${test.dbInMemoryOnly}</db.inMemoryOnly>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
@@ -150,6 +153,7 @@
             <id>db-tests</id>
             <properties>
                 <test.excludedGroups>none</test.excludedGroups>
+                <test.dbInMemoryOnly>false</test.dbInMemoryOnly>
             </properties>
         </profile>
     </profiles>
