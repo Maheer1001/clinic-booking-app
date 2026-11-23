@@ -90,6 +90,9 @@ public class StaffAccountDAO implements StaffAccountRepository {
     @Override
     public int createStaffUser(String email, String passwordHash, StaffRole role, int clinicId,
                                boolean mustResetPassword, boolean pending) throws SQLException {
+        // Checked before the transaction: the role goes on the clinic membership (and, as "a staff
+        // account", on "User".role), so PATIENT here would make an account with no rights anywhere.
+        if (role == null || !role.isStaff()) throw new IllegalArgumentException("A staff account needs a staff role");
         String insertUser = """
             INSERT INTO "User" (user_id, email, password_hash, email_verified, role, must_reset_password)
             VALUES (?, ?, ?, false, ?, ?)
@@ -108,7 +111,7 @@ public class StaffAccountDAO implements StaffAccountRepository {
                         ps.setBoolean(5, mustResetPassword);
                         ps.executeUpdate();
                     }
-                    addMembership(c, userId, clinicId, pending);
+                    addMembership(c, userId, clinicId, role, pending);
                     AuditLogDAO.insert(c, AuditEntry.of(userId, clinicId,
                             mustResetPassword ? AuditEntry.Action.STAFF_SEEDED : AuditEntry.Action.STAFF_SIGN_UP,
                             AuditEntry.STAFF, userId, null));
@@ -132,12 +135,15 @@ public class StaffAccountDAO implements StaffAccountRepository {
     public static final String ACTIVE = "ACTIVE";
     public static final String PENDING = "PENDING";
 
-    static void addMembership(Connection c, int userId, int clinicId, boolean pending) throws SQLException {
+    /** The membership's role is what the person may do at this clinic only. */
+    static void addMembership(Connection c, int userId, int clinicId, StaffRole role, boolean pending)
+            throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO \"StaffClinic\" (user_id, clinic_id, status) VALUES (?, ?, ?)")) {
+                "INSERT INTO \"StaffClinic\" (user_id, clinic_id, status, role) VALUES (?, ?, ?, ?)")) {
             ps.setInt(1, userId);
             ps.setInt(2, clinicId);
             ps.setString(3, pending ? PENDING : ACTIVE);
+            ps.setString(4, role.name());
             ps.executeUpdate();
         }
     }

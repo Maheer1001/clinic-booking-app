@@ -18,7 +18,9 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class UserDAO implements UserRepository, AccountRepository {
@@ -184,8 +186,9 @@ public class UserDAO implements UserRepository, AccountRepository {
 
 
     /**
-     * Role and clinic memberships for login routing (and for every staff action, which re-reads it).
-     * Empty if the user does not exist. A patient comes back with role PATIENT and no clinics.
+     * Account role and clinic memberships, each with its own role, for login routing (and for every
+     * staff action, which re-reads it). Empty if the user does not exist. A patient comes back with
+     * role PATIENT and no clinics.
      * Only ACTIVE memberships count: a staff member still waiting for their clinic admin's approval
      * comes back with no clinics (the app shows a waiting page).
      */
@@ -207,13 +210,15 @@ public class UserDAO implements UserRepository, AccountRepository {
                 mustReset = rs.getBoolean("must_reset_password");
             }
         }
-        List<Integer> clinics = new ArrayList<>();
+        // Each membership carries its own role: admin at one clinic says nothing about another.
+        Map<Integer, StaffRole> clinics = new LinkedHashMap<>();
         if (role.isStaff()) {
             try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT clinic_id FROM \"StaffClinic\" WHERE user_id = ? AND status = 'ACTIVE' ORDER BY clinic_id")) {
+                    "SELECT clinic_id, role FROM \"StaffClinic\" WHERE user_id = ? AND status = 'ACTIVE'"
+                            + " ORDER BY clinic_id")) {
                 ps.setInt(1, userId);
                 try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) clinics.add(rs.getInt(1));
+                    while (rs.next()) clinics.put(rs.getInt(1), StaffRole.fromDb(rs.getString(2)));
                 }
             }
         }

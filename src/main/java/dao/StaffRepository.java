@@ -91,7 +91,7 @@ public interface StaffRepository {
 
     // ------------------------------------------------------------ clinic admin
 
-    /** ACTIVE staff at the clinic (pending sign-ups are not staff there yet). */
+    /** ACTIVE staff at the clinic, each with their role here (pending sign-ups are not staff there yet). */
     List<StaffMember> staff(int clinicId) throws SQLException;
 
     /** Staff who signed up with the clinic's code and are waiting for an admin's approval. */
@@ -107,7 +107,10 @@ public interface StaffRepository {
     /** Removes an ACTIVE membership. */
     boolean removeStaff(int clinicId, int staffUserId, AuditEntry audit) throws SQLException;
 
-    /** Only changes a staff account that is an ACTIVE member of the clinic. */
+    /**
+     * Sets the role of the person's ACTIVE membership at this clinic only (their role at other
+     * clinics is untouched). False if they are not an ACTIVE member here or not a staff account.
+     */
     boolean setRole(int clinicId, int staffUserId, StaffRole role, AuditEntry audit) throws SQLException;
 
     /** Empty if the clinic has no staff code; otherwise whether it is still the seeded demo code. */

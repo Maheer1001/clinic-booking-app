@@ -21,7 +21,8 @@ import java.util.List;
  * <pre>
  *   STAFF_SEED_PASSWORD=... java app.StaffSeed admin &lt;clinicId&gt; &lt;email&gt;
  * </pre>
- * creates the first CLINIC_ADMIN of a clinic as a new account with must_reset_password set (an
+ * creates the first CLINIC_ADMIN of a clinic (admin at that clinic only: the role is stored on the
+ * "StaffClinic" membership) as a new account with must_reset_password set (an
  * existing email is refused). The password comes from the environment, never the command line or SQL.
  * {@code java app.StaffSeed codes} seeds missing demo staff codes only (demo databases).
  */

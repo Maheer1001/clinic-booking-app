@@ -39,9 +39,10 @@ import java.util.Set;
  * database (and some send email), so call them off the JavaFX thread (e.g. {@code Background.run}).
  *
  * <p>Every method takes the acting staff member's user id and the clinic they are working in, and
- * re-reads that user's role and clinic membership from the database before doing anything: a patient
+ * re-reads that user's clinic memberships from the database before doing anything: a patient
  * account gets NOT_STAFF, a clinic they don't work at NOT_AT_CLINIC, and admin-only actions ADMIN_ONLY
- * for a clinician. A membership still waiting for the clinic admin's approval (PENDING) does not count:
+ * for someone who is not CLINIC_ADMIN at that clinic (roles are per clinic: admin at one clinic gives
+ * nothing at another). A membership still waiting for the clinic admin's approval (PENDING) does not count:
  * {@link StaffRepository#access} only lists ACTIVE clinics. Patients are only visible if they have an appointment at the clinic (others come
  * back NOT_FOUND, the same as a record that does not exist), and only that clinic's records are
  * returned. Every read of a patient record and every write appends to the AuditLog (ids only); if the
@@ -439,12 +440,12 @@ public class StaffService {
         });
     }
 
-    /** Makes a clinician at this clinic a CLINIC_ADMIN (the role applies to all their clinics). */
+    /** Makes a clinician at this clinic a CLINIC_ADMIN here only (their role at other clinics is unchanged). */
     public StaffResult<List<StaffMember>> promoteStaff(int staffUserId, int clinicId, int targetUserId) {
         return changeRole(staffUserId, clinicId, targetUserId, StaffRole.CLINIC_ADMIN);
     }
 
-    /** Makes an admin a CLINICIAN again; refused for the clinic's last admin. */
+    /** Makes an admin a CLINICIAN again at this clinic only; refused for the clinic's last admin. */
     public StaffResult<List<StaffMember>> demoteStaff(int staffUserId, int clinicId, int targetUserId) {
         return changeRole(staffUserId, clinicId, targetUserId, StaffRole.CLINICIAN);
     }
@@ -564,7 +565,8 @@ public class StaffService {
             Optional<StaffAccess> access = repo.access(staffUserId);
             if (access.isEmpty() || !access.get().isStaff()) return StaffResult.fail(StaffResult.Status.NOT_STAFF);
             if (!access.get().worksAt(clinicId)) return StaffResult.fail(StaffResult.Status.NOT_AT_CLINIC);
-            if (adminOnly && !access.get().isAdmin()) return StaffResult.fail(StaffResult.Status.ADMIN_ONLY);
+            // The role at THIS clinic: an admin elsewhere is only a clinician (or nobody) here.
+            if (adminOnly && !access.get().isAdminAt(clinicId)) return StaffResult.fail(StaffResult.Status.ADMIN_ONLY);
             return work.run(access.get());
         } catch (SQLException e) {
             return dbError(e);

@@ -701,7 +701,7 @@ public class StaffDAO implements StaffRepository {
 
     private List<StaffMember> members(int clinicId, String status) throws SQLException {
         String sql = """
-            SELECT u.user_id, u.email, u.first_name, u.last_name, u.role
+            SELECT u.user_id, u.email, u.first_name, u.last_name, sc.role
             FROM "StaffClinic" sc JOIN "User" u ON u.user_id = sc.user_id
             WHERE sc.clinic_id = ? AND sc.status = ?
             ORDER BY u.email
@@ -739,18 +739,19 @@ public class StaffDAO implements StaffRepository {
 
     @Override
     public boolean setRole(int clinicId, int staffUserId, StaffRole role, AuditEntry audit) throws SQLException {
+        if (role == null || !role.isStaff()) return false;
+        // Only this clinic's membership changes; the person's role at their other clinics stays.
         String sql = """
-            UPDATE "User" SET role = ?
-            WHERE user_id = ? AND role IN ('CLINICIAN', 'CLINIC_ADMIN')
-              AND EXISTS (SELECT 1 FROM "StaffClinic" sc WHERE sc.user_id = ? AND sc.clinic_id = ?
-                          AND sc.status = 'ACTIVE')
+            UPDATE "StaffClinic" SET role = ?
+            WHERE user_id = ? AND clinic_id = ? AND status = 'ACTIVE'
+              AND EXISTS (SELECT 1 FROM "User" u WHERE u.user_id = ? AND u.role IN ('CLINICIAN', 'CLINIC_ADMIN'))
             """;
         return guarded(c -> {
             try (PreparedStatement ps = c.prepareStatement(sql)) {
                 ps.setString(1, role.name());
                 ps.setInt(2, staffUserId);
-                ps.setInt(3, staffUserId);
-                ps.setInt(4, clinicId);
+                ps.setInt(3, clinicId);
+                ps.setInt(4, staffUserId);
                 if (ps.executeUpdate() != 1) throw new NothingChanged();
             }
             AuditLogDAO.insert(c, audit);

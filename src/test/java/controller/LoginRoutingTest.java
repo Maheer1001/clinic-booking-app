@@ -80,6 +80,18 @@ class LoginRoutingTest {
     }
 
     @Test
+    void clinicTab_isThereForAnAdminAtAnyOfTheirClinics_only() {
+        // clinician at 1, admin at 2: the tab exists (its page follows the clinic switcher)
+        StaffAccess mixed = new StaffAccess(42, StaffRole.CLINICIAN,
+                java.util.Map.of(1, StaffRole.CLINICIAN, 2, StaffRole.CLINIC_ADMIN), false);
+        assertEquals(List.of("today", "patients", "clinic"), ids(LoginRouting.staffTabs(mixed)));
+        // the account-level role says nothing about any clinic
+        StaffAccess clinicianEverywhere = new StaffAccess(42, StaffRole.CLINIC_ADMIN,
+                java.util.Map.of(1, StaffRole.CLINICIAN, 2, StaffRole.CLINICIAN), false);
+        assertEquals(List.of("today", "patients"), ids(LoginRouting.staffTabs(clinicianEverywhere)));
+    }
+
+    @Test
     void staffNavigatorStartsOnTheTodayPage() {
         StaffAccess admin = access(StaffRole.CLINIC_ADMIN, List.of(1), false);
         Navigator nav = new Navigator(LoginRouting.staffTabs(admin), javafx.scene.layout.VBox::new);

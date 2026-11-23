@@ -18,6 +18,7 @@ Status: planned, not started. Build after the UI, bug-fix and UX work on `fix/re
 ## 1. Roles and auth
 - `"User".role` = `PATIENT` (default) | `CLINICIAN` | `CLINIC_ADMIN`. Same email, password and `PasswordHasher` as patients.
 - `"StaffClinic"(user_id, clinic_id)` so one staff member can work at several clinics.
+- Update 2026-11-23 (docs/migrations/2026-11-23-per-clinic-roles.sql): the role is per clinic, on `"StaffClinic".role` (`CLINICIAN` | `CLINIC_ADMIN`). `"User".role` now only separates patients from staff for login routing; every permission check uses the role at the clinic being acted on.
 - Staff sign up from the normal sign-up screen via "I'm clinic staff", entering their clinic's staff code (`clinic1`, `clinic2`, ... in the demo). A valid code creates a CLINICIAN tied to that clinic; a wrong code is rejected with an attempt limit. The first admin per clinic is seeded; admins can promote/remove staff and rotate the code.
 - Login routing: `loadLogin` also returns role + clinic ids; staff get `StaffNavigator`, patients `MainView`. Reminder restore and patient alerts are skipped for staff.
 - Authorisation: a single `service/StaffService` entry point. Every call takes a `clinicId`, re-checks `StaffClinic` membership and role from the DB, and every `StaffDAO` query filters by clinic in SQL. A patient is visible only if they have an appointment at that clinic. Writes re-check the record's clinic.

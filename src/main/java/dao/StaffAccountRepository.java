@@ -27,7 +27,8 @@ public interface StaffAccountRepository {
     boolean emailExists(String email) throws SQLException;
 
     /**
-     * Creates the account with the role, its clinic membership and an audit row, in one transaction.
+     * Creates the account, its clinic membership and an audit row, in one transaction. {@code role}
+     * (CLINICIAN or CLINIC_ADMIN) is the role at {@code clinicId} only.
      * The membership is ACTIVE (used for the seeded first admin and in tests).
      * @return the new user id
      */

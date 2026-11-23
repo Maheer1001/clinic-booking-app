@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
@@ -430,6 +431,10 @@ public class DB {
             s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN status SET DEFAULT 'PENDING'");
             s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS approved_by INTEGER");
             s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP");
+        }
+        // Roles per clinic membership (docs/migrations/2026-11-23-per-clinic-roles.sql).
+        applyPerClinicRolesMigration(c);
+        try (Statement s = c.createStatement()) {
             s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS staff_notes TEXT");
             s.execute("ALTER TABLE \"Appointment\" ADD COLUMN IF NOT EXISTS attended_at TIMESTAMP");
             s.execute("ALTER TABLE \"Test\" ADD COLUMN IF NOT EXISTS app_id INTEGER");
@@ -471,6 +476,42 @@ public class DB {
                         BEFORE UPDATE OR DELETE ON "AuditLog"
                         FOR EACH ROW EXECUTE FUNCTION audit_log_append_only()
                     """);
+            }
+        }
+    }
+
+    /** Name of the CHECK constraint on "StaffClinic".role. */
+    static final String STAFF_CLINIC_ROLE_CHECK = "staff_clinic_role_check";
+
+    /**
+     * docs/migrations/2026-11-23-per-clinic-roles.sql: the staff role moves onto each "StaffClinic"
+     * membership, so a person can be CLINIC_ADMIN at one clinic and CLINICIAN at another. Existing
+     * memberships take the user's old account-wide role (nobody gains or loses anything); a membership
+     * without a usable role becomes CLINICIAN (the lesser role). "User".role stays, but from now on
+     * only says patient or staff. Idempotent.
+     */
+    public static void applyPerClinicRolesMigration(Connection c) throws SQLException {
+        try (Statement s = c.createStatement()) {
+            s.execute("ALTER TABLE \"StaffClinic\" ADD COLUMN IF NOT EXISTS role VARCHAR(20)");
+            s.executeUpdate("""
+                UPDATE "StaffClinic" SET role = COALESCE(
+                    (SELECT u.role FROM "User" u
+                     WHERE u.user_id = "StaffClinic".user_id AND u.role IN ('CLINICIAN', 'CLINIC_ADMIN')),
+                    'CLINICIAN')
+                WHERE role IS NULL
+                """);
+            s.executeUpdate("UPDATE \"StaffClinic\" SET role = 'CLINICIAN' WHERE role NOT IN ('CLINICIAN', 'CLINIC_ADMIN')");
+            s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN role SET DEFAULT 'CLINICIAN'");
+            s.execute("ALTER TABLE \"StaffClinic\" ALTER COLUMN role SET NOT NULL");
+            boolean hasCheck;
+            try (ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM information_schema.table_constraints"
+                    + " WHERE LOWER(constraint_name) = '" + STAFF_CLINIC_ROLE_CHECK + "'")) {
+                rs.next();
+                hasCheck = rs.getInt(1) > 0;
+            }
+            if (!hasCheck) {
+                s.execute("ALTER TABLE \"StaffClinic\" ADD CONSTRAINT " + STAFF_CLINIC_ROLE_CHECK
+                        + " CHECK (role IN ('CLINICIAN', 'CLINIC_ADMIN'))");
             }
         }
     }
