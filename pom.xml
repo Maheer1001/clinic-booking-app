@@ -179,6 +179,32 @@
             </build>
         </profile>
         <profile>
+            <!-- Developer tool: checks the popup queue, the usual-clinic question, a partly booked
+                 multi-service booking, per-clinic roles and the result email's sender name against the
+                 database in .env; PNGs and a log go to target/verify-shots. Needs what staff-screenshots
+                 needs; see dev.VerifyHarness. mvn -o -Pverify-screenshots test-compile exec:exec -->
+            <id>verify-screenshots</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <configuration>
+                            <executable>java</executable>
+                            <classpathScope>test</classpathScope>
+                            <arguments>
+                                <argument>-classpath</argument>
+                                <classpath/>
+                                <argument>dev.VerifyScreenshots</argument>
+                                <argument>target/verify-shots</argument>
+                            </arguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>db-tests</id>
             <properties>
                 <test.excludedGroups>none</test.excludedGroups>
