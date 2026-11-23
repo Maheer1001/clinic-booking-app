@@ -1,9 +1,12 @@
 package dao;
 
 import app.DB;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import service.AccountService;
+import setup.SetupCheck;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -13,6 +16,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("db")
 public class UserDAOAccountTest {
+
+    /** Everything here runs in a temporary database (setup.SetupCheck), never the one in .env. */
+    private static SetupCheck.TempDatabase tempDb;
+
+    @BeforeAll
+    static void useTempDatabase() throws Exception {
+        tempDb = SetupCheck.tempDatabase();
+    }
+
+    @AfterAll
+    static void dropTempDatabase() throws Exception {
+        if (tempDb != null) tempDb.close();
+    }
 
     @Test
     void updateAccountInfo_then_getAccountInfo_shouldReturnUpdatedValues() throws Exception {

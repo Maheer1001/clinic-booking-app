@@ -11,9 +11,11 @@ import java.util.*;
 
 /**
  * Prints the live DB schema (tables/columns/PKs/FKs) to test output.
- * This is intentionally a test so it can be run via Maven easily.
+ * This is intentionally a test so it can be run via Maven easily:
+ * mvn test -Pdb-tests -Dtest=SchemaIntrospectTest. Not part of -Psetup-check (it checks nothing).
  */
 @Tag("db")
+@Tag("schema-dump")
 public class SchemaIntrospectTest {
 
     @Test
