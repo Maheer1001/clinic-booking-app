@@ -72,74 +72,78 @@ public class AccountServiceTest {
     @Test
     @Tag("db")
     void saveAccount_emailAlreadyUsed_shouldReturnEmailAlreadyUsed() throws Exception {
-        // Needs the real DB: one user holds the email, another user then tries to save it.
-        setup.SetupCheck.ensureSchema();
-        UserDAO dao = new UserDAO();
+        // One user holds the email, another user then tries to save it.
+        // Runs in a temporary database (setup.SetupCheck), never the one in .env.
+        try (setup.SetupCheck.TempDatabase tempDb = setup.SetupCheck.tempDatabase()) {
+            UserDAO dao = new UserDAO();
 
-        String used = uniqueEmail();
-        String another = uniqueEmail();
+            String used = uniqueEmail();
+            String another = uniqueEmail();
 
-        deleteByEmail(used);
-        deleteByEmail(another);
-
-        try {
-            dao.insertUser(used, "dummyhash");
-            dao.insertUser(another, "dummyhash");
-            Integer anotherId = dao.getUserIdByEmail(another);
-            assertNotNull(anotherId);
-
-            AccountService s = new AccountService();
-            AccountService.SaveResult r = s.saveAccount(
-                    anotherId,
-                    "T", "U",
-                    "07123456789",
-                    LocalDate.of(2000, 1, 1),
-                    used
-            );
-
-            assertEquals(AccountService.SaveResult.EMAIL_ALREADY_USED, r);
-        } finally {
             deleteByEmail(used);
             deleteByEmail(another);
+
+            try {
+                dao.insertUser(used, "dummyhash");
+                dao.insertUser(another, "dummyhash");
+                Integer anotherId = dao.getUserIdByEmail(another);
+                assertNotNull(anotherId);
+
+                AccountService s = new AccountService();
+                AccountService.SaveResult r = s.saveAccount(
+                        anotherId,
+                        "T", "U",
+                        "07123456789",
+                        LocalDate.of(2000, 1, 1),
+                        used
+                );
+
+                assertEquals(AccountService.SaveResult.EMAIL_ALREADY_USED, r);
+            } finally {
+                deleteByEmail(used);
+                deleteByEmail(another);
+            }
         }
     }
 
     @Test
     @Tag("db")
     void saveAccount_validInputs_shouldSucceed() throws Exception {
-        setup.SetupCheck.ensureSchema();
-        UserDAO dao = new UserDAO();
+        // Runs in a temporary database (setup.SetupCheck), never the one in .env.
+        try (setup.SetupCheck.TempDatabase tempDb = setup.SetupCheck.tempDatabase()) {
+            UserDAO dao = new UserDAO();
 
-        String email = uniqueEmail();
-        deleteByEmail(email);
-
-        try {
-            dao.insertUser(email, "dummyhash");
-            Integer userId = dao.getUserIdByEmail(email);
-            assertNotNull(userId);
-
-            AccountService s = new AccountService();
-            AccountService.SaveResult r = s.saveAccount(
-                    userId,
-                    "Alex",
-                    "Taylor",
-                    "07123456789",
-                    LocalDate.of(2000, 1, 1),
-                    email
-            );
-
-            assertEquals(AccountService.SaveResult.SUCCESS, r);
-
-            // read it back
-            AccountService.AccountInfo info = dao.getAccountInfo(userId);
-            assertNotNull(info);
-            assertEquals("Alex", info.firstName);
-            assertEquals("Taylor", info.lastName);
-            assertEquals("07123456789", info.phone);
-            assertEquals(LocalDate.of(2000, 1, 1), info.dob);
-            assertEquals(email, info.email);
-        } finally {
+            String email = uniqueEmail();
             deleteByEmail(email);
+
+            try {
+                dao.insertUser(email, "dummyhash");
+                Integer userId = dao.getUserIdByEmail(email);
+                assertNotNull(userId);
+
+                AccountService s = new AccountService();
+                AccountService.SaveResult r = s.saveAccount(
+                        userId,
+                        "Alex",
+                        "Taylor",
+                        "07123456789",
+                        LocalDate.of(2000, 1, 1),
+                        email
+                );
+
+                assertEquals(AccountService.SaveResult.SUCCESS, r);
+
+                // read it back
+                AccountService.AccountInfo info = dao.getAccountInfo(userId);
+                assertNotNull(info);
+                assertEquals("Alex", info.firstName);
+                assertEquals("Taylor", info.lastName);
+                assertEquals("07123456789", info.phone);
+                assertEquals(LocalDate.of(2000, 1, 1), info.dob);
+                assertEquals(email, info.email);
+            } finally {
+                deleteByEmail(email);
+            }
         }
     }
 

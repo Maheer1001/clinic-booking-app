@@ -63,8 +63,6 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -110,10 +108,7 @@ class SetupCheckTest {
             "BookingReminder", "BookingDetails", "StaffClinic", "ClinicStaffCode", "StaffCodeAttempt",
             "AuditLog", "SchemaMigration");
 
-    /** Temporary databases are named setup_check_<epoch seconds>_<8 hex>; only these are ever dropped. */
-    static final String SCRATCH_PREFIX = "setup_check_";
-    static final String SCRATCH_PATTERN = "^setup_check_([0-9]+)_[0-9a-f]{8}$";
-    static final long STALE_AFTER_SECONDS = 3600;
+    // Temporary databases: see SetupCheck (setup_check_<epoch seconds>_<8 hex>, only those are ever dropped).
 
     static final String EMAIL_DOMAIN = "@example.com";
     static final String CLINIC_PREFIX = "Setup check clinic ";
@@ -252,8 +247,8 @@ class SetupCheckTest {
     @DisplayName("3a. DB.initTables builds the full schema on an empty database (temporary database)")
     void step3a_initTablesOnEmptyDatabase() throws SQLException {
         requireStep(dbOk, "step 2 (database connection) failed");
-        dropStaleScratchDatabases();
-        String name = SCRATCH_PREFIX + (System.currentTimeMillis() / 1000) + "_" + nonce;
+        SetupCheck.dropStale(SetupCheckTest::note);
+        String name = SetupCheck.newName();
         try (Connection c = DB.connect(); Statement s = c.createStatement()) {
             s.execute("CREATE DATABASE " + name);
         } catch (SQLException e) {
@@ -262,7 +257,7 @@ class SetupCheckTest {
             skip("cannot create a temporary database; step 3b still checks your schema");
         }
         scratch = name;
-        scratchUrl = withDatabase(realUrl, scratch);
+        scratchUrl = SetupCheck.withDatabase(realUrl, scratch);
         DB.setUrl(scratchUrl);
         try (Connection c = DB.connect()) {
             DB.initTables(c);
@@ -278,39 +273,6 @@ class SetupCheckTest {
         }
         ok("an empty database gets all " + EXPECTED_TABLES.size()
                 + " tables, the per-clinic role column and the unique email index (database " + scratch + ")");
-    }
-
-    /** DB_URL with its database name replaced, keeping host, port and parameters. */
-    static String withDatabase(String url, String database) {
-        String prefix = "jdbc:postgresql://";
-        int slash = url.indexOf('/', prefix.length());
-        if (slash < 0) throw new IllegalArgumentException("DB_URL has no database name");
-        int query = url.indexOf('?', slash);
-        return url.substring(0, slash + 1) + database + (query < 0 ? "" : url.substring(query));
-    }
-
-    /** Drops setup_check_* databases left by a run that was killed more than an hour ago. */
-    private static void dropStaleScratchDatabases() throws SQLException {
-        long cutoff = System.currentTimeMillis() / 1000 - STALE_AFTER_SECONDS;
-        Pattern pattern = Pattern.compile(SCRATCH_PATTERN);
-        try (Connection c = DB.connect()) {
-            List<String> stale = new ArrayList<>();
-            try (Statement s = c.createStatement();
-                 ResultSet rs = s.executeQuery("SELECT datname FROM pg_database")) {
-                while (rs.next()) {
-                    Matcher m = pattern.matcher(rs.getString(1));
-                    if (m.matches() && Long.parseLong(m.group(1)) < cutoff) stale.add(m.group());
-                }
-            }
-            for (String name : stale) {
-                try (Statement s = c.createStatement()) {
-                    s.execute("DROP DATABASE " + name + " WITH (FORCE)");
-                    note("dropped " + name + ", left by an earlier run that was interrupted");
-                } catch (SQLException e) {
-                    note("could not drop the old temporary database " + name + ": " + e.getMessage());
-                }
-            }
-        }
     }
 
     /** Points every DAO at the temporary database, or skips the step when there is none. */
@@ -756,9 +718,7 @@ class SetupCheckTest {
     }
 
     private void dropScratchDatabase() throws SQLException {
-        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
-            s.execute("DROP DATABASE IF EXISTS " + scratch + " WITH (FORCE)");
-        }
+        SetupCheck.drop(scratch);
     }
 
     private static long[] realCounts(Connection c) throws SQLException {

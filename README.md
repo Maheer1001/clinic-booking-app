@@ -179,7 +179,7 @@ Plain `mvn test` never touches your database: it refuses to connect to anything 
 
 ### Check my setup
 
-After filling in `.env`, `mvn test -Psetup-check` runs `setup.SetupCheckTest` and then the other `db` tests against the database in `.env`. The check reads your database and runs `DB.initTables` on it (as every app start does), but everything it writes goes into a temporary database `setup_check_<time>_<random>` on the same server that it creates, fills and drops again; it never deletes rows from your tables or touches the `AuditLog` guard. Temporary databases over an hour old (from an interrupted run) are dropped at the start. It is safe on a fresh, empty database and on one already in use. Each step prints `[setup-check] OK`, `NOTE` or `SKIP`; when a step fails, the steps that depend on it are skipped, so read the first failure.
+After filling in `.env`, `mvn test -Psetup-check` runs `setup.SetupCheckTest` and then the other `db` tests (`UserDAOAccountTest` and the account tests in `AccountServiceTest`, which each get their own temporary database too) against the server in `.env`. The check reads your database and runs `DB.initTables` on it (as every app start does), but everything it writes goes into a temporary database `setup_check_<time>_<random>` on the same server that it creates, fills and drops again; it never deletes rows from your tables or touches the `AuditLog` guard. Temporary databases over an hour old (from an interrupted run) are dropped at the start. It is safe on a fresh, empty database and on one already in use. Each step prints `[setup-check] OK`, `NOTE` or `SKIP`; when a step fails, the steps that depend on it are skipped, so read the first failure.
 
 | Step | What it proves | If it fails |
 |---|---|---|
