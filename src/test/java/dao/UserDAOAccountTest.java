@@ -1,9 +1,11 @@
 package dao;
 
 import app.DB;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import service.AccountService;
+import setup.SetupCheck;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -13,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("db")
 public class UserDAOAccountTest {
+
+    @BeforeAll
+    static void schema() throws Exception {
+        SetupCheck.ensureSchema(); // works on a fresh database too
+    }
 
     @Test
     void updateAccountInfo_then_getAccountInfo_shouldReturnUpdatedValues() throws Exception {

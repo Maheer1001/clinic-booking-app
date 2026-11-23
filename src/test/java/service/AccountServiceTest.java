@@ -72,7 +72,8 @@ public class AccountServiceTest {
     @Test
     @Tag("db")
     void saveAccount_emailAlreadyUsed_shouldReturnEmailAlreadyUsed() throws Exception {
-        // 需要真实 DB：插入一个用户占用 email，然后用另一个 userId 保存同一个 email
+        // Needs the real DB: one user holds the email, another user then tries to save it.
+        setup.SetupCheck.ensureSchema();
         UserDAO dao = new UserDAO();
 
         String used = uniqueEmail();
@@ -106,6 +107,7 @@ public class AccountServiceTest {
     @Test
     @Tag("db")
     void saveAccount_validInputs_shouldSucceed() throws Exception {
+        setup.SetupCheck.ensureSchema();
         UserDAO dao = new UserDAO();
 
         String email = uniqueEmail();
@@ -128,7 +130,7 @@ public class AccountServiceTest {
 
             assertEquals(AccountService.SaveResult.SUCCESS, r);
 
-            // 回查确认
+            // read it back
             AccountService.AccountInfo info = dao.getAccountInfo(userId);
             assertNotNull(info);
             assertEquals("Alex", info.firstName);
