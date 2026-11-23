@@ -169,11 +169,11 @@ Or in IntelliJ, run `app.Main`. If the database is unreachable the window still 
 ## Test
 
 ```powershell
-mvn test                 # 299 unit tests, no database needed (tests tagged "db" are excluded)
-mvn test -Pdb-tests      # also runs the 9 integration tests against the Postgres in .env
+mvn test                 # 596 tests on in-memory H2, no database needed (tests tagged "db" are excluded)
+mvn test -Pdb-tests      # also runs the integration tests against the Postgres in .env
 ```
 
-Email sending is disabled during tests (`-Demail.disabled=true` is set by the build).
+Email sending is disabled during tests (`-Demail.disabled=true` is set by the build). Plain `mvn test` also refuses to connect to anything except in-memory H2 (`-Ddb.inMemoryOnly=true`), so it never writes to the database in your `.env`; only `-Pdb-tests` turns that off.
 
 ### Screenshots
 
