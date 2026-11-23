@@ -1,6 +1,8 @@
 package service;
 
 import dao.UserDAO;
+import dao.UserRepository;
+import model.BookingCommunicationPreferences;
 import model.User;
 import service.email.EmailSender;
 import service.email.TestResultEmail;
@@ -34,14 +36,21 @@ public interface ResultReleaseNotifier {
         return email(new UserDAO(), new EmailSender());
     }
 
-    static ResultReleaseNotifier email(UserDAO users, EmailSender sender) {
+    /**
+     * Reads the patient's communication preferences the same way booking emails do
+     * ({@link BookingCommunicationPrefs#load(UserRepository, int)}) and uses their chosen sender name.
+     * The content stays discreet whatever they chose for bookings: a result email never names the test.
+     */
+    static ResultReleaseNotifier email(UserRepository users, EmailSender sender) {
         return (patientUserId, testDate) -> {
             try {
                 Optional<User> user = users.findById(patientUserId);
                 if (user.isEmpty() || user.get().email().isBlank()) return false;
                 User u = user.get();
+                BookingCommunicationPreferences prefs = BookingCommunicationPrefs.load(users, patientUserId);
                 TestResultEmail mail = new TestResultEmail(u.email(), u.getDisplayName(), null,
-                        testDate != null ? testDate : LocalDate.now(), STATUS, true);
+                        testDate != null ? testDate : LocalDate.now(), STATUS, true,
+                        prefs.confirmationTemplate().getEmailFromName());
                 return sender.send(mail);
             } catch (SQLException | RuntimeException e) {
                 System.err.println("[ResultRelease] Could not send the result email (" + e.getClass().getSimpleName() + ")");

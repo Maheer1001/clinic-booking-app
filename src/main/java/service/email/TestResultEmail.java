@@ -16,6 +16,7 @@ public class TestResultEmail extends BaseEmail {
     private final LocalDate testDate;
     private final String resultStatus; // e.g. "Available", "Requires Follow-Up"
     private final boolean discreet;
+    private final String fromNameOverride;
 
     public TestResultEmail(String recipientEmail, String recipientName,
                            String testType, LocalDate testDate, String resultStatus) {
@@ -24,11 +25,19 @@ public class TestResultEmail extends BaseEmail {
 
     public TestResultEmail(String recipientEmail, String recipientName,
                            String testType, LocalDate testDate, String resultStatus, boolean discreet) {
+        this(recipientEmail, recipientName, testType, testDate, resultStatus, discreet, null);
+    }
+
+    /** @param fromNameOverride the patient's chosen sender name, or null/blank for the default */
+    public TestResultEmail(String recipientEmail, String recipientName,
+                           String testType, LocalDate testDate, String resultStatus, boolean discreet,
+                           String fromNameOverride) {
         super(recipientEmail, recipientName);
         this.testType = testType;
         this.testDate = testDate;
         this.resultStatus = resultStatus;
         this.discreet = discreet;
+        this.fromNameOverride = fromNameOverride != null && !fromNameOverride.isBlank() ? fromNameOverride.trim() : null;
     }
 
     @Override
@@ -52,6 +61,11 @@ public class TestResultEmail extends BaseEmail {
         context.put("testDate", testDate.format(DateTimeFormatter.ofPattern("dd MMMM yyyy")));
         context.put("resultStatus", resultStatus);
         return context;
+    }
+
+    @Override
+    public String getFromName() {
+        return fromNameOverride;
     }
 
     @Override
