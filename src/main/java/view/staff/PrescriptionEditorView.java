@@ -109,6 +109,8 @@ public class PrescriptionEditorView {
         instructions.setAccessibleText("Instructions");
 
         Label msg = StaffUi.message();
+        // "Choose a medicine from the list." stayed up after one was chosen.
+        medicine.valueProperty().addListener((o, was, now) -> msg.setText(""));
         Button prescribe = UI.primaryButton("Prescribe");
         prescribe.setMaxWidth(Double.MAX_VALUE);
         prescribe.setOnAction(e -> {
@@ -191,9 +193,40 @@ public class PrescriptionEditorView {
                     showExisting(StaffForms.savedText(r.message()));
                 });
             });
-            content.getChildren().add(stop);
+            content.getChildren().addAll(shortenCard(p, msg), stop);
         }
         content.getChildren().add(msg);
+    }
+
+    /** Pick an earlier last day for a course still being taken (Stop early ends it today instead). */
+    private Node shortenCard(StaffPrescription p, Label msg) {
+        DatePicker lastDay = new DatePicker(p.endDate() == null ? null : p.endDate().minusDays(1));
+        StaffUi.datePicker(lastDay);
+        lastDay.setMaxWidth(Double.MAX_VALUE);
+        lastDay.setAccessibleText("New last day");
+        lastDay.setPromptText("New last day");
+        lastDay.valueProperty().addListener((o, was, now) -> msg.setText(""));
+        Button shorten = UI.secondaryButton("Shorten course");
+        shorten.setMaxWidth(Double.MAX_VALUE);
+        shorten.setOnAction(e -> {
+            int id = p.prescriptionId();
+            LocalDate day = lastDay.getValue();
+            shorten.setDisable(true);
+            staff.<StaffPrescription>call((s, u, c) -> s.shortenPrescription(u, c, id, day), r -> {
+                shorten.setDisable(false);
+                if (!r.ok()) {
+                    StaffUi.showError(msg, r.message());
+                    return;
+                }
+                existing = r.value();
+                onSaved.run();
+                showExisting(StaffForms.savedText(r.message() + " The last day is now "
+                        + Dates.medium(r.value().endDate()) + "."));
+            });
+        });
+        return StaffUi.section("Shorten the course",
+                UI.muted("Choose an earlier last day. Dose reminders stop after it."),
+                label("NEW LAST DAY"), lastDay, shorten);
     }
 
     static String howOften(StaffPrescription p) {

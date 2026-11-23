@@ -28,6 +28,43 @@ The demo above follows a patient through the app:
 
 ![More screens: booking confirmed, reschedule, prescriptions, high contrast mode](media/screens-more.png)
 
+## Staff side
+
+Clinic staff use the same app and the same login screen, with their own tabs:
+
+- **Today**: the clinic's appointments for a day. Open one to see the booking details, mark it attended or a no-show, and keep staff-only notes.
+- **Patients**: search patients who have an appointment at the clinic and open their record (appointments, tests, prescriptions). Add a test result: it is saved as a draft and the patient sees nothing until you **Release to patient** (a positive result asks you to confirm first). The patient then gets a discreet email that never says the result, and an in-app alert. Prescribe from the medicine list, then shorten the course or stop it early; dose reminders end with it.
+- **Clinic** (clinic admins only): approve or reject new staff, make staff admins or clinicians, remove them, rotate the staff code, and add or edit timeslots.
+
+Staff and patient accounts are separate: an email that already has an account can't become staff. The app talks to the database directly, so clinic scoping controls what the app shows, not who can read the database (see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)).
+
+### Staff codes
+
+Each clinic has a staff code. Someone who signs up with **I'm clinic staff** and a clinic's code becomes a clinician at that clinic, waiting for approval. Only a hash of the code is stored. A clinic admin can rotate it on the **Clinic** tab: the new code is shown once, the old one stops working at once, and staff who already have access keep it. Wrong codes are rate-limited (5 tries per email and 50 overall per 15 minutes).
+
+`DEMO_STAFF_CODES=true` in `.env` is for demo databases: on startup every clinic with no code gets `clinic<id>` (`clinic1`, `clinic2`, ...). It never overwrites a code, and the Clinic tab asks the admin to rotate a demo code. Leave it `false` for anything real; staff sign-up then fails until an admin creates a code (**Clinic > Create staff code**).
+
+### First clinic admin
+
+There is no sign-up for admins. Create a clinic's first admin with `app.StaffSeed`, against the database in `.env`. The email must not have an account yet, the password comes from an environment variable (never the command line), and the admin must choose a new password at first login.
+
+```powershell
+$env:STAFF_SEED_PASSWORD = "<temporary password, 8+ characters with a letter and a number>"
+mvn -q compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java "-Dexec.mainClass=app.StaffSeed" "-Dexec.args=admin <clinicId> <email>"
+Remove-Item Env:STAFF_SEED_PASSWORD
+```
+
+`<clinicId>` is a `clinic_id` from the `"Clinic"` table (the sample data has 1 to 3). Further admins are promoted from the Clinic tab.
+
+### Clinician sign-up and approval
+
+1. The admin gives the clinic's staff code to the new clinician.
+2. The clinician clicks **Create an account**, ticks **I'm clinic staff** and enters the code.
+3. Until approved, logging in shows **Waiting for approval**.
+4. The admin opens **Clinic > Waiting for approval** and clicks **Approve** (or **Reject**). At their next login the clinician gets the staff tabs.
+
+**Remove** on the Clinic tab takes someone's access away straight away; their account stays but can't use the staff area. They can't sign up again with the same email, so use a different email if they come back.
+
 ## Stack
 
 Java 21, JavaFX (FXML, MaterialFX, ControlsFX, WebView + Leaflet), PostgreSQL, a DAO/repository data layer, JavaMail with Thymeleaf templates, and `dotenv-java` for configuration. Tests use JUnit 5 with H2. The build uses Maven.
@@ -69,6 +106,7 @@ notepad .env
 | `SMTP_PASSWORD` | for email | SMTP password / app password |
 | `MAIL_FROM` | for email | Sender address |
 | `MAIL_FROM_NAME` | no | Sender display name |
+| `DEMO_STAFF_CODES` | no | `true` gives clinics without a staff code the demo code `clinic<id>` (demo databases only, see [Staff side](#staff-side)) |
 
 Without the SMTP keys the app still runs; it logs `[Email] WARNING` and skips sending.
 
@@ -88,7 +126,7 @@ Without the SMTP keys the app still runs; it logs `[Email] WARNING` and skips se
 
    With Docker, prefix each command with `docker exec -it clinic-db` (e.g. `docker exec -it clinic-db psql -U postgres -c "..."`).
 3. Put `DB_URL=jdbc:postgresql://localhost:5432/clinic_booking`, `DB_USERNAME=clinic_app` and `DB_PASSWORD=change-me` in `.env`.
-4. Schema: there is no separate migration file. The app creates every table itself on startup (`CREATE TABLE IF NOT EXISTS` in `app.DB.initTables`). It does not add any clinics or services, so load the sample data to get something to book:
+4. Schema: nothing to run. The app creates every table and column itself on startup (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` in `app.DB.initTables`). The SQL files in `docs/migrations/` are only for upgrading a database made by an older version of the app by hand; starting the new app does the same. It does not add any clinics or services, so load the sample data to get something to book:
 
    ```powershell
    psql -h localhost -U clinic_app -d clinic_booking -f docs/sample-data.sql
@@ -147,6 +185,8 @@ mvn -Pscreenshots test-compile exec:exec -Dshots.only=book    # just the booking
 ```
 
 It books and moves appointments, so reload `docs/demo-data.sql` before running it again.
+
+`mvn -Pstaff-screenshots test-compile exec:exec` does the same for the staff side (PNGs and a log in `target/staff-shots`). It needs a clinic admin made with `StaffSeed` and the environment variables listed in `dev.StaffHarness`; it creates its own test patient and clinician with `example.com` emails and deletes them at the end.
 
 More setup notes and troubleshooting: [`docs/SETUP.md`](docs/SETUP.md).
 

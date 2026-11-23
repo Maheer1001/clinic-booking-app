@@ -38,9 +38,9 @@ public class ScreenshotHarness extends Application {
     static final String DEMO_PASSWORD = "DemoPass2026!";
     static final String DEMO_POSTCODE = "SO17 1BJ";
 
-    private static Path out = Path.of("target", "screenshots");
-    private static String only = "";
-    private Stage stage;
+    static Path out = Path.of("target", "screenshots");
+    static String only = "";
+    Stage stage;
 
     public static void main(String[] args) {
         if (args.length > 0) out = Path.of(args[0]);
@@ -67,7 +67,7 @@ public class ScreenshotHarness extends Application {
         script.start();
     }
 
-    private void showLogin() throws IOException {
+    void showLogin() throws IOException {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/login.fxml"));
         Scene scene = new Scene(loader.load(), WIDTH, HEIGHT);
         scene.getStylesheets().add(UI.STYLE);
@@ -101,7 +101,7 @@ public class ScreenshotHarness extends Application {
 
     record Step(String name, Runnable body) {}
 
-    private List<Step> steps() {
+    List<Step> steps() {
         List<Step> list = new ArrayList<>();
         list.add(new Step("auth", this::authScreens));
         list.add(new Step("dbwarning", this::dbWarning));

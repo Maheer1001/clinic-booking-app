@@ -17,6 +17,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import model.Service;
 import model.StaffMember;
@@ -141,7 +142,7 @@ public class StaffClinicView {
             }));
             reject.setOnAction(e -> {
                 if (!StaffUi.confirm(pending, "Reject this request?",
-                        m.email() + " won't get access to this clinic. Their account stays, so they can ask again with the staff code.",
+                        m.email() + " won't get access to this clinic. Their account stays, but it can't use the staff area.",
                         "Reject")) return;
                 staff.<List<StaffMember>>call((s, u, c) -> s.rejectStaff(u, c, m.userId()), this::pendingResult);
             });
@@ -201,7 +202,10 @@ public class StaffClinicView {
         }
     }
 
-    /** Name and email, an optional role pill, then two small buttons underneath. */
+    /**
+     * Name and email on full-width lines, then two small buttons with the optional role pill on the
+     * right. (With the pill beside the name, a long email was cut mid-word at 420px.)
+     */
     private Node personRow(StaffMember m, StaffForms.Pill pill, Button a, Button b) {
         boolean me = m.userId() == staff.staffUserId();
         // Accounts without a name show their email as the name: don't repeat it underneath.
@@ -209,13 +213,14 @@ public class StaffClinicView {
         Label name = UI.wrappingLabel((named ? m.displayName() : m.email()) + (me ? " (you)" : ""));
         name.getStyleClass().add(UI.HEADING);
         name.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(name, Priority.ALWAYS);
-        HBox top = new HBox(10, name);
-        if (pill != null) top.getChildren().add(StaffUi.pill(pill));
-        top.setAlignment(Pos.CENTER_LEFT);
         HBox buttons = new HBox(8, a, b);
+        if (pill != null) {
+            Region gap = new Region();
+            HBox.setHgrow(gap, Priority.ALWAYS);
+            buttons.getChildren().addAll(gap, StaffUi.pill(pill));
+        }
         buttons.setAlignment(Pos.CENTER_LEFT);
-        VBox row = UI.innerCard(6, top);
+        VBox row = UI.innerCard(6, name);
         if (named) {
             Label email = UI.muted(m.email());
             email.setWrapText(true);

@@ -635,6 +635,29 @@ public class StaffDAO implements StaffRepository {
         });
     }
 
+    @Override
+    public boolean shortenPrescription(int clinicId, int prescriptionId, LocalDate newEnd, LocalDateTime now,
+                                       AuditEntry audit) throws SQLException {
+        String sql = """
+            UPDATE "Prescription"
+            SET end_date = ?, updated_at = ?
+            WHERE prescription_id = ? AND clinic_id = ? AND (actively_taking IS NULL OR actively_taking = TRUE)
+              AND (end_date IS NULL OR end_date > ?)
+            """;
+        return guarded(c -> {
+            try (PreparedStatement ps = c.prepareStatement(sql)) {
+                ps.setDate(1, Date.valueOf(newEnd));
+                ps.setTimestamp(2, Timestamp.valueOf(now));
+                ps.setInt(3, prescriptionId);
+                ps.setInt(4, clinicId);
+                ps.setDate(5, Date.valueOf(newEnd));
+                if (ps.executeUpdate() != 1) throw new NothingChanged();
+            }
+            AuditLogDAO.insert(c, audit);
+            return true;
+        });
+    }
+
     private static List<StaffPrescription> prescriptions(PreparedStatement ps) throws SQLException {
         List<StaffPrescription> out = new ArrayList<>();
         try (ResultSet rs = ps.executeQuery()) {
