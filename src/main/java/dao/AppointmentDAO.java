@@ -37,6 +37,11 @@ public class AppointmentDAO implements AppointmentRepository {
         this.timeslotDAO = timeslotDAO;
     }
 
+    /** Booking notes: blank is stored as NULL, and a blank value saved before that reads as no notes. */
+    static String notesOrNull(String notes) {
+        return notes == null || notes.isBlank() ? null : notes;
+    }
+
     /**
      * Inserts the appointment and, when the booking carries personal details (first/last name, date of
      * birth, phone, email, gender, sexuality, accessibility needs), a "BookingDetails" row for it, in one
@@ -56,7 +61,7 @@ public class AppointmentDAO implements AppointmentRepository {
                 try (PreparedStatement ps = c.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS)) {
                     ps.setInt(1, userId);
                     ps.setInt(2, timeslotId);
-                    ps.setString(3, b.getReason());
+                    ps.setString(3, notesOrNull(b.getReason()));
                     ps.setString(4, "CONFIRMED");
                     ps.executeUpdate();
                     try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -311,7 +316,7 @@ public class AppointmentDAO implements AppointmentRepository {
                             dateStr, startStr, endStr,
                             rs.getString("service_name"),
                             rs.getString("clinic_name"),
-                            rs.getString("notes")));
+                            notesOrNull(rs.getString("notes"))));
                 }
             }
         } catch (SQLException e) {
@@ -375,7 +380,7 @@ public class AppointmentDAO implements AppointmentRepository {
                 dateStr, startStr, endStr,
                 rs.getString("service_name"),
                 rs.getString("clinic_name"),
-                rs.getString("notes"),
+                notesOrNull(rs.getString("notes")),
                 AppointmentStatus.fromDb(rs.getString("status")));
     }
 
