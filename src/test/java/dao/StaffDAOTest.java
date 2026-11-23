@@ -178,10 +178,18 @@ class StaffDAOTest {
         assertEquals(clinician, dao.prescription(C1, rx).orElseThrow().prescribingClinicianId());
         assertTrue(dao.prescription(C2, rx).isEmpty());
         assertTrue(dao.patientPrescriptions(C2, patientBoth).isEmpty());
+        // shorten: never from another clinic, never later or the same day, then earlier works
+        assertFalse(dao.shortenPrescription(C2, rx, DAY.plusDays(3), NOW, audit(Action.SHORTEN_PRESCRIPTION, patientBoth)));
+        assertFalse(dao.shortenPrescription(C1, rx, DAY.plusDays(7), NOW, audit(Action.SHORTEN_PRESCRIPTION, patientBoth)));
+        assertTrue(dao.shortenPrescription(C1, rx, DAY.plusDays(3), NOW, audit(Action.SHORTEN_PRESCRIPTION, patientBoth)));
+        assertEquals(DAY.plusDays(3), dao.prescription(C1, rx).orElseThrow().endDate());
+        assertTrue(dao.prescription(C1, rx).orElseThrow().active());
         assertFalse(dao.stopPrescription(C2, rx, DAY, NOW, audit(Action.STOP_PRESCRIPTION, patientBoth)));
         assertTrue(dao.stopPrescription(C1, rx, DAY, NOW, audit(Action.STOP_PRESCRIPTION, patientBoth)));
         assertFalse(dao.prescription(C1, rx).orElseThrow().active());
         assertEquals(DAY, dao.prescription(C1, rx).orElseThrow().endDate());
+        assertFalse(dao.shortenPrescription(C1, rx, DAY.minusDays(1), NOW, audit(Action.SHORTEN_PRESCRIPTION, patientBoth)),
+                "a stopped course can't be shortened");
     }
 
     @Test

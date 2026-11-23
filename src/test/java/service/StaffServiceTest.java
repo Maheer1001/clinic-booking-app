@@ -170,6 +170,7 @@ class StaffServiceTest {
         service.releaseTest(CLINICIAN, CLINIC_1, testId, false);
         int rx = service.prescribe(CLINICIAN, CLINIC_1, PATIENT_HERE,
                 new PrescriptionDraft(1, testId, "100mg", 2, 0, TODAY, TODAY.plusDays(7), "With food")).value().prescriptionId();
+        service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.plusDays(3));
         service.stopPrescription(CLINICIAN, CLINIC_1, rx);
         service.promoteStaff(ADMIN, CLINIC_1, CLINICIAN);
         service.demoteStaff(ADMIN, CLINIC_1, CLINICIAN);
@@ -318,6 +319,45 @@ class StaffServiceTest {
     // ------------------------------------------------------------ prescriptions
 
     @Test
+    void shortenPrescription_onlyMovesTheLastDayEarlier_andIsAudited() {
+        int rx = service.prescribe(CLINICIAN, CLINIC_1, PATIENT_HERE,
+                new PrescriptionDraft(1, null, "100mg", 2, 0, TODAY.minusDays(2), TODAY.plusDays(7), null))
+                .value().prescriptionId();
+
+        assertEquals("Choose the new last day.", service.shortenPrescription(CLINICIAN, CLINIC_1, rx, null).message());
+        assertEquals("The last day can't be in the past. Use Stop early to end it today.",
+                service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.minusDays(1)).message());
+        assertEquals("Choose a day before the current last day.",
+                service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.plusDays(7)).message());
+        assertEquals("Choose a day before the current last day.",
+                service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.plusDays(9)).message());
+        assertFalse(auditedActions().contains(Action.SHORTEN_PRESCRIPTION));
+
+        StaffResult<model.StaffPrescription> shorter = service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.plusDays(3));
+        assertTrue(shorter.ok());
+        assertEquals(TODAY.plusDays(3), shorter.value().endDate());
+        assertTrue(shorter.value().active());
+        assertTrue(auditedActions().contains(Action.SHORTEN_PRESCRIPTION));
+
+        // today is allowed (the course's last day); another clinic can't touch it
+        assertTrue(service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY).ok());
+        assertEquals(StaffResult.Status.NOT_FOUND,
+                service.shortenPrescription(OTHER_CLINIC_STAFF, CLINIC_2, rx, TODAY).status());
+    }
+
+    @Test
+    void shortenPrescription_ongoingCourse_getsAnEndDate_notBeforeItsStart() {
+        int rx = service.prescribe(CLINICIAN, CLINIC_1, PATIENT_HERE,
+                new PrescriptionDraft(1, null, "1 tablet", 1, 0, TODAY.plusDays(5), null, null))
+                .value().prescriptionId();
+        assertEquals("The last day can't be before the start date.",
+                service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.plusDays(4)).message());
+        StaffResult<model.StaffPrescription> r = service.shortenPrescription(CLINICIAN, CLINIC_1, rx, TODAY.plusDays(20));
+        assertTrue(r.ok());
+        assertEquals(TODAY.plusDays(20), r.value().endDate());
+    }
+
+    @Test
     void prescribe_setsClinician_andStopEarlyEndsToday() {
         StaffResult<model.StaffPrescription> p = service.prescribe(CLINICIAN, CLINIC_1, PATIENT_HERE,
                 new PrescriptionDraft(1, null, " 100mg ", 2, 0, TODAY, TODAY.plusDays(7), " "));
@@ -331,6 +371,9 @@ class StaffServiceTest {
         assertEquals(TODAY, stopped.value().endDate());
         assertEquals("This prescription has already been stopped.",
                 service.stopPrescription(CLINICIAN, CLINIC_1, p.value().prescriptionId()).message());
+
+        assertEquals("This prescription has already been stopped.",
+                service.shortenPrescription(CLINICIAN, CLINIC_1, p.value().prescriptionId(), TODAY).message());
 
         assertEquals("Choose a medicine from the list.", service.prescribe(CLINICIAN, CLINIC_1, PATIENT_HERE,
                 new PrescriptionDraft(99, null, "1", null, null, TODAY, null, null)).message());

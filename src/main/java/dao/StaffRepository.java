@@ -89,6 +89,13 @@ public interface StaffRepository {
     boolean stopPrescription(int clinicId, int prescriptionId, LocalDate today, LocalDateTime now,
                              AuditEntry audit) throws SQLException;
 
+    /**
+     * Moves the last day of a course that is still being taken to {@code newEnd} (only ever earlier).
+     * @return false if it is stopped, gone, or already ends on or before {@code newEnd}
+     */
+    boolean shortenPrescription(int clinicId, int prescriptionId, LocalDate newEnd, LocalDateTime now,
+                                AuditEntry audit) throws SQLException;
+
     // ------------------------------------------------------------ clinic admin
 
     /** ACTIVE staff at the clinic (pending sign-ups are not staff there yet). */

@@ -267,6 +267,20 @@ public class FakeStaffRepository implements StaffRepository {
     }
 
     @Override
+    public boolean shortenPrescription(int clinicId, int prescriptionId, LocalDate newEnd, LocalDateTime now,
+                                       AuditEntry audit) throws SQLException {
+        Optional<StaffPrescription> p = prescription(clinicId, prescriptionId);
+        if (p.isEmpty() || !p.get().active()) return false;
+        StaffPrescription o = p.get();
+        if (o.endDate() != null && !o.endDate().isAfter(newEnd)) return false;
+        prescriptions.put(prescriptionId, new StaffPrescription(o.prescriptionId(), o.patientUserId(), o.clinicId(),
+                o.medicineId(), o.medicineName(), o.testId(), o.dosage(), o.dosesPerDay(), o.daysBetweenDoses(),
+                o.startDate(), newEnd, o.instructions(), true, o.prescribingClinicianId()));
+        write(audit);
+        return true;
+    }
+
+    @Override
     public List<StaffMember> staff(int clinicId) {
         return List.copyOf(staff.getOrDefault(clinicId, List.of()));
     }

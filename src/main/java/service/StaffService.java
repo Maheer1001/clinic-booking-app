@@ -384,6 +384,39 @@ public class StaffService {
         });
     }
 
+    /**
+     * Shortens a course still being taken: {@code newLastDay} becomes its end date. Only ever earlier
+     * than the current end, never in the past and never before the start (use Stop early to end it
+     * now). Dose reminders already re-read the end date before each one goes out.
+     */
+    public StaffResult<StaffPrescription> shortenPrescription(int staffUserId, int clinicId, int prescriptionId,
+                                                              LocalDate newLastDay) {
+        return run(staffUserId, clinicId, false, a -> {
+            Optional<StaffPrescription> p = repo.prescription(clinicId, prescriptionId);
+            if (p.isEmpty() || !repo.patientVisible(clinicId, p.get().patientUserId())) {
+                return StaffResult.fail(StaffResult.Status.NOT_FOUND);
+            }
+            StaffPrescription rx = p.get();
+            if (!rx.active()) return StaffResult.invalid("This prescription has already been stopped.");
+            if (newLastDay == null) return StaffResult.invalid("Choose the new last day.");
+            if (newLastDay.isBefore(today())) {
+                return StaffResult.invalid("The last day can't be in the past. Use Stop early to end it today.");
+            }
+            if (rx.startDate() != null && newLastDay.isBefore(rx.startDate())) {
+                return StaffResult.invalid("The last day can't be before the start date.");
+            }
+            if (rx.endDate() != null && !newLastDay.isBefore(rx.endDate())) {
+                return StaffResult.invalid("Choose a day before the current last day.");
+            }
+            AuditEntry audit = AuditEntry.of(staffUserId, clinicId, Action.SHORTEN_PRESCRIPTION, AuditEntry.PRESCRIPTION,
+                    prescriptionId, rx.patientUserId());
+            if (!repo.shortenPrescription(clinicId, prescriptionId, newLastDay, nowUtc(), audit)) {
+                return StaffResult.invalid("This prescription changed meanwhile. Go back and open it again.");
+            }
+            return StaffResult.ok(repo.prescription(clinicId, prescriptionId).orElse(rx), "Course shortened.");
+        });
+    }
+
     // ================================================================ clinic admin
 
     public StaffResult<List<StaffMember>> listStaff(int staffUserId, int clinicId) {
