@@ -28,12 +28,22 @@ public final class ReminderPopups {
      * never appears for someone who has logged out or for a different user in the meantime.
      */
     static void showIfSignedIn(ReminderAlert alert, Supplier<String> signedInEmail, java.util.function.Consumer<Runnable> fxThread) {
+        showIfSignedIn(alert, signedInEmail, fxThread, PopupQueue.shared());
+    }
+
+    /**
+     * Like {@link #showIfSignedIn(ReminderAlert, Supplier, java.util.function.Consumer)}, through the given
+     * popup queue, so a reminder waits for any other popup (another reminder, new results) to close
+     * first. Who is signed in is checked once more when its turn comes.
+     */
+    static void showIfSignedIn(ReminderAlert alert, Supplier<String> signedInEmail,
+                               java.util.function.Consumer<Runnable> fxThread, PopupQueue popups) {
         if (!alert.isFor(signedInEmail.get())) {
             return;
         }
         fxThread.accept(() -> {
             if (alert.isFor(signedInEmail.get())) {
-                notificationFor(alert).show();
+                popups.enqueue(notificationFor(alert), () -> alert.isFor(signedInEmail.get()));
             }
         });
     }

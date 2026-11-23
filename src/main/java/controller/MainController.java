@@ -49,9 +49,7 @@ public class MainController {
         view.getQuickBookButton().setOnAction(e -> {
             BookingController bc = new BookingController(nav);
             nav.goToPage(bc.getClinicSearchPage(), "Find a clinic", false);
-            try {
-                bc.checkForDefaultClinic();
-            } catch (SQLException ignored) {}
+            bc.checkForDefaultClinic();
         });
 
         // open the first tab (Booking for patients, Today for staff)

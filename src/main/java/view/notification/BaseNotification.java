@@ -27,6 +27,14 @@ public abstract class BaseNotification implements Notification {
     private Node previewContent;
     private Node fullContent;
     private boolean previewMode;
+    /** Called once the popup window has closed; set by {@link #show(Runnable)}. */
+    private Runnable onClosed;
+
+    @Override
+    public void show(Runnable onClosed) {
+        this.onClosed = onClosed;
+        show();
+    }
 
     @Override
     public void show() {
@@ -150,6 +158,9 @@ public abstract class BaseNotification implements Notification {
         }
 
         stage.setScene(scene);
+        Runnable closed = onClosed;
+        onClosed = null;
+        if (closed != null) stage.setOnHidden(e -> closed.run());
         stage.show();
     }
 }

@@ -82,4 +82,22 @@ class ReminderPopupsTest {
         assertFalse(alert.isFor(null));
         assertFalse(alert.isFor("other@example.com"));
     }
+
+    @Test
+    void waitsBehindAnOpenPopup_andIsSkippedIfTheUserLogsOutBeforeItsTurn() {
+        PopupQueue popups = new PopupQueue();
+        Runnable[] closeBlocker = new Runnable[1];
+        popups.enqueue(onClosed -> closeBlocker[0] = onClosed); // e.g. the security-question prompt
+        List<Runnable> fx = new ArrayList<>();
+        AtomicReference<String> signedIn = new AtomicReference<>(EMAIL);
+
+        ReminderPopups.showIfSignedIn(appointmentAlert(), signedIn::get, fx::add, popups);
+        fx.getFirst().run();
+        assertEquals(1, popups.waitingCount(), "queued behind the open popup, not shown on top of it");
+
+        signedIn.set(null);
+        assertDoesNotThrow(() -> closeBlocker[0].run(), "skipped when its turn comes, so nothing is shown");
+        assertEquals(0, popups.waitingCount());
+        assertFalse(popups.isShowing());
+    }
 }

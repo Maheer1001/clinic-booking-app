@@ -85,7 +85,9 @@ public class Review {
             confirm.setDisable(true);
             controller.confirmBookingOfferingName(result -> {
                 if (!result.anyBooked()) {
-                    confirmMessage.setText("Sorry, that time is no longer available. Please choose a different time.");
+                    String notice = controller.bookingNotice();
+                    confirmMessage.setText("Sorry, that time is no longer available. Please choose a different time."
+                            + (notice != null ? "\n" + notice : ""));
                     changeTime.setVisible(true);
                     confirm.setDisable(false);
                 }

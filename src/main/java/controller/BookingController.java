@@ -77,37 +77,76 @@ public class BookingController {
         messageLabel.visibleProperty().bind(messageLabel.textProperty().isNotEmpty());
     }
 
-    public void checkForDefaultClinic() throws SQLException {
-        if (userRepository.defaultClinicExists(Data.getCurrentUserId())) {
-            int clinicID = userRepository.getDefaultClinic(Data.getCurrentUserId());
-            String defaultCName = bookingService.findClinicNameById(clinicID);
-            ButtonType defaultC = new ButtonType("Yes, continue", ButtonBar.ButtonData.OK_DONE);
+    /** The patient's saved default clinic, as offered by {@link #checkForDefaultClinic()}. */
+    record DefaultClinic(int id, String name) {}
 
-            ButtonType ignore = new ButtonType("Choose another", ButtonBar.ButtonData.CANCEL_CLOSE);
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Your clinic");
-            alert.setHeaderText("Book at your usual clinic?");
-            alert.setContentText(defaultCName + " is saved as your default clinic.");
+    /**
+     * Reads the patient's default clinic, if they have one. Reads the database: call off the FX thread.
+     * Package-private for tests.
+     */
+    Optional<DefaultClinic> findDefaultClinic(int userId) throws SQLException {
+        if (userId < 0 || !userRepository.defaultClinicExists(userId)) return Optional.empty();
+        int clinicId = userRepository.getDefaultClinic(userId);
+        return Optional.of(new DefaultClinic(clinicId, bookingService.findClinicNameById(clinicId)));
+    }
 
-            alert.getButtonTypes().setAll(defaultC, ignore);
-            UI.styleDialog(alert, Data.getScene());
-            DialogPane dialogPane = alert.getDialogPane();
+    /** The clinic with its services, ready to book at. Reads the database: call off the FX thread. */
+    private Clinic loadClinicWithServices(int clinicId) {
+        List<Service> services = bookingService.findServicesByClinicId(clinicId);
+        Clinic clinic = bookingService.findClinicById(clinicId);
+        if (clinic != null) clinic.setServices(services);
+        return clinic;
+    }
 
-            Button defaultBtn = (Button) dialogPane.lookupButton(defaultC);
-            defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
-            Button ignoreBtn = (Button) dialogPane.lookupButton(ignore);
-            ignoreBtn.getStyleClass().add(UI.ALERT_IGNORE);
-
-            Optional<ButtonType> result = alert.showAndWait();
-
-            if (result.isPresent() && result.get() == defaultC) {
-                List<Service> services = bookingService.findServicesByClinicId(clinicID);
-                Clinic clinic = bookingService.findClinicById(clinicID);
-                clinic.setServices(services);
-                Data.getBooking().setClinic(clinic);
-                nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
+    /**
+     * Offers "Book at your usual clinic?" when the patient has a default clinic. The database is read
+     * in the background (it used to be read on the JavaFX thread, freezing the window on a slow
+     * connection); the question and the move to "Choose a service" happen back on the FX thread.
+     * Nothing is asked if the patient has logged out meanwhile; if the read fails they just stay on
+     * the clinic search page.
+     */
+    public void checkForDefaultClinic() {
+        int userId = Data.getCurrentUserId();
+        if (userId < 0) return;
+        Background.run(() -> {
+            try {
+                return findDefaultClinic(userId);
+            } catch (SQLException e) {
+                throw new IllegalStateException(e);
             }
-        }
+        }, found -> {
+            if (found.isEmpty() || Data.getCurrentUserId() != userId) return;
+            if (askToUseDefaultClinic(found.get().name())) {
+                int clinicId = found.get().id();
+                Background.run(() -> loadClinicWithServices(clinicId), clinic -> {
+                    if (clinic == null || Data.getCurrentUserId() != userId) return;
+                    Data.getBooking().setClinic(clinic);
+                    nav.goToPage(ServiceSelection.getPage(this), "Choose a service", false);
+                }, ex -> messageLabel.setText("We couldn't open your usual clinic. Please choose it from the list."));
+            }
+        }, ex -> System.err.println("[Booking] Could not check for a default clinic: " + ex.getClass().getSimpleName()));
+    }
+
+    private static boolean askToUseDefaultClinic(String clinicName) {
+        ButtonType defaultC = new ButtonType("Yes, continue", ButtonBar.ButtonData.OK_DONE);
+
+        ButtonType ignore = new ButtonType("Choose another", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Your clinic");
+        alert.setHeaderText("Book at your usual clinic?");
+        alert.setContentText(clinicName + " is saved as your default clinic.");
+
+        alert.getButtonTypes().setAll(defaultC, ignore);
+        UI.styleDialog(alert, Data.getScene());
+        DialogPane dialogPane = alert.getDialogPane();
+
+        Button defaultBtn = (Button) dialogPane.lookupButton(defaultC);
+        defaultBtn.getStyleClass().add(UI.ALERT_AGREE);
+        Button ignoreBtn = (Button) dialogPane.lookupButton(ignore);
+        ignoreBtn.getStyleClass().add(UI.ALERT_IGNORE);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == defaultC;
     }
 
     public List<Clinic> getClinics() throws SQLException {
@@ -364,6 +403,16 @@ public class BookingController {
      * @return the outcome; when nothing was booked the booking is kept so the user can pick another time
      */
     public BookingService.BookingResult confirmBooking() {
+        return confirmBooking(null);
+    }
+
+    /**
+     * Like {@link #confirmBooking()}, with {@code notice} (if not null) shown on the "Booking confirmed"
+     * page, e.g. that the name typed at booking couldn't be saved to the account.
+     * When only some services were booked, the booking keeps just the others (their dates kept, times
+     * cleared) and the page offers "Choose a different time" for them, like the single-service path.
+     */
+    BookingService.BookingResult confirmBooking(String notice) {
         Book b = Data.getBooking();
         int userId = Data.getCurrentUserId();
         if (userId < 0) {
@@ -421,7 +470,18 @@ public class BookingController {
                     } : null
             );
         }
-        Data.reset();
+        // Some services booked but not all: keep the others (and the details typed) so the patient can
+        // pick another time for them; otherwise this booking is finished.
+        List<Item> rebook = outcome.unavailable().isEmpty() ? List.of()
+                : BookingOutcome.itemsToRebook(b.getItems(), outcome);
+        if (rebook.isEmpty()) {
+            Data.reset();
+        } else {
+            b.setItems(new ArrayList<>(rebook));
+            b.setTimeslotId(0);
+            b.setDate(null);
+            b.setTime(null);
+        }
 
         // Every new booking gets a reminder straight away (the user's saved default, or one day before).
         // Before, nothing was set unless the user went to Reminders and switched each one on.
@@ -442,8 +502,10 @@ public class BookingController {
         Button setupRemindersBtn = UI.secondaryButton("Change reminder");
         Button skipBtn = UI.primaryButton("Done");
 
-        setupRemindersBtn.setOnAction(e -> {nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});
-        skipBtn.setOnAction(e -> nav.goToHome());
+        // leaving without choosing another time ends the half-finished booking
+        Runnable dropRebook = () -> { if (!rebook.isEmpty() && Data.getBooking() == b) Data.reset(); };
+        setupRemindersBtn.setOnAction(e -> {dropRebook.run(); nav.goToPageNewTab("reminders", new RemindersView(userId).getRemindersScene("appointments"), "Reminders", true); nav.clearTabStack("booking");});
+        skipBtn.setOnAction(e -> {dropRebook.run(); nav.goToHome();});
 
         setupRemindersBtn.setMaxWidth(Double.MAX_VALUE);
         skipBtn.setMaxWidth(Double.MAX_VALUE);
@@ -473,11 +535,23 @@ public class BookingController {
         hero.setAlignment(Pos.CENTER);
 
         javafx.scene.layout.VBox prompt = UI.pageTop(hero, summary);
-        if (!outcome.unavailable().isEmpty()) {
+        if (!rebook.isEmpty()) {
+            Label notBooked = UI.error(BookingOutcome.partialMessage(BookingOutcome.bookedNames(outcome), outcome.unavailable()));
+            notBooked.setWrapText(true);
+            Button changeTime = UI.secondaryButton("Choose a different time");
+            changeTime.setMaxWidth(Double.MAX_VALUE);
+            changeTime.setOnAction(e -> goToTimeslotsForItems());
+            prompt.getChildren().addAll(notBooked, changeTime);
+        } else if (!outcome.unavailable().isEmpty()) {
             Label notBooked = UI.error("Not booked, the time was no longer available: "
                     + String.join(", ", outcome.unavailable()) + ". You can book it again from Booking.");
             notBooked.setWrapText(true);
             prompt.getChildren().add(notBooked);
+        }
+        if (notice != null && !notice.isBlank()) {
+            Label noticeLabel = UI.error(notice);
+            noticeLabel.setWrapText(true);
+            prompt.getChildren().add(noticeLabel);
         }
         blurbLabel.setWrapText(true);
         sub.setWrapText(true);
@@ -546,19 +620,38 @@ public class BookingController {
         Book b = Data.getBooking();
         String first = b.getFirstName();
         String last = b.getLastName();
-        Runnable book = () -> onResult.accept(confirmBooking());
+        bookingNotice = null;
+        Runnable book = () -> onResult.accept(confirmBooking(bookingNotice));
         Background.run(() -> shouldOfferSaveName(first, last), offer -> {
             if (!offer || !saveNamePrompt.test(first, last)) {
                 book.run();
                 return;
             }
+            // The booking goes ahead either way; a name that didn't save gets a short line with the result.
             Background.run(() -> saveNameToAccount(first, last), saved -> {
                 if (saved != service.AccountSecurityService.SaveNameResult.SUCCESS) {
                     System.err.println("[Booking] Could not save the name to the account: " + saved);
+                    bookingNotice = BookingOutcome.NAME_NOT_SAVED;
                 }
                 book.run();
-            }, ex -> book.run());
+            }, ex -> {
+                System.err.println("[Booking] Could not save the name to the account: " + ex.getClass().getSimpleName());
+                bookingNotice = BookingOutcome.NAME_NOT_SAVED;
+                book.run();
+            });
         }, ex -> book.run());
+    }
+
+    /** Set by {@link #confirmBookingOfferingName} when the typed name couldn't be saved to the account. */
+    private String bookingNotice;
+
+    /**
+     * A message from the last {@link #confirmBookingOfferingName} to show with its result (e.g. that the
+     * name wasn't saved to the account), or null. The "Booking confirmed" page already shows it; the
+     * review page shows it when nothing could be booked.
+     */
+    public String bookingNotice() {
+        return bookingNotice;
     }
 
     private static boolean askToSaveName(String first, String last) {
