@@ -1,5 +1,6 @@
 package service;
 
+import app.DB;
 import dao.StaffAccountDAO;
 import dao.StaffAccountRepository;
 import model.SecurityQuestion;
@@ -132,6 +133,7 @@ public class StaffAuthService {
             securityQuestions.setSecurityQuestion(userId, securityQuestionKey, securityAnswer);
             return new StaffSignUpResult(Status.SUCCESS, clinicId, userId);
         } catch (SQLException e) {
+            if (DB.isDuplicateEmail(e)) return StaffSignUpResult.of(Status.EMAIL_ALREADY_USED);
             System.err.println("[StaffSignUp] Database error (SQLState " + e.getSQLState() + ")");
             return StaffSignUpResult.of(Status.DB_ERROR);
         }

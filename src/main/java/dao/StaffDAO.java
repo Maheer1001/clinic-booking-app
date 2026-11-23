@@ -218,7 +218,7 @@ public class StaffDAO implements StaffRepository {
                         date == null ? null : date.toLocalDate(),
                         start == null ? null : start.toLocalTime(),
                         end == null ? null : end.toLocalTime(),
-                        rs.getString("service_name"), rs.getString("status"), rs.getString("notes"), details);
+                        rs.getString("service_name"), rs.getString("status"), AppointmentDAO.notesOrNull(rs.getString("notes")), details);
                 String name = bookingName(details);
                 if (name == null) {
                     name = new User(rs.getInt("user_id"), rs.getString("u_email"), rs.getString("u_first"),

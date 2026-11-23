@@ -12,11 +12,18 @@ import model.StaffRole;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import service.AccountSecurityService.ChangePasswordResult;
+import service.FakeStaffRepository;
+import service.ResultReleaseNotifier;
+import service.StaffResult;
+import service.StaffService;
 import view.Navigator;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -94,7 +101,14 @@ class LoginRoutingTest {
     @Test
     void staffNavigatorStartsOnTheTodayPage() {
         StaffAccess admin = access(StaffRole.CLINIC_ADMIN, List.of(1), false);
-        Navigator nav = new Navigator(LoginRouting.staffTabs(admin), javafx.scene.layout.VBox::new);
+        // The pages' loads are dropped, so this only checks navigation and never opens a database.
+        StaffController.Runner dropWork = new StaffController.Runner() {
+            @Override
+            public <T> void run(Supplier<StaffResult<T>> work, Consumer<StaffResult<T>> done) { }
+        };
+        StaffService offline = new StaffService(new FakeStaffRepository(), ResultReleaseNotifier.NONE, Clock.systemUTC());
+        Navigator nav = new Navigator(LoginRouting.staffTabs(admin, a -> new StaffController(offline, dropWork, a)),
+                javafx.scene.layout.VBox::new);
         nav.start();
         assertEquals("today", nav.getCurrentTab());
         assertInstanceOf(javafx.scene.control.ScrollPane.class, nav.getRoot().getCenter(), "the staff day list");

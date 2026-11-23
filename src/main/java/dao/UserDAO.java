@@ -88,8 +88,9 @@ public class UserDAO implements UserRepository, AccountRepository {
                 ps.executeUpdate();
                 return true;
             } catch (SQLException e) {
-                // Postgres unique violation
-                if ("23505".equals(e.getSQLState())) {
+                // Postgres unique violation on user_id: MAX(user_id)+1 raced, try the next id.
+                // A duplicate email is not retried: the caller reports "email already in use".
+                if ("23505".equals(e.getSQLState()) && !DB.isDuplicateEmail(e)) {
                     continue;
                 }
                 throw e;

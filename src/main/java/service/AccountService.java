@@ -1,5 +1,6 @@
 package service;
 
+import app.DB;
 import dao.UserDAO;
 
 import java.sql.SQLException;
@@ -92,7 +93,7 @@ public class AccountService {
 
             return ok ? SaveResult.SUCCESS : SaveResult.DB_ERROR;
         } catch (SQLException e) {
-            return SaveResult.DB_ERROR;
+            return DB.isDuplicateEmail(e) ? SaveResult.EMAIL_ALREADY_USED : SaveResult.DB_ERROR;
         }
     }
 

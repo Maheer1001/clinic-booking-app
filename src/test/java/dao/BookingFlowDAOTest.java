@@ -233,4 +233,36 @@ class BookingFlowDAOTest {
             s.execute("DELETE FROM \"Clinic\" WHERE clinic_id = 2");
         }
     }
+
+    private static String storedNotes(int appId) throws Exception {
+        try (Connection c = DB.connect();
+             PreparedStatement ps = c.prepareStatement("SELECT notes FROM \"Appointment\" WHERE app_id = ?")) {
+            ps.setInt(1, appId);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                return rs.getString(1);
+            }
+        }
+    }
+
+    @Test
+    void emptyNotes_areSavedAsNull_andOldEmptyStringsReadAsNoNotes() throws Exception {
+        Book blank = new Book();
+        blank.setReason("   ");
+        int blankApp = appointments.save(blank, USER, slots.reserve(0, CLINIC, SERVICE, DAY, LocalTime.of(9, 0), LocalTime.of(9, 30))).orElseThrow();
+        Book written = new Book();
+        written.setReason("Please call first");
+        int writtenApp = appointments.save(written, USER, slots.reserve(0, CLINIC, SERVICE, DAY, LocalTime.of(10, 0), LocalTime.of(10, 30))).orElseThrow();
+        assertNull(storedNotes(blankApp));
+        assertEquals("Please call first", storedNotes(writtenApp));
+
+        // a row saved before the fix, with '' instead of NULL
+        try (Connection c = DB.connect(); Statement s = c.createStatement()) {
+            s.execute("UPDATE \"Appointment\" SET notes = '' WHERE app_id = " + blankApp);
+        }
+        UpcomingAppointmentDetails old = appointments.getUpcomingAppointmentDetailsByUserId(USER).stream()
+                .filter(a -> a.appId() == blankApp).findFirst().orElseThrow();
+        assertNull(old.notes());
+        assertEquals(List.of(), old.getNotesLines());
+    }
 }

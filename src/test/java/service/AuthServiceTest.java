@@ -74,6 +74,19 @@ public class AuthServiceTest {
     }
 
     @Test
+    void signUp_racingAnotherSignUp_uniqueIndexGivesEmailAlreadyUsed() {
+        // emailExists said no, but another sign-up with the same email got in first
+        FakeUserRepository users = new FakeUserRepository() {
+            @Override public boolean insertUser(String email, String passwordHash) throws java.sql.SQLException {
+                throw new java.sql.SQLException(
+                        "ERROR: duplicate key value violates unique constraint \"user_email_lower_key\"", "23505");
+            }
+        };
+        assertEquals(AuthService.SignUpResult.EMAIL_ALREADY_USED,
+                new AuthService(users).signUp("race@example.com", "Password1", true));
+    }
+
+    @Test
     void signUp_withoutAcceptingTerms_shouldFail() {
         AuthService auth = new AuthService();
         assertEquals(AuthService.SignUpResult.TERMS_NOT_ACCEPTED,

@@ -98,7 +98,7 @@ public class BookingDetailsDAO implements BookingDetailsRepository {
                             end == null ? null : end.toLocalTime(),
                             rs.getString("service_name"),
                             rs.getString("status"),
-                            rs.getString("notes"),
+                            AppointmentDAO.notesOrNull(rs.getString("notes")),
                             map(rs)));
                 }
             }

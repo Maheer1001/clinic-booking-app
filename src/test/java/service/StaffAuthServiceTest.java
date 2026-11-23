@@ -123,6 +123,14 @@ class StaffAuthServiceTest {
     }
 
     @Test
+    void racingSignUpWithTheSameEmail_isEmailAlreadyUsed() {
+        repo.createFailure = new SQLException(
+                "ERROR: duplicate key value violates unique constraint \"user_email_lower_key\"", "23505");
+        assertEquals(StaffAuthService.Status.EMAIL_ALREADY_USED,
+                service.signUpStaff("race@clinic.test", PASSWORD, true, "clinic1", QUESTION, "Rover").status());
+    }
+
+    @Test
     void databaseDown_isReported() {
         repo.down = true;
         assertEquals(StaffAuthService.Status.DB_ERROR,
@@ -140,6 +148,7 @@ class StaffAuthServiceTest {
         final List<Created> created = new ArrayList<>();
         final List<String> existing = new ArrayList<>();
         boolean down;
+        SQLException createFailure;
 
         private void check() throws SQLException {
             if (down) throw new SQLException("down", "08000");
@@ -168,7 +177,8 @@ class StaffAuthServiceTest {
         @Override public boolean emailExists(String email) throws SQLException { check(); return existing.contains(email); }
 
         @Override public int createStaffUser(String email, String passwordHash, StaffRole role, int clinicId,
-                                             boolean mustResetPassword, boolean pending) {
+                                             boolean mustResetPassword, boolean pending) throws SQLException {
+            if (createFailure != null) throw createFailure;
             created.add(new Created(email, passwordHash, role, clinicId, pending));
             return 100 + created.size();
         }

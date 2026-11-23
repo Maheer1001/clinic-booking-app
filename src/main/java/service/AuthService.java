@@ -1,5 +1,6 @@
 package service;
 
+import app.DB;
 import dao.UserDAO;
 import dao.UserRepository;
 
@@ -111,7 +112,8 @@ public class AuthService {
             boolean inserted = userDAO.insertUser(email, passwordHash);
             return inserted ? SignUpResult.SUCCESS : SignUpResult.DB_ERROR;
         } catch (SQLException e) {
-            return SignUpResult.DB_ERROR;
+            // The unique email index catches a sign-up racing another with the same email.
+            return DB.isDuplicateEmail(e) ? SignUpResult.EMAIL_ALREADY_USED : SignUpResult.DB_ERROR;
         }
     }
 
