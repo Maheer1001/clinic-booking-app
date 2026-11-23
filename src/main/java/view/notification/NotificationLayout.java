@@ -53,6 +53,34 @@ public final class NotificationLayout {
         return card;
     }
 
+    /**
+     * A card listing entries of two lines each: a heading line (e.g. a test type), then a muted detail
+     * line (e.g. "20 Nov 2026 · Available"). For lists, where a long heading next to its value would
+     * squeeze the value into a narrow column; pairs with a blank heading are left out.
+     */
+    public static VBox listCard(String... headingDetailPairs) {
+        VBox card = UI.card(10);
+        for (int i = 0; i + 1 < headingDetailPairs.length; i += 2) {
+            String heading = headingDetailPairs[i];
+            if (heading == null || heading.isBlank()) continue;
+            Label h = new Label(heading.strip());
+            h.getStyleClass().add(UI.BODY);
+            h.setWrapText(true);
+            h.setMaxWidth(Double.MAX_VALUE);
+            VBox entry = new VBox(2, h);
+            String detail = headingDetailPairs[i + 1];
+            if (detail != null && !detail.isBlank()) {
+                Label d = new Label(detail.strip());
+                d.getStyleClass().add(UI.MUTED);
+                d.setWrapText(true);
+                d.setMaxWidth(Double.MAX_VALUE);
+                entry.getChildren().add(d);
+            }
+            card.getChildren().add(entry);
+        }
+        return card;
+    }
+
     /** Plain-text version of {@link #detailsCard} for {@code getMessage()}: one "Label: value" line per row. */
     public static String detailsText(String... labelValuePairs) {
         StringBuilder sb = new StringBuilder();

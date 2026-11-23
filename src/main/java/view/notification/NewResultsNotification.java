@@ -53,8 +53,10 @@ public class NewResultsNotification extends BaseNotification {
 
     @Override
     protected Node buildPreviewContent() {
+        // each result as its own two-line entry: a long test type next to its date squeezed the date
+        // into a narrow column ("20 Nov / 2026 · / Available")
         return NotificationLayout.page(getTitle(), patientName, LEAD,
-                NotificationLayout.detailsCard(rows()), TestResultNotification.FOOTNOTE);
+                NotificationLayout.listCard(rows()), TestResultNotification.FOOTNOTE);
     }
 
     /** One row per result: the test type, then e.g. "5 Feb 2026 · Available". */
