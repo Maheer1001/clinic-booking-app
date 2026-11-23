@@ -61,7 +61,10 @@ final class StaffGate {
         Label body = new Label(PENDING_MESSAGE);
         body.setWrapText(true);
         body.getStyleClass().add("muted");
-        Label hint = new Label("Once you're approved, log in again to open the staff app.");
+        // Removed or rejected staff land here too (they have no clinic either), so say so.
+        Label hint = new Label("Once you're approved, log in again to open the staff app. "
+                + "If you've been removed from your clinic, ask your clinic admin.");
+        hint.setWrapText(true);
         hint.getStyleClass().add("auth-hint");
         HBox footer = new HBox(logOutButton(logOut));
         footer.getStyleClass().add("auth-footer");

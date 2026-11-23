@@ -55,6 +55,9 @@ public class TestEditorView {
     private final Button save = UI.secondaryButton("Save draft");
     private final Button release = UI.primaryButton("Release to patient");
     private final HBox header = new HBox(10);
+    /** How releasing works; hidden with the Release button once the test is released. */
+    private final Label releaseNote = UI.muted("When you release it, the patient gets a discreet email (it never "
+            + "says the result) and an in-app alert that a new result is ready.");
 
     private record RowFields(VBox row, TextField condition, ComboBox<TestResultStatus> result) {}
 
@@ -127,9 +130,9 @@ public class TestEditorView {
         release.setMaxWidth(Double.MAX_VALUE);
         save.setOnAction(e -> doSave(false));
         release.setOnAction(e -> doSave(true));
-        Label releaseNote = UI.muted("When you release it, the patient gets a discreet email (it never says the "
-                + "result) and an in-app alert that a new result is ready.");
         releaseNote.setWrapText(true);
+        releaseNote.managedProperty().bind(release.managedProperty());
+        releaseNote.visibleProperty().bind(release.visibleProperty());
 
         VBox details = StaffUi.section("Test", label("TEST TYPE"), type, label("TEST DATE"), date);
         VBox results = StaffUi.section("Results", rows, add);

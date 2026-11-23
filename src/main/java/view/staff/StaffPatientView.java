@@ -131,8 +131,12 @@ public class StaffPatientView {
         VBox appts = StaffUi.section("Appointments here");
         if (rec.appointments().isEmpty()) appts.getChildren().add(UI.muted("No appointments at this clinic."));
         for (StaffAppointment a : rec.appointments()) {
-            String when = Dates.dateTime(a.booking().date(), a.booking().startTime(), a.booking().endTime());
-            appts.getChildren().add(StaffUi.listCard(when, a.booking().serviceName(),
+            // Date as the title, time and service underneath: "date, time" in one title was cut in two
+            // beside the pill at 420px.
+            String time = Dates.timeRange(a.booking().startTime(), a.booking().endTime());
+            String service = a.booking().serviceName();
+            appts.getChildren().add(StaffUi.listCard(Dates.full(a.booking().date()),
+                    service == null || service.isBlank() ? time : time + " · " + service,
                     StaffForms.appointmentPill(a.status()),
                     () -> nav.goToPage(new StaffAppointmentView(nav, staff, a.appId(), reload).page(),
                             "Appointment", false)));
