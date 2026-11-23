@@ -231,7 +231,7 @@ public class TrackingTestController extends TrackingSectionController {
                 nav.goToPageNewTab("booking", bc.getClinicSearchPage(), "Find a clinic", false);
                 nav.clearTabStack("booking");
                 // Same offer as "+ Book Appointment": book at the saved default clinic, or choose another.
-                try { bc.checkForDefaultClinic(); } catch (java.sql.SQLException ignored) {}
+                bc.checkForDefaultClinic();
             });
             HBox booking = UI.callout("A positive result usually needs a retest. Book a follow-up when you are ready.", newBookingButton);
 

@@ -38,6 +38,8 @@ class BookingControllerPromptTest {
         int lastUserId = -1;
         Book lastBook;
         boolean slotTaken;
+        /** Books the first item only; every other item's slot has been taken. */
+        boolean onlyFirstFree;
 
         @Override
         public BookingResult placeBooking(Book book, int userId) {
@@ -45,6 +47,12 @@ class BookingControllerPromptTest {
             this.lastUserId = userId;
             if (slotTaken) {
                 return new BookingResult(List.of(), List.of("Service A"));
+            }
+            if (onlyFirstFree) {
+                Item first = book.getItems().getFirst();
+                List<String> taken = book.getItems().stream().skip(1).map(i -> i.getService().getName()).toList();
+                return new BookingResult(
+                        List.of(new BookedAppointment(55, first.getService(), first.getDate(), first.getTime())), taken);
             }
             Item item = book.getItems().get(0);
             return new BookingResult(
@@ -59,6 +67,12 @@ class BookingControllerPromptTest {
         @Override
         public void notifyUser(int targetUserId, Email email, Notification notification) {
             callCount++;
+        }
+
+        @Override
+        public void notifyUserAsync(int targetUserId, Email email, Notification notification,
+                                    java.util.function.Consumer<Boolean> onEmailResult) {
+            callCount++; // no popup window or email from tests
         }
     }
 
@@ -174,8 +188,197 @@ class BookingControllerPromptTest {
         @Override
         public service.AccountSecurityService.SaveNameResult saveNameToAccount(String first, String last) {
             events.add("save " + first + " " + last);
-            return service.AccountSecurityService.SaveNameResult.SUCCESS;
+            if (saveFails) throw new IllegalStateException("database unreachable");
+            return saveResult;
         }
+
+        service.AccountSecurityService.SaveNameResult saveResult = service.AccountSecurityService.SaveNameResult.SUCCESS;
+        boolean saveFails;
+    }
+
+    /** Every piece of text (labels and buttons) on a page, in order. */
+    private static List<String> texts(Node node) {
+        List<String> out = new java.util.ArrayList<>();
+        collectTexts(node, out);
+        return out;
+    }
+
+    private static void collectTexts(Node node, List<String> out) {
+        if (node instanceof javafx.scene.control.Labeled l && l.getText() != null) out.add(l.getText());
+        if (node instanceof javafx.scene.control.ScrollPane sp && sp.getContent() != null) collectTexts(sp.getContent(), out);
+        if (node instanceof javafx.scene.Parent p) {
+            for (Node child : p.getChildrenUnmodifiable()) collectTexts(child, out);
+        }
+    }
+
+    private static javafx.scene.control.Button button(Node page, String text) {
+        List<javafx.scene.control.Button> found = new java.util.ArrayList<>();
+        findButtons(page, text, found);
+        return found.isEmpty() ? null : found.getFirst();
+    }
+
+    private static void findButtons(Node node, String text, List<javafx.scene.control.Button> out) {
+        if (node instanceof javafx.scene.control.Button b && text.equals(b.getText())) out.add(b);
+        if (node instanceof javafx.scene.control.ScrollPane sp && sp.getContent() != null) findButtons(sp.getContent(), text, out);
+        if (node instanceof javafx.scene.Parent p) {
+            for (Node child : p.getChildrenUnmodifiable()) findButtons(child, text, out);
+        }
+    }
+
+    /** Runs on the FX thread and waits for it. */
+    private static <T> T onFx(java.util.concurrent.Callable<T> work) throws Exception {
+        java.util.concurrent.CompletableFuture<T> done = new java.util.concurrent.CompletableFuture<>();
+        Platform.runLater(() -> {
+            try { done.complete(work.call()); } catch (Throwable t) { done.completeExceptionally(t); }
+        });
+        return done.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private static Clinic clinicOffering(Service... services) {
+        return new Clinic("Clinic 1", "Addr", "PC", "123", List.of(services), new Coordinate(0, 0), List.of());
+    }
+
+    @Test
+    void confirmBooking_whenOnlySomeServicesAreBooked_saysWhichAndOffersAnotherTimeForTheRest() throws Exception {
+        Data.setCurrentUser(1, "patient@example.com", "Test User");
+        Book b = Data.getBooking();
+        Service s1 = new Service(1, "Service A", "desc", 30);
+        Service s2 = new Service(2, "Service B", "desc", 15);
+        LocalDate day = LocalDate.now().plusDays(2);
+        Item a = new Item(s1);
+        a.setTimeslotId(10);
+        a.setDate(day);
+        a.setTime(LocalTime.of(10, 30));
+        Item second = new Item(s2);
+        second.setTimeslotId(11);
+        second.setDate(day);
+        second.setTime(LocalTime.of(11, 30));
+        b.setItems(List.of(a, second));
+        b.setClinic(clinicOffering(s1, s2));
+        b.setFirstName("Sam");
+
+        CapturingNavigator nav = new CapturingNavigator(new MainView());
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.onlyFirstFree = true;
+        BookingController controller = new BookingController(nav, bookingService, new CapturingDispatcher(), uid -> Optional.empty(), new UserDAO());
+
+        BookingService.BookingResult result = onFx(controller::confirmBooking);
+
+        assertTrue(result.anyBooked());
+        assertEquals("Booking confirmed", nav.lastTitle);
+        List<String> text = texts(nav.lastPage);
+        assertTrue(text.contains("Booked: Service A. Not booked, the time was no longer available: Service B. "
+                + "Choose a different time to book it."), text.toString());
+        assertNotNull(button(nav.lastPage, "Choose a different time"), "same recovery as the single-service path");
+
+        assertSame(b, Data.getBooking(), "the unbooked service is kept to pick another time for");
+        assertEquals(1, b.getItems().size());
+        Item left = b.getItems().getFirst();
+        assertSame(s2, left.getService());
+        assertEquals(day, left.getDate(), "the time picker reopens on the chosen date");
+        assertNull(left.getTime());
+        assertEquals("Sam", b.getFirstName(), "details typed are kept for the retry");
+
+        onFx(() -> { button(nav.lastPage, "Done").fire(); return null; });
+        assertNotSame(b, Data.getBooking(), "Done ends the half-finished booking");
+    }
+
+    @Test
+    void confirmBooking_whenEverythingIsBooked_endsTheBookingWithNoRetry() throws Exception {
+        Data.setCurrentUser(1, "patient@example.com", "Test User");
+        Book b = Data.getBooking();
+        Service s1 = new Service(1, "Service A", "desc", 30);
+        Item a = new Item(s1);
+        a.setTimeslotId(10);
+        a.setDate(LocalDate.now().plusDays(2));
+        a.setTime(LocalTime.of(10, 30));
+        b.setItems(List.of(a));
+        b.setClinic(clinicOffering(s1));
+        CapturingNavigator nav = new CapturingNavigator(new MainView());
+        BookingController controller = new BookingController(nav, new CapturingBookingService(),
+                new CapturingDispatcher(), uid -> Optional.empty(), new UserDAO());
+
+        onFx(controller::confirmBooking);
+
+        assertNotSame(b, Data.getBooking());
+        assertNull(button(nav.lastPage, "Choose a different time"));
+    }
+
+    @Test
+    void confirmBookingOfferingName_nameNotSaved_stillBooksAndSaysSo() throws Exception {
+        bookingWithTypedName();
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.slotTaken = true;
+        NameOfferController controller = new NameOfferController(new CapturingNavigator(new MainView()), bookingService, true);
+        controller.saveNamePrompt = (f, l) -> true;
+        controller.saveResult = service.AccountSecurityService.SaveNameResult.DB_ERROR;
+
+        bookOfferingName(controller);
+
+        assertNotNull(bookingService.lastBook, "the booking still goes ahead");
+        assertEquals(BookingOutcome.NAME_NOT_SAVED, controller.bookingNotice());
+    }
+
+    @Test
+    void confirmBookingOfferingName_saveThrows_stillBooksAndSaysSo() throws Exception {
+        bookingWithTypedName();
+        Data.getBooking().setClinic(clinicOffering(Data.getBooking().getItems().getFirst().getService()));
+        CapturingBookingService bookingService = new CapturingBookingService();
+        CapturingNavigator nav = new CapturingNavigator(new MainView());
+        NameOfferController controller = new NameOfferController(nav, bookingService, true);
+        controller.saveNamePrompt = (f, l) -> true;
+        controller.saveFails = true;
+
+        BookingService.BookingResult result = bookOfferingName(controller);
+
+        assertTrue(result.anyBooked());
+        assertEquals(BookingOutcome.NAME_NOT_SAVED, controller.bookingNotice());
+        assertTrue(texts(nav.lastPage).contains(BookingOutcome.NAME_NOT_SAVED), "shown on the Booking confirmed page");
+    }
+
+    @Test
+    void confirmBookingOfferingName_nameSaved_noNotice() throws Exception {
+        bookingWithTypedName();
+        CapturingBookingService bookingService = new CapturingBookingService();
+        bookingService.slotTaken = true;
+        NameOfferController controller = new NameOfferController(new CapturingNavigator(new MainView()), bookingService, true);
+        controller.saveNamePrompt = (f, l) -> true;
+
+        bookOfferingName(controller);
+
+        assertNull(controller.bookingNotice());
+    }
+
+    /** A UserRepository whose default clinic is the given id (or none for a negative id); nothing else is used. */
+    private static dao.UserRepository defaultClinicRepo(int clinicId) {
+        return (dao.UserRepository) java.lang.reflect.Proxy.newProxyInstance(
+                dao.UserRepository.class.getClassLoader(), new Class<?>[]{dao.UserRepository.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "defaultClinicExists" -> clinicId >= 0;
+                    case "getDefaultClinic" -> clinicId;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @Test
+    void findDefaultClinic_givesTheSavedClinicsIdAndName() throws Exception {
+        CapturingBookingService bookingService = new CapturingBookingService() {
+            @Override public String findClinicNameById(int id) { return id == 4 ? "Riverside Clinic" : null; }
+        };
+        BookingController controller = new BookingController(new CapturingNavigator(new MainView()),
+                bookingService, new CapturingDispatcher(), uid -> Optional.empty(), defaultClinicRepo(4));
+
+        assertEquals(Optional.of(new BookingController.DefaultClinic(4, "Riverside Clinic")), controller.findDefaultClinic(1));
+    }
+
+    @Test
+    void findDefaultClinic_noneSavedOrLoggedOut_isEmpty() throws Exception {
+        BookingController none = new BookingController(new CapturingNavigator(new MainView()),
+                new CapturingBookingService(), new CapturingDispatcher(), uid -> Optional.empty(), defaultClinicRepo(-1));
+        assertTrue(none.findDefaultClinic(1).isEmpty());
+        BookingController saved = new BookingController(new CapturingNavigator(new MainView()),
+                new CapturingBookingService(), new CapturingDispatcher(), uid -> Optional.empty(), defaultClinicRepo(4));
+        assertTrue(saved.findDefaultClinic(-1).isEmpty(), "logged out: no database read");
     }
 
     private static BookingService.BookingResult bookOfferingName(NameOfferController controller) throws Exception {
