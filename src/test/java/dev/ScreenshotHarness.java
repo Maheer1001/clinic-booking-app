@@ -5,6 +5,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -250,10 +251,12 @@ public class ScreenshotHarness extends Application {
         dump("book-07-services");
 
         Fx.run(() -> {
-            TitledPane pane = Fx.require(stage, TitledPane.class, t -> t.getGraphic() instanceof CheckBox cb
-                    && "STI test".equals(cb.getText()), "sti pane");
+            TitledPane pane = Fx.require(stage, TitledPane.class, t -> t.getGraphic() instanceof Parent g
+                    && Fx.all(g).stream().anyMatch(n -> n instanceof Label l && "STI test".equals(l.getText())),
+                    "sti pane");
             pane.setExpanded(true);
-            ((CheckBox) pane.getGraphic()).setSelected(true);
+            Fx.all((Parent) pane.getGraphic()).stream().filter(n -> n instanceof CheckBox).map(n -> (CheckBox) n)
+                    .findFirst().orElseThrow(() -> new IllegalStateException("sti checkbox")).setSelected(true);
         });
         Fx.settle();
         shot("book-08-service-chosen");

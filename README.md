@@ -2,7 +2,7 @@
 
 Book a sexual-health clinic appointment in under a minute: a JavaFX desktop app to find a clinic by postcode, book a slot, and keep track of test results, prescriptions and reminders.
 
-![Demo: sign in, find a clinic on the map, choose a service and time, confirm, manage bookings, track results and prescriptions](media/demo.gif)
+![Demo: sign in, book at your usual clinic or the nearest one on the map, choose a service and time, confirm, reminders, results and prescriptions, then the staff side: the day list, patient records, releasing a result, shortening a course and approving staff](media/demo.gif)
 
 ![Screens: upcoming appointments, clinic search by postcode, times generated from opening hours, test results](media/screens.png)
 
@@ -189,6 +189,8 @@ mvn -Pscreenshots test-compile exec:exec -Dshots.only=book    # just the booking
 It books and moves appointments, so reload `docs/demo-data.sql` before running it again.
 
 `mvn -Pstaff-screenshots test-compile exec:exec` does the same for the staff side (PNGs and a log in `target/staff-shots`). It needs a clinic admin made with `StaffSeed` and the environment variables listed in `dev.StaffHarness`; it creates its own test patient and clinician with `example.com` emails and deletes them at the end. `mvn -Pverify-screenshots test-compile exec:exec` (`dev.VerifyHarness`, same environment variables) checks the popup queue, a partly-failed multi-service booking, switching clinics with per-clinic roles and the result-release email, with PNGs in `target/verify-shots`.
+
+`media/demo.gif` is built from the patient and staff screenshots with `python media/make_demo_gif.py` (needs Pillow); the steps are at the top of that script.
 
 Both staff harnesses use the app normally, so they add rows to `AuditLog`, which is append-only by design.
 
