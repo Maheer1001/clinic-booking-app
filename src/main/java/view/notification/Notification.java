@@ -14,6 +14,18 @@ public interface Notification {
     void show();
 
     /**
+     * Shows the popup and calls {@code onClosed} once it has closed (used by {@link PopupQueue}).
+     * The default, for notifications without a window, shows it and reports it closed at once.
+     */
+    default void show(Runnable onClosed) {
+        try {
+            show();
+        } finally {
+            onClosed.run();
+        }
+    }
+
+    /**
      * Dismisses the notification popup if it is currently showing.
      */
     void dismiss();

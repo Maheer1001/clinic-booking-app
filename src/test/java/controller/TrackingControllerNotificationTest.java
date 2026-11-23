@@ -216,6 +216,22 @@ class TrackingControllerNotificationTest {
     }
 
     @Test
+    void severalNewResults_oneCombinedPopupListingThem() throws Exception {
+        FakeRepository repo = new FakeRepository(new NewResults(List.of(
+                entry(1, "Blood test", false), entry(2, "Urine test", true), entry(3, "Swab", false)), WATERMARK));
+        CapturingDispatcher dispatcher = new CapturingDispatcher();
+
+        open(repo, dispatcher);
+
+        assertTrue(repo.seen.await(5, TimeUnit.SECONDS));
+        assertEquals(1, dispatcher.calls.size(), "one popup, not one per result");
+        Notification n = dispatcher.calls.getFirst().notification();
+        assertEquals("You have 3 new results", n.getTitle());
+        String text = n.getMessage();
+        assertTrue(text.contains("Blood test") && text.contains("Urine test") && text.contains("Swab"), text);
+    }
+
+    @Test
     void hasAnyTrackingRecords_falseWhenListsEmpty_trueWhenTestsPresent() {
         assertFalse(TrackingController.hasAnyTrackingRecords(new FakeTrackingService(1, List.of())));
         model.Test t = new model.Test("Screening", "01/03/26", null, null, List.of());

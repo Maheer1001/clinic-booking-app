@@ -8,6 +8,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import model.SecurityQuestion;
 import service.SecurityQuestionService.SetResult;
+import view.notification.PopupQueue;
 import view.ui.UI;
 
 /**
@@ -22,16 +23,31 @@ public final class SecurityQuestionPrompt {
 
     private SecurityQuestionPrompt() {}
 
-    /** Checks in the background and shows the prompt only when the signed-in user has no question. */
+    /**
+     * Checks in the background and shows the prompt only when the signed-in user has no question. It
+     * takes its turn in the {@link PopupQueue}, so it never opens on top of a new-result or reminder popup.
+     */
     public static void offerIfMissing(int userId) {
         AccountController controller = new AccountController();
         Background.run(() -> controller.hasSecurityQuestion(userId), has -> {
-            // still the same user on the main screen (they may have logged out meanwhile)
-            if (!has && Data.getCurrentUserId() == userId && Data.getScene() != null) show(controller, userId);
+            if (has) return;
+            PopupQueue.shared().enqueue(onClosed -> {
+                // still the same user on the main screen (they may have logged out meanwhile)
+                if (Data.getCurrentUserId() == userId && Data.getScene() != null) {
+                    show(controller, userId, onClosed);
+                } else {
+                    onClosed.run();
+                }
+            });
         }, ex -> System.err.println("[Account] Could not check the security question: " + ex.getClass().getSimpleName()));
     }
 
     static Dialog<ButtonType> show(AccountController controller, int userId) {
+        return show(controller, userId, null);
+    }
+
+    /** Shows the prompt; {@code onClosed} (if given) runs once it has closed, however it was closed. */
+    static Dialog<ButtonType> show(AccountController controller, int userId, Runnable onClosed) {
         ComboBox<SecurityQuestion> choice = SecurityQuestionChoice.create();
         TextField answer = UI.textField("");
         answer.setPromptText("Your answer");
@@ -85,6 +101,7 @@ public final class SecurityQuestionPrompt {
                 save.disableProperty().bind(choice.valueProperty().isNull().or(answer.textProperty().isEmpty()));
             });
         });
+        if (onClosed != null) dialog.setOnHidden(e -> onClosed.run());
         dialog.show();
         return dialog;
     }

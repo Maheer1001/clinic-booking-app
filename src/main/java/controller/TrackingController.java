@@ -13,7 +13,9 @@ import service.TrackingService;
 import view.Navigator;
 import view.TrackingHubView;
 import view.TrackingView;
-import view.notification.TestResultNotification;
+import view.notification.NewResultsNotification;
+import view.notification.Notification;
+import view.notification.PopupQueue;
 
 /**
  * Handles the Tracking section: test results, prescriptions, and appointment history.
@@ -41,6 +43,7 @@ public class TrackingController {
     private int refreshGeneration;
     private final ResultAlertService alerts;
     private final NotificationDispatcher dispatcher;
+    private final PopupQueue popups = PopupQueue.shared();
     /** True while a new-result check is running, so a quick tab return does not alert twice. */
     private boolean checkingResults;
 
@@ -173,8 +176,10 @@ public class TrackingController {
     }
 
     /**
-     * Shows one discreet popup per new result (test type and date only, never the result).
-     * True if they were shown to the patient they belong to, i.e. they can now be marked seen.
+     * Shows one discreet popup for the new results (test type and date only, never the result): the
+     * single-result popup for one, "You have N new results" listing them for more. It waits its turn in
+     * the {@link PopupQueue} behind any other popup (e.g. the security-question prompt after login).
+     * True if they were handed to the patient they belong to, i.e. they can now be marked seen.
      * Package-private for tests.
      */
     boolean announceNewResults(int userId, NewResults n) {
@@ -184,9 +189,8 @@ public class TrackingController {
             String email = Data.getCurrentUserEmail();
             name = email != null ? email : "";
         }
-        for (NewResults.Entry e : n.tests()) {
-            dispatcher.notifyUser(userId, null, new TestResultNotification(name, e.testType(), e.testDate(), e.resultUpdated()));
-        }
+        Notification popup = NewResultsNotification.forResults(name, n.tests());
+        dispatcher.notifyUser(userId, null, popups.queued(popup, () -> Data.getCurrentUserId() == userId));
         return true;
     }
 }
